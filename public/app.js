@@ -78,35 +78,225 @@ const getSettings = () => q(sb.from('settings').select('*').single());
 
 // ---------- sign in ----------
 
-function signInView() {
-  document.body.classList.add('signed-out');
-  setHTML($view, html`
-    <div class="signin">
-      <h1>Hotel Billing</h1>
-      <p class="muted">Sign in with your staff account.</p>
-      <form id="auth" class="card form">
-        <label>Email <input type="email" name="email" autocomplete="email" required></label>
-        <label>Password <input type="password" name="password" autocomplete="current-password" minlength="6" required></label>
-        <button type="submit">Sign In</button>
-        <button type="button" id="signup" class="secondary">Create Account</button>
-      </form>
-      <p class="small">New staff: create an account with the email the owner added in Settings, confirm it from your inbox, then sign in.</p>
-    </div>`);
-  const form = document.getElementById('auth');
-  onSubmit($view, '#auth', async ({ email, password }) => {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(/Invalid login/.test(error.message) ? 'Email or password is incorrect.' : error.message);
-  });
-  document.getElementById('signup').addEventListener('click', (e) => {
-    if (!form.reportValidity()) return;
-    const { email, password } = Object.fromEntries(new FormData(form));
-    act(e.currentTarget, async () => {
-      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
-      if (error) throw error;
-      toast(data.session ? 'Account created.' : 'Check your email to confirm the account, then sign in.');
-    });
-  });
+const ICONS = {
+  receipt: '<path d="M5 2.5h14v19l-2.33-1.6L14.33 21.5 12 19.9l-2.33 1.6-2.34-1.6L5 21.5zM8 7v1.6h8V7zm0 4v1.6h8V11zm0 4v1.6h5V15z" fill-rule="evenodd"/>',
+  mail: '<path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1.4 2L12 12.2 19.6 7zM4 9.1V17h16V9.1l-8 5.4z" fill-rule="evenodd"/>',
+  lock: '<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z" fill-rule="evenodd"/>',
+};
+const icon = (name) => new Raw(`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[name]}</svg>`);
+let recoveringPassword = false; // set when someone arrives from a password-reset email
+let lastEmail = '';             // carried between sign-in screens so nobody retypes it
+
+function authError(error) {
+  const msg = error?.message || String(error);
+  if (/Invalid login credentials/i.test(msg)) return 'That email and password don’t match. Check them and try again, or reset your password.';
+  if (/Email not confirmed/i.test(msg)) return 'unconfirmed';
+  if (/already registered|already been registered/i.test(msg)) return 'exists';
+  if (/Password should be at least/i.test(msg)) return 'Use a password with at least 6 characters.';
+  if (/rate limit|too many/i.test(msg)) return 'Too many attempts. Wait a minute, then try again.';
+  if (/valid email|invalid format/i.test(msg)) return 'Enter a valid email address, like name@example.com.';
+  return friendly(error);
 }
+
+/** Password field with a Show/Hide button. */
+const passwordField = (label, autocomplete, hint = '') => html`
+  <div class="field">
+    <label for="password">${label}</label>
+    <div class="password-wrap">
+      <input id="password" type="password" name="password" autocomplete="${autocomplete}" minlength="6" required
+        ${hint ? new Raw('aria-describedby="password-hint"') : ''}>
+      <button type="button" class="reveal" aria-pressed="false" aria-label="Show password">Show</button>
+    </div>
+    ${hint ? html`<p class="hint" id="password-hint">${hint}</p>` : ''}
+  </div>`;
+
+function authScreen({ iconName = 'receipt', title, subtitle, body, footer = '' }) {
+  document.body.classList.add('signed-out');
+  const root = mount(html`
+    <div class="auth">
+      <div class="auth-card">
+        <div class="auth-icon">${icon(iconName)}</div>
+        <h1>${title}</h1>
+        <p class="auth-sub">${subtitle}</p>
+        <div class="auth-alert" role="alert" hidden></div>
+        ${body}
+      </div>
+      ${footer ? html`<p class="auth-footer">${footer}</p>` : ''}
+    </div>`);
+  root.querySelectorAll('.reveal').forEach((b) => b.addEventListener('click', () => {
+    const input = b.previousElementSibling;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    b.textContent = show ? 'Hide' : 'Show';
+    b.setAttribute('aria-pressed', String(show));
+    b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  }));
+  root.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', (e) => {
+    e.preventDefault();
+    const email = root.querySelector('[name=email]')?.value;
+    if (email) lastEmail = email;
+    authViews[b.dataset.go]();
+  }));
+  const alertBox = root.querySelector('.auth-alert');
+  const showAlert = (message, kind = 'error') => {
+    alertBox.className = `auth-alert ${kind}`;
+    setHTML(alertBox, message instanceof Raw ? message : html`${message}`);
+    alertBox.hidden = false;
+    alertBox.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); authViews[b.dataset.go](); }));
+  };
+  /** Submit handler with a busy label on the button and errors shown in the card. */
+  const handle = (busyLabel, fn) => root.querySelector('form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const btn = form.querySelector('button[type=submit]');
+    const label = btn.textContent;
+    alertBox.hidden = true;
+    btn.disabled = true;
+    btn.textContent = busyLabel;
+    try {
+      const values = Object.fromEntries(new FormData(form));
+      if (values.email) lastEmail = values.email.trim();
+      await fn(values);
+    } catch (err) {
+      showAlert(err instanceof Raw ? err : authError(err));
+    } finally {
+      if (btn.isConnected) { btn.disabled = false; btn.textContent = label; }
+    }
+  });
+  return { root, handle, showAlert };
+}
+
+const emailField = (autofocus = true) => html`
+  <div class="field">
+    <label for="email">Email</label>
+    <input id="email" type="email" name="email" autocomplete="email" inputmode="email" required
+      value="${lastEmail}" ${autofocus ? new Raw('autofocus') : ''} placeholder="name@example.com">
+  </div>`;
+
+const authViews = {
+  signIn() {
+    const { handle } = authScreen({
+      title: 'Welcome back',
+      subtitle: 'Sign in to take orders and print bills.',
+      body: html`
+        <form class="auth-form" novalidate>
+          ${emailField()}
+          ${passwordField('Password', 'current-password')}
+          <div class="auth-row"><a href="#" data-go="forgot">Forgot password?</a></div>
+          <button type="submit" class="wide">Sign In</button>
+        </form>
+        <p class="auth-switch">New staff member? <a href="#" data-go="signUp">Create an account</a></p>`,
+      footer: 'Only people the owner has added in Settings can sign in.',
+    });
+    handle('Signing In…', async ({ email, password }) => {
+      if (!email.trim() || !password) throw new Error('Enter your email and password.');
+      const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+      if (!error) return;
+      const code = authError(error);
+      if (code === 'unconfirmed') {
+        throw html`Confirm your email first. Open the link we sent to ${email.trim()}. <a href="#" data-go="checkEmail">Send it again</a>`;
+      }
+      throw error;
+    });
+    if (lastEmail) document.getElementById('password')?.focus();
+  },
+
+  signUp() {
+    const { handle } = authScreen({
+      title: 'Create your account',
+      subtitle: 'Use the email address the owner added for you in Settings.',
+      body: html`
+        <form class="auth-form" novalidate>
+          ${emailField()}
+          ${passwordField('Choose a password', 'new-password', 'At least 6 characters.')}
+          <button type="submit" class="wide">Create Account</button>
+        </form>
+        <p class="auth-switch">Already have an account? <a href="#" data-go="signIn">Sign in</a></p>`,
+      footer: 'We’ll email you a link to confirm the account.',
+    });
+    handle('Creating Account…', async ({ email, password }) => {
+      if (!email.trim()) throw new Error('Enter your email address.');
+      if ((password || '').length < 6) throw new Error('Use a password with at least 6 characters.');
+      const { data, error } = await sb.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: location.origin } });
+      if (error) {
+        if (authError(error) === 'exists') throw html`There’s already an account for this email. <a href="#" data-go="signIn">Sign in instead</a>`;
+        throw error;
+      }
+      // Supabase hides whether an email is taken: an existing address comes back with no identities.
+      if (!data.session && data.user && data.user.identities?.length === 0) {
+        throw html`There’s already an account for this email. <a href="#" data-go="signIn">Sign in instead</a>`;
+      }
+      if (!data.session) authViews.checkEmail('signup');
+    });
+  },
+
+  forgot() {
+    const { handle } = authScreen({
+      iconName: 'lock',
+      title: 'Reset your password',
+      subtitle: 'Enter your email and we’ll send you a link to set a new password.',
+      body: html`
+        <form class="auth-form" novalidate>
+          ${emailField()}
+          <button type="submit" class="wide">Send Reset Link</button>
+        </form>
+        <p class="auth-switch"><a href="#" data-go="signIn">Back to sign in</a></p>`,
+    });
+    handle('Sending…', async ({ email }) => {
+      if (!email.trim()) throw new Error('Enter your email address.');
+      const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin });
+      if (error) throw error;
+      authViews.checkEmail('reset');
+    });
+  },
+
+  checkEmail(kind = 'signup') {
+    const reset = kind === 'reset';
+    const { root, showAlert } = authScreen({
+      iconName: 'mail',
+      title: 'Check your email',
+      subtitle: '',
+      body: html`
+        <p class="auth-text">We sent a ${reset ? 'password reset' : 'confirmation'} link to <strong>${lastEmail || 'your email'}</strong>.
+          ${reset ? 'Open it to choose a new password.' : 'Open it to confirm your account, then come back here and sign in.'}</p>
+        <p class="hint">Can’t find it? Check your spam folder.</p>
+        <button type="button" class="wide" data-go="signIn">Back to Sign In</button>
+        <button type="button" class="wide secondary" id="resend">Send Again</button>`,
+    });
+    root.querySelector('#resend').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const { error } = reset
+        ? await sb.auth.resetPasswordForEmail(lastEmail, { redirectTo: location.origin })
+        : await sb.auth.resend({ type: 'signup', email: lastEmail, options: { emailRedirectTo: location.origin } });
+      showAlert(error ? authError(error) : 'Sent. It can take a minute to arrive.', error ? 'error' : 'success');
+      setTimeout(() => { if (btn.isConnected) btn.disabled = false; }, 30000);
+    });
+  },
+
+  newPassword() {
+    const { handle } = authScreen({
+      iconName: 'lock',
+      title: 'Choose a new password',
+      subtitle: session?.user?.email ? `For ${session.user.email}` : '',
+      body: html`
+        <form class="auth-form" novalidate>
+          ${passwordField('New password', 'new-password', 'At least 6 characters.')}
+          <button type="submit" class="wide">Save Password</button>
+        </form>`,
+    });
+    handle('Saving…', async ({ password }) => {
+      if ((password || '').length < 6) throw new Error('Use a password with at least 6 characters.');
+      const { error } = await sb.auth.updateUser({ password });
+      if (error) throw error;
+      recoveringPassword = false;
+      toast('Password updated');
+      route();
+    });
+  },
+};
+
+const signInView = () => authViews.signIn();
 
 // ---------- Tables ----------
 
@@ -629,13 +819,22 @@ async function route() {
   const token = ++renderToken;
   document.body.classList.remove('sheet-open');
   if (!session) return signInView();
+  if (recoveringPassword) return authViews.newPassword();
   staffCheck ??= sb.rpc('is_staff').then((r) => r.data === true);
   if (!(await staffCheck)) {
     staffCheck = null;
     document.body.classList.add('signed-out');
-    setHTML($view, html`<div class="signin"><h1>No Access</h1>
-      <p>${session.user.email} isn’t on the staff list. Ask the owner to add this email in Settings, then sign in again.</p>
-      <button type="button" id="signout2" class="secondary">Sign Out</button></div>`);
+    const { root } = authScreen({
+      iconName: 'lock',
+      title: 'Waiting for access',
+      subtitle: '',
+      body: html`
+        <p class="auth-text"><strong>${session.user.email}</strong> isn’t on the staff list yet. Ask the owner to add this email in
+          Settings → Staff, then tap Try Again.</p>
+        <button type="button" class="wide" id="retry">Try Again</button>
+        <button type="button" class="wide secondary" id="signout2">Use a Different Account</button>`,
+    });
+    root.querySelector('#retry').onclick = () => route();
     document.getElementById('signout2').onclick = () => sb.auth.signOut();
     return;
   }
@@ -663,6 +862,8 @@ sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
   session = s;
   if (changed) staffCheck = null;
+  if (event === 'PASSWORD_RECOVERY') { recoveringPassword = true; setTimeout(route, 0); return; }
+  if (event === 'SIGNED_OUT') { recoveringPassword = false; lastEmail = ''; }
   // Defer: calling Supabase from inside this callback can deadlock the auth client.
   if (changed || event === 'INITIAL_SESSION') setTimeout(route, 0);
 });
