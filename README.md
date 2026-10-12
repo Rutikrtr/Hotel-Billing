@@ -12,7 +12,7 @@ It runs in the browser, keeps its data in **Supabase**, and is hosted on **Netli
 4. **Bill**: an 80 mm receipt layout that prints on thermal bill printers, or to any printer or PDF.
 5. **Bills**: the day's sales split by payment method, and every settled bill. Pick a date to see past days.
 6. **Menu**: add dishes with a category, price and veg/non-veg mark. Change prices, or mark an item sold out for the day.
-7. **Settings**: restaurant name, address, GSTIN and GST rate (default 5%, shown as CGST + SGST), tables, and staff access.
+7. **Settings**: restaurant name, address, and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables, and staff access.
 
 Bills round to the nearest rupee and show the round-off. Amounts are stored in whole paise, so totals are exact.
 

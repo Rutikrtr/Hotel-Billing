@@ -313,3 +313,6 @@ body.signed-out main { min-height: 100vh; min-height: 100dvh; display: grid; pla
   main { padding: 0; max-width: none; }
   .receipt { box-shadow: none; max-width: none; padding: 0; -webkit-mask: none; mask: none; font-size: 12px; }
 }
+
+.gst-box { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.gst-fields { display: grid; gap: 10px; }

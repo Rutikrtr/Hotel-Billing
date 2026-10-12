@@ -588,7 +588,7 @@ async function billView(token, orderId) {
           <div class="shop">${settings.hotel_name}</div>
           ${settings.hotel_address ? html`<div>${settings.hotel_address}</div>` : ''}
           ${settings.hotel_phone ? html`<div>Ph: ${settings.hotel_phone}</div>` : ''}
-          ${settings.hotel_gstin ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
+          ${settings.hotel_gstin && rate > 0 ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
           ${paid ? '' : html`<div class="stamp">NOT PAID</div>`}
         </div>
         <div class="rule"></div>
@@ -790,12 +790,18 @@ async function settingsView(token) {
         <h2 style="margin:0">Bill Details</h2>
         <label>Restaurant name <input name="hotel_name" value="${s.hotel_name}" required></label>
         <label>Address <textarea name="hotel_address" rows="2">${s.hotel_address}</textarea></label>
-        <div class="row">
-          <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}"></label>
-          <label>GSTIN <input name="hotel_gstin" value="${s.hotel_gstin}" autocapitalize="characters"></label>
+        <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}"></label>
+        <div class="gst-box">
+          <label class="toggle"><input type="checkbox" name="gst_on" id="gst-on" ${s.tax_rate_bp > 0 ? new Raw('checked') : ''}> Charge GST on bills</label>
+          <p class="small" style="margin:0">Off: bills show only items and the total. Turn on if your restaurant is GST-registered.</p>
+          <div class="gst-fields" id="gst-fields" ${s.tax_rate_bp > 0 ? '' : new Raw('hidden')}>
+            <div class="row">
+              <label>GST rate (%) <input name="tax_rate" inputmode="decimal" value="${s.tax_rate_bp > 0 ? +(s.tax_rate_bp / 100).toFixed(2) : 5}"></label>
+              <label>GSTIN <input name="hotel_gstin" value="${s.hotel_gstin}" autocapitalize="characters" placeholder="Optional"></label>
+            </div>
+            <p class="small" style="margin:0">Shown on the bill as CGST + SGST (half each). Bills already settled don’t change.</p>
+          </div>
         </div>
-        <label>GST rate (%) <input name="tax_rate" inputmode="decimal" value="${+(s.tax_rate_bp / 100).toFixed(2)}"></label>
-        <p class="small" style="margin:0">Split equally into CGST and SGST. Settled bills keep the rate they were issued with.</p>
         <button type="submit">Save Changes</button>
       </form>
       <div>
@@ -824,12 +830,14 @@ async function settingsView(token) {
         </div>
       </div>
     </div>`);
+  root.querySelector('#gst-on').addEventListener('change', (e) => { root.querySelector('#gst-fields').hidden = !e.target.checked; });
   onSubmit(root, '#settings', async (f) => {
-    const rate = toPaise(f.tax_rate);
+    const rate = f.gst_on === 'on' ? toPaise(f.tax_rate) : 0;
+    if (f.gst_on === 'on' && rate <= 0) throw new Error('Enter a GST rate, like 5, or turn GST off.');
     if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
     await q(sb.from('settings').update({
       hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
-      hotel_gstin: f.hotel_gstin.trim().toUpperCase(), tax_rate_bp: rate,
+      hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate,
     }).eq('id', 1));
     document.getElementById('brand').textContent = f.hotel_name.trim();
     toast('Changes saved');
