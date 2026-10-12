@@ -346,47 +346,70 @@ function receivePayment({ orderId, tableName, total }) {
 
 // ---------- Tables ----------
 
+let tableFilter = 'all'; // remembered while the app is open
+
 async function tablesView(token) {
-  const [tables, open, settings] = await Promise.all([
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const [tables, open, settings, paidToday] = await Promise.all([
     q(sb.from('dining_tables').select('*').order('sort').order('name')),
     q(sb.from('orders').select('*, order_items(quantity, unit_price, name)').eq('status', 'open')),
     getSettings(),
+    q(sb.from('orders').select('discount, tax_rate_bp, order_items(quantity, unit_price)').eq('status', 'paid').gte('closed_at', dayStart.toISOString())),
   ]);
   if (token !== renderToken) return;
   const byTable = {};
   open.forEach((o) => { (byTable[o.table_id] ??= []).push(o); });
+  const sales = paidToday.reduce((sum, o) => sum + orderBill(o, o.order_items, o.tax_rate_bp ?? 0).total, 0);
+  const runningTables = tables.filter((t) => byTable[t.id]?.length).length;
   const waiting = open.filter((o) => o.billed_at).length;
-  const eating = open.length - waiting;
-  const summary = open.length
-    ? [eating && `${eating} eating`, waiting && `${waiting} waiting to pay`].filter(Boolean).join(' · ')
-    : 'All tables are free';
-  setHTML($view, html`
-    <div class="page-head">
-      <div>
-        <h1>Tables</h1>
-        <p class="muted">${summary}</p>
+  const onTables = open.reduce((sum, o) => sum + orderBill(o, o.order_items, settings.tax_rate_bp).total, 0);
+  const counts = { all: tables.length, running: runningTables, free: tables.length - runningTables };
+  const visible = tables.filter((t) => tableFilter === 'all' || (tableFilter === 'running') === Boolean(byTable[t.id]?.length));
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const root = mount(html`
+    <div class="page-head"><div><p class="eyebrow">${today}</p><h1>Tables</h1></div></div>
+    <section class="hero" aria-label="Today">
+      <span class="label">Today’s sales</span>
+      <span class="big">${rs(sales)}</span>
+      <div class="facts">
+        <div class="fact"><strong>${runningTables}</strong><span>Running</span></div>
+        <div class="fact"><strong>${waiting}</strong><span>To pay</span></div>
+        <div class="fact"><strong>${rs(onTables).replace('.00', '')}</strong><span>On tables</span></div>
       </div>
-    </div>
-    ${tables.length ? '' : html`<div class="card empty">No tables yet. <a href="#/settings">Add tables in Settings</a>.</div>`}
+    </section>
+    ${tables.length ? html`
+      <div class="filter-tabs" role="toolbar" aria-label="Show tables">
+        ${[['all', 'All'], ['running', 'Running'], ['free', 'Free']].map(([k, label]) =>
+          html`<button type="button" class="chip" data-filter="${k}" aria-pressed="${tableFilter === k}">${label} <span class="count-badge">${counts[k]}</span></button>`)}
+      </div>` : html`<div class="card empty"><span class="emoji" aria-hidden="true">🍽️</span>No tables yet. <a href="#/settings">Add tables in Settings</a>.</div>`}
     <div class="tables">
-      ${tables.map((t) => {
+      ${visible.map((t) => {
         const orders = (byTable[t.id] ?? []).sort((a, b) => a.section.localeCompare(b.section));
-        if (!orders.length) return html`<a class="table-tile" href="#/table/${t.id}" aria-label="${t.name}, free">
-          <span class="name">${t.name}</span><span class="state">Free</span></a>`;
+        if (!orders.length) return html`<a class="table-tile free" href="#/table/${t.id}" aria-label="${t.name}, free">
+          <span class="tile-top"><span class="name">${t.name}</span><span class="pill">Free</span></span>
+          <span class="tap">Tap to take order</span></a>`;
         const bills = orders.map((o) => orderBill(o, o.order_items, settings.tax_rate_bp));
         const total = bills.reduce((sum, b) => sum + b.total, 0);
         const billed = orders.every((o) => o.billed_at);
         const label = billed ? 'Bill printed' : 'Eating';
         const o = orders[0];
+        const items = bills.reduce((n, b) => n + b.itemCount, 0);
         const detail = orders.length > 1
-          ? orders.map((x, i) => `${x.section} ${rs(bills[i].total)}${x.billed_at ? ' (billed)' : ''}`).join(' · ')
-          : billed ? `Waiting to pay · ${since(o.billed_at)}` : `${bills[0].itemCount} item${bills[0].itemCount === 1 ? '' : 's'} · ${since(o.opened_at)}`;
-        return html`<a class="table-tile busy ${billed ? 'billed' : ''}" href="#/table/${t.id}" aria-label="${t.name}, ${orders.length > 1 ? `${orders.length} sections, ` : ''}${label}, ${rs(total)}">
-          <span class="tile-top"><span class="name">${t.name}</span><span class="tag">${orders.length > 1 ? `${orders.length} sections` : label}</span></span>
-          <span><span class="amount">${rs(total)}</span><br>
-          <span class="state">${detail}</span></span></a>`;
+          ? orders.map((x, i) => `${x.section} ${rs(bills[i].total).replace('.00', '')}`).join(' · ')
+          : billed ? `Waiting · ${since(o.billed_at)}` : `${items} item${items === 1 ? '' : 's'} · ${since(o.opened_at)}`;
+        return html`<a class="table-tile ${billed ? 'billed' : 'busy'}" href="#/table/${t.id}" aria-label="${t.name}, ${orders.length > 1 ? `${orders.length} sections, ` : ''}${label}, ${rs(total)}">
+          <span class="tile-top"><span class="name">${t.name}</span><span class="pill">${orders.length > 1 ? `${orders.length} groups` : label}</span></span>
+          <span><span class="amount">${rs(total)}</span><span class="state">${detail}</span></span></a>`;
       })}
-    </div>`);
+    </div>
+    ${tables.length && !visible.length ? html`<div class="card empty">${tableFilter === 'free' ? 'Every table is busy right now.' : 'No tables are running right now.'}</div>` : ''}`);
+  root.addEventListener('click', (e) => {
+    const f = e.target.closest('[data-filter]');
+    if (!f) return;
+    tableFilter = f.dataset.filter;
+    tablesView(renderToken);
+  });
 }
 
 // ---------- Order for a table ----------
@@ -419,15 +442,14 @@ async function tableView(token, tableId, sectionArg) {
   const categories = [...(hasPopular ? [POPULAR] : []), 'All', ...new Set(menu.map((m) => m.category))];
   let queue = Promise.resolve();
 
+  const countIn = (c) => (c === POPULAR ? favourites.length + bestSellers.length : c === 'All' ? menu.length : menu.filter((m) => m.category === c).length);
   setHTML($view, html`
     <div class="order-page">
-      <div class="page-head">
-        <div><h1>${table.name}</h1><p class="muted" id="order-sub"></p></div>
-        <div class="head-actions">
-          <button type="button" class="secondary" id="add-section" ${current?.order_items.length ? '' : new Raw('hidden')}
-            title="Two different groups at this table? Give each its own bill.">+ Add Section</button>
-          <a class="button secondary" href="#/">All Tables</a>
-        </div>
+      <div class="order-top">
+        <a class="back" href="#/" aria-label="Back to all tables">‹</a>
+        <div class="titles"><h1>${table.name}</h1><p id="order-sub"></p></div>
+        <button type="button" class="secondary add-section" id="add-section" ${current?.order_items.length ? '' : new Raw('hidden')}
+          title="Two different groups at this table? Give each its own bill.">+ Section</button>
       </div>
       ${multi ? html`
         <nav class="sections" aria-label="Sections of ${table.name}">
@@ -438,16 +460,17 @@ async function tableView(token, tableId, sectionArg) {
       <div class="order-layout">
         <section aria-label="Menu">
           <div class="menu-tools">
-            <input type="search" id="search" placeholder="Search menu" aria-label="Search menu" autocomplete="off">
+            <div class="search"><input type="search" id="search" placeholder="Search dishes" aria-label="Search dishes" autocomplete="off"></div>
             <div class="chips" role="toolbar" aria-label="Categories">
-              ${categories.map((c) => html`<button class="chip" type="button" data-cat="${c}" aria-pressed="${c === state.filter}">${c}</button>`)}
+              ${categories.map((c) => html`<button class="chip" type="button" data-cat="${c}" aria-pressed="${c === state.filter}">${c} <span class="count-badge">${countIn(c)}</span></button>`)}
             </div>
           </div>
-          <div class="menu-grid" id="menu-grid"></div>
+          <div class="menu-list" id="menu-grid"></div>
         </section>
         <aside class="order-panel" id="order-panel" aria-label="Order"></aside>
       </div>
-      <div class="order-bar" id="order-bar"></div>
+      <div class="sheet-backdrop" id="sheet-backdrop"></div>
+      <div class="cart-bar" id="order-bar"></div>
     </div>`);
 
   const $grid = document.getElementById('menu-grid');
@@ -457,34 +480,43 @@ async function tableView(token, tableId, sectionArg) {
   const qtyOf = (menuId) => state.items.find((i) => i.menu_item_id === menuId)?.quantity ?? 0;
   const bill = () => orderBill(state.order, state.items, settings.tax_rate_bp);
 
-  const tile = (m, showSold) => {
+  const dish = (m, showSold) => {
     const n = qtyOf(m.id);
     const sold = soldById.get(m.id);
-    return html`<button type="button" class="menu-item ${n ? 'in-order' : ''}" data-add="${m.id}" ${m.available ? '' : new Raw('disabled')}
-        aria-label="Add ${m.name}, ${rs(m.price)}${m.is_favorite ? ', favourite' : ''}${n ? `, ${n} in order` : ''}${m.available ? '' : ', sold out'}">
-      <span class="top"><span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span><span>${m.name}</span>${m.is_favorite ? html`<span class="star" aria-hidden="true">★</span>` : ''}</span>
-      <span class="price">${m.available ? rs(m.price) : 'Sold out'}${showSold && sold ? html`<span class="sold"> · ${sold} sold</span>` : ''}</span>
-      ${n ? html`<span class="count" aria-hidden="true">${n}</span>` : ''}
-    </button>`;
+    const control = !m.available
+      ? html`<span class="meta">Sold out</span>`
+      : n
+        ? html`<span class="qty" role="group" aria-label="${m.name}, ${n} in order">
+            <button type="button" data-minus="${m.id}" aria-label="Remove one ${m.name}">−</button>
+            <output>${n}</output>
+            <button type="button" data-add="${m.id}" aria-label="Add one more ${m.name}">+</button></span>`
+        : html`<button type="button" class="add-btn" data-add="${m.id}" aria-label="Add ${m.name}, ${rs(m.price)}">ADD</button>`;
+    return html`<div class="dish ${n ? 'in-order' : ''} ${m.available ? '' : 'sold-out'}">
+      <div class="info">
+        <span class="line1"><span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span><span class="dname">${m.name}</span>${m.is_favorite ? html`<span class="star" title="Favourite">★</span>` : ''}</span>
+        <span><span class="price">${rs(m.price).replace('.00', '')}</span>${showSold && sold ? html`<span class="meta"> · ${sold} sold this month</span>` : ''}</span>
+      </div>
+      ${control}
+    </div>`;
   };
-  const groupHead = (title, note) => html`<h3 class="grid-head">${title}${note ? html` <span class="grid-note">${note}</span>` : ''}</h3>`;
+  const groupHead = (title, note) => html`<h3 class="list-head">${title}${note ? html` <span class="note">${note}</span>` : ''}</h3>`;
 
   function renderMenu() {
     const term = state.search.trim().toLowerCase();
-    if (!menu.length) return setHTML($grid, html`<div class="card empty" style="grid-column: 1 / -1">Your menu is empty. <a href="#/menu">Add menu items</a> to start taking orders.</div>`);
+    if (!menu.length) return setHTML($grid, html`<div class="card empty" style="grid-column: 1 / -1"><span class="emoji" aria-hidden="true">📋</span>Your menu is empty. <a href="#/menu">Add dishes</a> to start taking orders.</div>`);
     // Searching looks through the whole menu, whichever tab is selected.
     if (term) {
       const found = menu.filter((m) => m.name.toLowerCase().includes(term));
-      return setHTML($grid, found.length ? html`${found.map((m) => tile(m, false))}`
-        : html`<p class="muted" style="grid-column: 1 / -1">No items match “${state.search}”.</p>`);
+      return setHTML($grid, found.length ? html`${found.map((m) => dish(m, false))}`
+        : html`<p class="muted" style="grid-column: 1 / -1">No dishes match “${state.search}”.</p>`);
     }
     if (state.filter === POPULAR) {
       return setHTML($grid, html`
-        ${favourites.length ? [groupHead('★ Favourites'), favourites.map((m) => tile(m, true))] : ''}
-        ${bestSellers.length ? [groupHead('Best sellers', 'last 30 days'), bestSellers.map((m) => tile(m, true))] : ''}`);
+        ${favourites.length ? [groupHead('★ Favourites'), favourites.map((m) => dish(m, true))] : ''}
+        ${bestSellers.length ? [groupHead('Best sellers', 'last 30 days'), bestSellers.map((m) => dish(m, true))] : ''}`);
     }
     const shown = menu.filter((m) => state.filter === 'All' || m.category === state.filter);
-    setHTML($grid, html`${shown.map((m) => tile(m, false))}`);
+    setHTML($grid, html`${shown.map((m) => dish(m, false))}`);
   }
 
   function renderOrder() {
@@ -497,10 +529,12 @@ async function tableView(token, tableId, sectionArg) {
       : billed ? `Bill ${state.order.bill_no} printed at ${time(state.order.billed_at)} · waiting to pay`
       : `Eating since ${time(state.order.opened_at)}`;
     setHTML($panel, html`
+      <div class="grabber" aria-hidden="true"></div>
       <div class="order-head">
-        <span class="title">${multi ? `Order · Section ${section}` : 'Order'}</span>
+        <span><span class="title">${multi ? `Section ${section}` : 'Your order'}</span>
+          <span class="sub">${label}${state.items.length ? ` · ${b.itemCount} item${b.itemCount === 1 ? '' : 's'}` : ''}</span></span>
         <span>
-          ${state.items.length && !state.order?.bill_no ? html`<button type="button" class="destructive" id="clear">${multi ? 'Clear Section' : 'Clear Table'}</button>` : ''}
+          ${state.items.length && !state.order?.bill_no ? html`<button type="button" class="destructive" id="clear">Clear</button>` : ''}
           <button type="button" class="plain sheet-close" id="close-sheet" aria-label="Close order">Done</button>
         </span>
       </div>
@@ -508,13 +542,14 @@ async function tableView(token, tableId, sectionArg) {
         <ul class="order-lines">
           ${state.items.map((i) => html`
             <li class="order-line">
-              <span><span class="name">${i.name}</span><span class="each">@ ${fmt(i.unit_price)}</span></span>
-              <span class="stepper" role="group" aria-label="Quantity of ${i.name}">
+              <span class="name">${i.name}</span>
+              <span class="line-total">${rs(i.unit_price * i.quantity)}</span>
+              <span class="each">${rs(i.unit_price)} each</span>
+              <span class="qty" role="group" aria-label="Quantity of ${i.name}">
                 <button type="button" data-dec="${i.id}" aria-label="Remove one ${i.name}">−</button>
                 <output>${i.quantity}</output>
                 <button type="button" data-inc="${i.id}" aria-label="Add one ${i.name}">+</button>
               </span>
-              <span class="line-total">${fmt(i.unit_price * i.quantity)}</span>
             </li>`)}
         </ul>
         <div class="totals">
@@ -535,9 +570,10 @@ async function tableView(token, tableId, sectionArg) {
             : html`<button type="button" class="secondary" id="print-bill">Print Bill</button>
                    <button type="button" id="save-order">Save Order</button>`}
         </div>`
-      : html`<div class="empty">No items yet.<br>Tap dishes from the menu to add them.</div>`}`);
+      : html`<div class="empty"><span class="emoji" aria-hidden="true">🍛</span>No dishes yet.<br>Tap <strong>ADD</strong> on a dish to start the order.</div>`}`);
     setHTML($bar, state.items.length
-      ? html`<span><span class="money">${rs(b.total)}</span> · ${b.itemCount} item${b.itemCount === 1 ? '' : 's'}</span><button type="button" id="view-order">View Order</button>`
+      ? html`<span><span class="count">${b.itemCount} item${b.itemCount === 1 ? '' : 's'} · ${label}</span><span class="money">${rs(b.total)}</span></span>
+          <button type="button" id="view-order">View Order ›</button>`
       : html``);
     $bar.hidden = !state.items.length;
     if (!state.items.length) document.body.classList.remove('sheet-open');
@@ -583,7 +619,14 @@ async function tableView(token, tableId, sectionArg) {
   }
 
   let tempId = 0;
+  const tick = () => { try { navigator.vibrate?.(8); } catch { /* not supported */ } };
   $grid.addEventListener('click', (e) => {
+    const minus = e.target.closest('[data-minus]');
+    if (minus) {
+      const item = state.items.find((i) => i.menu_item_id === Number(minus.dataset.minus));
+      if (item) { tick(); changeQty(item, -1); }
+      return;
+    }
     const btn = e.target.closest('[data-add]');
     if (!btn) return;
     const m = menu.find((x) => x.id === Number(btn.dataset.add));
@@ -592,8 +635,10 @@ async function tableView(token, tableId, sectionArg) {
       item = { id: --tempId, menu_item_id: m.id, name: m.name, unit_price: m.price, quantity: 0 };
       state.items.push(item);
     }
+    tick();
     changeQty(item, 1);
   });
+  document.getElementById('sheet-backdrop').addEventListener('click', () => document.body.classList.remove('sheet-open'));
 
   $panel.addEventListener('click', (e) => {
     const t = e.target.closest('button, a');
@@ -748,30 +793,37 @@ async function billsView(token, day = localDay()) {
   const rows = orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp) }));
   const sum = (f) => rows.filter(f).reduce((s, r) => s + r.b.total, 0);
   const isToday = day === localDay();
+  const total = sum(() => true);
+  const byMethod = Object.fromEntries(METHODS.map((m) => [m, sum((r) => r.o.payment_method === m)]));
+  const badge = (m) => html`<span class="method-badge m-${m.toLowerCase()}" aria-hidden="true">${m === 'Cash' ? '₹' : m}</span>`;
   setHTML($view, html`
     <div class="page-head">
-      <div><h1>Bills</h1><p class="muted">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
-      <label style="min-width:180px">Date <input type="date" id="day" value="${day}" max="${localDay()}"></label>
+      <div><p class="eyebrow">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long' })}</p>
+        <h1>Bills</h1></div>
+      <label class="date-pick"><span class="sr-only">Date</span><input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
     </div>
+    <section class="sales-card" aria-label="Sales">
+      <span class="label">${isToday ? 'Today’s sales' : `Sales on ${new Date(start).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}`} · ${rows.length} bill${rows.length === 1 ? '' : 's'}</span>
+      <span class="big">${rs(total)}</span>
+      <div class="split-bar" aria-hidden="true">${total ? METHODS.filter((m) => byMethod[m]).map((m) => html`<span class="m-${m.toLowerCase()}" style="flex:${byMethod[m]}"></span>`) : ''}</div>
+      <div class="split-legend">${METHODS.map((m) => html`<div class="m-${m.toLowerCase()}"><span class="k">${m}</span><strong>${rs(byMethod[m]).replace('.00', '')}</strong></div>`)}</div>
+    </section>
     ${unpaid.length ? html`
-      <h3 style="margin-top:0">Waiting for payment</h3>
+      <h3 style="margin-top:0">Waiting for payment · ${unpaid.length}</h3>
       <div class="list" style="margin-bottom:20px">${unpaid.map((o) => html`
         <a class="list-row" href="#/bill/${o.id}">
-          <span class="grow"><strong>${o.bill_no}</strong> · ${tableLabel(o.dining_tables.name, o.section)}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
+          <span class="method-badge m-wait" aria-hidden="true">⏳</span>
+          <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section)}</strong> · ${o.bill_no}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
           <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
         </a>`)}</div>` : ''}
-    <h3 style="margin-top:0">Paid</h3>
-    <div class="stats">
-      <div class="stat lead"><span>Total sales</span><strong>${rs(sum(() => true))}</strong></div>
-      ${METHODS.map((m) => html`<div class="stat"><span>${m}</span><strong>${rs(sum((r) => r.o.payment_method === m))}</strong></div>`)}
-      <div class="stat"><span>Bills</span><strong>${rows.length}</strong></div>
-    </div>
+    <h3 style="margin-top:0">Paid bills</h3>
     ${rows.length ? html`<div class="list">${rows.map(({ o, b }) => html`
       <a class="list-row" href="#/bill/${o.id}">
-        <span class="grow"><strong>${o.bill_no}</strong> · ${tableLabel(o.dining_tables.name, o.section)}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
+        ${badge(o.payment_method)}
+        <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section)}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
         <span class="money">${rs(b.total)}</span><span class="chevron" aria-hidden="true">›</span>
       </a>`)}</div>`
-    : html`<div class="card empty">No bills ${isToday ? 'yet today' : 'on this day'}. Settled bills appear here.</div>`}`);
+    : html`<div class="card empty"><span class="emoji" aria-hidden="true">🧾</span>No bills ${isToday ? 'yet today' : 'on this day'}. Paid bills appear here.</div>`}`);
   document.getElementById('day').addEventListener('change', (e) => { location.hash = `#/bills/${e.target.value}`; });
 }
 
@@ -1085,10 +1137,17 @@ async function route() {
     const m = path.match(re);
     if (!m) continue;
     document.querySelectorAll('[data-tab]').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+    // Show placeholders only if loading takes a moment, so fast screens don't flash.
+    const placeholder = setTimeout(() => {
+      if (token === renderToken) setHTML($view, html`<div class="skeleton" aria-label="Loading"><div class="bar"></div><div class="block"></div>
+        <div class="grid">${[1, 2, 3, 4].map(() => html`<div class="block"></div>`)}</div></div>`);
+    }, 150);
     try {
       await view(token, ...m.slice(1).filter(Boolean));
+      clearTimeout(placeholder);
       if (token === renderToken) window.scrollTo(0, 0);
     } catch (err) {
+      clearTimeout(placeholder);
       if (token === renderToken) setHTML($view, html`<div class="card empty">${friendly(err)}<br><br><a href="#/">Back to Tables</a></div>`);
     }
     return;
