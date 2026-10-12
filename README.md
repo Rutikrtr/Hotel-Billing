@@ -29,6 +29,10 @@ The design follows Apple's Human Interface Guidelines using the `apple-design` s
 - **Accessibility**: tap targets are at least 44 px, and every text colour meets 4.5:1 contrast in both light and dark mode (values are noted in `style.css`). Veg and non-veg marks differ by shape as well as colour.
 - **Receipt**: monospaced type styled like a thermal-printer bill.
 
+## Restaurants
+
+Each owner account runs its own restaurant, with its own menu, tables, bills, bill numbers, settings and staff. Accounts never see another restaurant's data. Staff the owner adds in Settings join that owner's restaurant.
+
 ## Security
 
 Every table has row-level security, so only signed-in staff can read or write data. A settled bill can't be edited, and only the `settle_order()` database function can close an order. The schema is in `supabase/migrations/`.

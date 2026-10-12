@@ -46,8 +46,8 @@ function toast(message, kind = '') {
 function friendly(error) {
   const msg = error?.message || String(error);
   if (/orders_one_open_per_table/.test(msg)) return 'This table already has a running order. Refresh to see it.';
-  if (/menu_items_name_key/.test(msg)) return 'An item with that name is already on the menu.';
-  if (/dining_tables_name_key/.test(msg)) return 'A table with that name already exists.';
+  if (/menu_items_restaurant_name_key|menu_items_name_key/.test(msg)) return 'An item with that name is already on the menu.';
+  if (/dining_tables_restaurant_name_key|dining_tables_name_key/.test(msg)) return 'A table with that name already exists.';
   if (/orders_table_id_fkey/.test(msg)) return 'This table has bills, so it can’t be removed. Rename it instead.';
   if (/row-level security|Not authorised/.test(msg)) return 'You don’t have permission to do that.';
   if (/Failed to fetch|NetworkError/.test(msg)) return 'No connection. Check the internet and try again.';
@@ -74,7 +74,8 @@ function onSubmit(root, selector, handler) {
   }));
 }
 
-const getSettings = () => q(sb.from('settings').select('*').single());
+// Each account belongs to one restaurant; row-level security returns only that one.
+const getSettings = () => q(sb.from('restaurants').select('*').single());
 
 // ---------- sign in ----------
 
@@ -383,7 +384,7 @@ async function tablesView(token) {
 async function tableView(token, tableId) {
   const [table, menu, settings, open] = await Promise.all([
     q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
-    q(sb.from('menu_items').select('*').order('category').order('name')),
+    q(sb.from('menu_items').select('*').order('id')),
     getSettings(),
     q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()),
   ]);
@@ -716,7 +717,7 @@ async function billsView(token, day = localDay()) {
 // ---------- Menu ----------
 
 async function menuView(token) {
-  const menu = await q(sb.from('menu_items').select('*').order('category').order('name'));
+  const menu = await q(sb.from('menu_items').select('*').order('id'));
   if (token !== renderToken) return;
   const categories = [...new Set(menu.map((m) => m.category))];
   const suggestions = ['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', ...categories]
@@ -900,10 +901,10 @@ async function settingsView(token) {
     const rate = f.gst_on === 'on' ? toPaise(f.tax_rate) : 0;
     if (f.gst_on === 'on' && rate <= 0) throw new Error('Enter a GST rate, like 5, or turn GST off.');
     if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
-    await q(sb.from('settings').update({
+    await q(sb.from('restaurants').update({
       hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
       hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate,
-    }).eq('id', 1));
+    }).eq('id', s.id));
     document.getElementById('brand').textContent = f.hotel_name.trim();
     toast('Changes saved');
   });
