@@ -93,6 +93,7 @@ function authError(error) {
   if (/Email not confirmed/i.test(msg)) return 'unconfirmed';
   if (/already registered|already been registered/i.test(msg)) return 'exists';
   if (/Password should be at least/i.test(msg)) return 'Use a password with at least 6 characters.';
+  if (/email rate limit/i.test(msg)) return 'Too many emails were sent in the last hour, so we can’t send another one yet. Try again in an hour, or ask the owner to set up your account.';
   if (/rate limit|too many/i.test(msg)) return 'Too many attempts. Wait a minute, then try again.';
   if (/valid email|invalid format/i.test(msg)) return 'Enter a valid email address, like name@example.com.';
   return friendly(error);
