@@ -41,6 +41,12 @@ supabase/migrations/
 tests/             unit tests for billing.js
 ```
 
+## Deploying
+
+Netlify deploys `main` automatically: every push to GitHub goes live in about a minute (see `netlify.toml`).
+On Netlify's free plan, a private repo only builds commits from the one Git account linked in Netlify
+(**Team settings → Git contributors**), so commits must be authored by that account.
+
 ## Local development
 
 ```bash
