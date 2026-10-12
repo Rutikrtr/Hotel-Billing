@@ -382,16 +382,24 @@ async function tablesView(token) {
 // ---------- Order for a table ----------
 
 async function tableView(token, tableId) {
-  const [table, menu, settings, open] = await Promise.all([
+  const [table, menu, settings, open, sales] = await Promise.all([
     q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
     q(sb.from('menu_items').select('*').order('id')),
     getSettings(),
     q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()),
+    // Best sellers are a convenience: if they can't load, the menu still works.
+    sb.rpc('popular_menu_items', { p_days: 30, p_limit: 12 }).then((r) => r.data ?? [], () => []),
   ]);
   if (token !== renderToken) return;
 
-  const state = { order: open, items: open ? open.order_items : [], filter: 'All', search: '' };
-  const categories = ['All', ...new Set(menu.map((m) => m.category))];
+  // Popular tab: starred dishes first, then the month's best sellers.
+  const soldById = new Map(sales.map((r) => [r.menu_item_id, Number(r.sold)]));
+  const favourites = menu.filter((m) => m.is_favorite);
+  const bestSellers = sales.map((r) => menu.find((m) => m.id === r.menu_item_id)).filter((m) => m && !m.is_favorite);
+  const POPULAR = '★ Popular';
+  const hasPopular = favourites.length + bestSellers.length > 0;
+  const state = { order: open, items: open ? open.order_items : [], filter: hasPopular ? POPULAR : 'All', search: '' };
+  const categories = [...(hasPopular ? [POPULAR] : []), 'All', ...new Set(menu.map((m) => m.category))];
   let queue = Promise.resolve();
 
   setHTML($view, html`
@@ -405,7 +413,7 @@ async function tableView(token, tableId) {
           <div class="menu-tools">
             <input type="search" id="search" placeholder="Search menu" aria-label="Search menu" autocomplete="off">
             <div class="chips" role="toolbar" aria-label="Categories">
-              ${categories.map((c) => html`<button class="chip" type="button" data-cat="${c}" aria-pressed="${c === 'All'}">${c}</button>`)}
+              ${categories.map((c) => html`<button class="chip" type="button" data-cat="${c}" aria-pressed="${c === state.filter}">${c}</button>`)}
             </div>
           </div>
           <div class="menu-grid" id="menu-grid"></div>
@@ -422,20 +430,34 @@ async function tableView(token, tableId) {
   const qtyOf = (menuId) => state.items.find((i) => i.menu_item_id === menuId)?.quantity ?? 0;
   const bill = () => orderBill(state.order, state.items, settings.tax_rate_bp);
 
+  const tile = (m, showSold) => {
+    const n = qtyOf(m.id);
+    const sold = soldById.get(m.id);
+    return html`<button type="button" class="menu-item ${n ? 'in-order' : ''}" data-add="${m.id}" ${m.available ? '' : new Raw('disabled')}
+        aria-label="Add ${m.name}, ${rs(m.price)}${m.is_favorite ? ', favourite' : ''}${n ? `, ${n} in order` : ''}${m.available ? '' : ', sold out'}">
+      <span class="top"><span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span><span>${m.name}</span>${m.is_favorite ? html`<span class="star" aria-hidden="true">★</span>` : ''}</span>
+      <span class="price">${m.available ? rs(m.price) : 'Sold out'}${showSold && sold ? html`<span class="sold"> · ${sold} sold</span>` : ''}</span>
+      ${n ? html`<span class="count" aria-hidden="true">${n}</span>` : ''}
+    </button>`;
+  };
+  const groupHead = (title, note) => html`<h3 class="grid-head">${title}${note ? html` <span class="grid-note">${note}</span>` : ''}</h3>`;
+
   function renderMenu() {
     const term = state.search.trim().toLowerCase();
-    const shown = menu.filter((m) => (state.filter === 'All' || m.category === state.filter) && (!term || m.name.toLowerCase().includes(term)));
     if (!menu.length) return setHTML($grid, html`<div class="card empty" style="grid-column: 1 / -1">Your menu is empty. <a href="#/menu">Add menu items</a> to start taking orders.</div>`);
-    if (!shown.length) return setHTML($grid, html`<p class="muted" style="grid-column: 1 / -1">No items match “${state.search}”.</p>`);
-    setHTML($grid, html`${shown.map((m) => {
-      const n = qtyOf(m.id);
-      return html`<button type="button" class="menu-item ${n ? 'in-order' : ''}" data-add="${m.id}" ${m.available ? '' : new Raw('disabled')}
-          aria-label="Add ${m.name}, ${rs(m.price)}${n ? `, ${n} in order` : ''}${m.available ? '' : ', sold out'}">
-        <span class="top"><span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span><span>${m.name}</span></span>
-        <span class="price">${m.available ? rs(m.price) : 'Sold out'}</span>
-        ${n ? html`<span class="count" aria-hidden="true">${n}</span>` : ''}
-      </button>`;
-    })}`);
+    // Searching looks through the whole menu, whichever tab is selected.
+    if (term) {
+      const found = menu.filter((m) => m.name.toLowerCase().includes(term));
+      return setHTML($grid, found.length ? html`${found.map((m) => tile(m, false))}`
+        : html`<p class="muted" style="grid-column: 1 / -1">No items match “${state.search}”.</p>`);
+    }
+    if (state.filter === POPULAR) {
+      return setHTML($grid, html`
+        ${favourites.length ? [groupHead('★ Favourites'), favourites.map((m) => tile(m, true))] : ''}
+        ${bestSellers.length ? [groupHead('Best sellers', 'last 30 days'), bestSellers.map((m) => tile(m, true))] : ''}`);
+    }
+    const shown = menu.filter((m) => state.filter === 'All' || m.category === state.filter);
+    setHTML($grid, html`${shown.map((m) => tile(m, false))}`);
   }
 
   function renderOrder() {
@@ -723,7 +745,7 @@ async function menuView(token) {
   const suggestions = ['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', ...categories]
     .filter((c, i, a) => a.indexOf(c) === i);
   const root = mount(html`
-    <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'}</p></div></div>
+    <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'} · tap ☆ to show a dish first when taking orders</p></div></div>
     <div class="two-col">
       <div>
         ${menu.length ? categories.map((c) => html`
@@ -735,6 +757,7 @@ async function menuView(token) {
                 <span class="row-name">${m.name}</span>
                 <span class="sub"><span class="money">${rs(m.price)}</span>${m.available ? '' : ' · Sold out'}</span>
               </button>
+              <button type="button" class="star-btn" data-star="${m.id}" aria-pressed="${m.is_favorite}" aria-label="${m.is_favorite ? 'Remove' : 'Add'} ${m.name} ${m.is_favorite ? 'from' : 'to'} favourites" title="${m.is_favorite ? 'Favourite: shows first when taking orders' : 'Mark as favourite'}">${m.is_favorite ? '★' : '☆'}</button>
               <label class="toggle" title="${m.available ? 'Available' : 'Sold out'}"><input type="checkbox" data-avail="${m.id}" ${m.available ? new Raw('checked') : ''} aria-label="${m.name} available today"></label>
               <button type="button" class="secondary edit-btn" data-edit="${m.id}" aria-label="Edit ${m.name}">Edit</button>
             </div>`)}
@@ -769,6 +792,7 @@ async function menuView(token) {
         </div>
         <label class="toggle"><input type="checkbox" name="is_veg" ${m.is_veg ? new Raw('checked') : ''}> Vegetarian</label>
         <label class="toggle"><input type="checkbox" name="available" ${m.available ? new Raw('checked') : ''}> Available today</label>
+        <label class="toggle"><input type="checkbox" name="is_favorite" ${m.is_favorite ? new Raw('checked') : ''}> ★ Favourite (shows first when taking orders)</label>
         <p class="hint">Tables already running keep the old rate. New orders use the new one.</p>
         <button type="submit" value="save" class="wide">Save Changes</button>
         <button type="button" class="secondary wide" data-close>Cancel</button>
@@ -791,6 +815,7 @@ async function menuView(token) {
       btn.textContent = 'Saving…';
       sb.from('menu_items').update({
         name: f.name.trim(), category: f.category.trim(), price, is_veg: f.is_veg === 'on', available: f.available === 'on',
+        is_favorite: f.is_favorite === 'on',
       }).eq('id', m.id).then(({ error }) => {
         if (error) {
           btn.disabled = false;
@@ -833,6 +858,16 @@ async function menuView(token) {
     });
   });
   root.addEventListener('click', (e) => {
+    const star = e.target.closest('[data-star]');
+    if (star) {
+      const m = menu.find((x) => x.id === Number(star.dataset.star));
+      act(star, async () => {
+        await q(sb.from('menu_items').update({ is_favorite: !m.is_favorite }).eq('id', m.id));
+        toast(m.is_favorite ? `${m.name} removed from favourites` : `★ ${m.name} will show first`);
+        menuView(renderToken);
+      });
+      return;
+    }
     const b = e.target.closest('[data-edit]');
     if (b) openEditor(menu.find((x) => x.id === Number(b.dataset.edit)));
   });

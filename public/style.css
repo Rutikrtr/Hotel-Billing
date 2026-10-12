@@ -328,3 +328,13 @@ body.signed-out main { min-height: 100vh; min-height: 100dvh; display: grid; pla
 .table-tile.billed .amount, .table-tile.billed .tag { color: var(--billed); }
 .order-note { margin: 0 16px; padding: 10px 12px; border-radius: 10px; font-size: 14px; background: var(--billed-bg); color: var(--text); }
 .paid-note { margin: -6px 0 0; color: var(--muted); text-align: center; }
+
+/* Favourites and best sellers */
+.menu-item .star { color: var(--billed); margin-left: auto; font-size: 15px; line-height: 1.25; }
+.menu-item .sold { color: var(--muted); font-family: var(--font); font-size: 13px; }
+.grid-head { grid-column: 1 / -1; margin: 8px 0 0; }
+.grid-head:first-child { margin-top: 0; }
+.grid-note { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.star-btn { min-height: 44px; min-width: 44px; padding: 0; background: none; color: var(--muted); font-size: 24px; font-weight: 400; }
+.star-btn[aria-pressed="true"] { color: var(--billed); }
+.star-btn:hover { color: var(--billed); }

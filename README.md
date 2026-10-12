@@ -8,14 +8,14 @@ It runs in the browser, keeps its data in **Supabase**, and is hosted on **Netli
 
 Each table goes through three steps:
 
-1. **Take the order**: tap a free table and tap dishes to add them (use − / + for quantities). Tap **Save Order** and the table shows as *Eating*. You can come back and add more at any time.
+1. **Take the order**: tap a free table. It opens on **★ Popular**, which shows your starred favourites first and then the best sellers of the last 30 days. **All** and the category tabs follow. Tap dishes to add them (use − / + for quantities). Tap **Save Order** and the table shows as *Eating*. You can come back and add more at any time.
 2. **Print the bill** after they've eaten: open the table and tap **Print Bill**. The bill gets its number (`B00001`, `B00002`, …) and prints straight away, and the table shows *Bill printed* in amber. If items change after printing, use **Reprint Bill**.
 3. **Receive payment**: tap **Receive Payment** and choose Cash, UPI or Card. The table is free again.
 
 Other screens:
 
 - **Bills**: bills waiting for payment, the day's sales split by payment method, and every paid bill. Pick a date to see past days.
-- **Menu**: add dishes, or tap **Edit** to change a dish's name, rate, category, veg/non-veg or availability.
+- **Menu**: add dishes, tap ☆ to make a dish a favourite, or tap **Edit** to change its name, rate, category, veg/non-veg or availability.
 - **Settings**: restaurant name, address and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables, and staff access.
 
 Bills round to the nearest rupee and show the round-off. Amounts are stored in whole paise, so totals are exact.
