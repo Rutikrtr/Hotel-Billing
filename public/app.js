@@ -1,42 +1,56 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import { buildBill, fmt, nightsBetween, plain, toPaise } from './billing.js';
+import { fmt, orderBill, plain, toPaise } from './billing.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-const PAYMENT_METHODS = ['Cash', 'Card', 'UPI', 'Bank transfer'];
+const METHODS = ['Cash', 'UPI', 'Card'];
 const $view = document.getElementById('view');
-const $nav = document.getElementById('nav');
 let session = null;
 let staffCheck = null; // cached is_staff() result for the current session
+let renderToken = 0;   // guards against a slow view finishing after the person navigated away
 
-// ---------- small helpers ----------
+// ---------- helpers ----------
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 class Raw { constructor(s) { this.s = s; } }
-const raw = (s) => new Raw(s);
-/** Tagged template that HTML-escapes every interpolated value unless wrapped in raw() or produced by html``. */
+/** Tagged template that HTML-escapes every interpolated value unless it came from html``. */
 function html(strings, ...values) {
   const part = (v) => (v instanceof Raw ? v.s : Array.isArray(v) ? v.map(part).join('') : v === false || v == null ? '' : esc(v));
-  return raw(strings.reduce((out, s, i) => out + s + (i < values.length ? part(values[i]) : ''), ''));
+  return new Raw(strings.reduce((out, s, i) => out + s + (i < values.length ? part(values[i]) : ''), ''));
 }
-const render = (tpl) => { $view.innerHTML = tpl.s; };
-const rupees = (p) => `₹${fmt(p)}`;
-const today = () => new Date().toLocaleDateString('en-CA');
+const setHTML = (el, tpl) => { el.innerHTML = tpl.s; };
+/** Render a view into a fresh container so listeners from earlier renders are dropped with it. */
+function mount(tpl) {
+  const root = document.createElement('div');
+  root.innerHTML = tpl.s;
+  $view.replaceChildren(root);
+  return root;
+}
+const rs = (p) => `₹${fmt(p)}`;
 const pct = (bp) => `${+(bp / 100).toFixed(2)}%`;
+const time = (iso) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+const dateTime = (iso) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+const minutesSince = (iso) => Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+const since = (iso) => { const m = minutesSince(iso); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`; };
+const localDay = (d = new Date()) => d.toLocaleDateString('en-CA');
 
-function flash(message, kind = 'success') {
-  const el = document.getElementById('flash');
-  el.innerHTML = html`<div class="flash ${kind}">${message}</div>`.s;
-  clearTimeout(flash.t);
-  flash.t = setTimeout(() => { el.innerHTML = ''; }, 5000);
+function toast(message, kind = '') {
+  const el = document.getElementById('toast');
+  el.textContent = message;
+  el.className = `toast ${kind}`;
+  el.hidden = false;
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => { el.hidden = true; }, kind === 'error' ? 5000 : 2500);
 }
 
 function friendly(error) {
   const msg = error?.message || String(error);
-  if (/bookings_one_active_per_room/.test(msg)) return 'That room already has a guest checked in';
-  if (/rooms_number_key/.test(msg)) return 'A room with that number already exists';
-  if (/bookings_room_id_fkey/.test(msg)) return 'Cannot delete a room that has bookings';
-  if (/row-level security/.test(msg)) return 'You do not have permission to do that';
+  if (/orders_one_open_per_table/.test(msg)) return 'This table already has a running order. Refresh to see it.';
+  if (/menu_items_name_key/.test(msg)) return 'An item with that name is already on the menu.';
+  if (/dining_tables_name_key/.test(msg)) return 'A table with that name already exists.';
+  if (/orders_table_id_fkey/.test(msg)) return 'This table has bills, so it can’t be removed. Rename it instead.';
+  if (/row-level security|Not authorised/.test(msg)) return 'You don’t have permission to do that.';
+  if (/Failed to fetch|NetworkError/.test(msg)) return 'No connection. Check the internet and try again.';
   return msg;
 }
 
@@ -46,441 +60,601 @@ async function q(promise) {
   return data;
 }
 
-/** Wire a form's submit to an async handler, showing errors as flash messages. */
-function onSubmit(selector, handler) {
-  document.querySelectorAll(selector).forEach((form) => form.addEventListener('submit', async (e) => {
+/** Run an action from a button or form, showing failures as a toast. */
+async function act(button, fn) {
+  if (button) button.disabled = true;
+  try { await fn(); } catch (err) { toast(friendly(err), 'error'); } finally { if (button) button.disabled = false; }
+}
+
+function onSubmit(root, selector, handler) {
+  root.querySelectorAll(selector).forEach((form) => form.addEventListener('submit', (e) => {
     e.preventDefault();
-    const btn = form.querySelector('button');
     if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
-    btn && (btn.disabled = true);
-    try {
-      await handler(Object.fromEntries(new FormData(form)), form);
-    } catch (err) {
-      flash(friendly(err), 'error');
-    } finally {
-      btn && (btn.disabled = false);
-    }
+    act(form.querySelector('button[type=submit], button:not([type])'), () => handler(Object.fromEntries(new FormData(form)), form));
   }));
 }
 
-// ---------- auth ----------
+const getSettings = () => q(sb.from('settings').select('*').single());
 
-function loginView() {
-  $nav.hidden = true;
-  render(html`
-    <div class="login">
+// ---------- sign in ----------
+
+function signInView() {
+  document.body.classList.add('signed-out');
+  setHTML($view, html`
+    <div class="signin">
       <h1>Hotel Billing</h1>
-      <p class="small">Sign in with your staff account.</p>
-      <form id="auth" class="stack">
+      <p class="muted">Sign in with your staff account.</p>
+      <form id="auth" class="card form">
         <label>Email <input type="email" name="email" autocomplete="email" required></label>
         <label>Password <input type="password" name="password" autocomplete="current-password" minlength="6" required></label>
-        <div class="row">
-          <button name="mode" value="in">Sign in</button>
-          <button type="button" id="signup" class="secondary">Create account</button>
-        </div>
+        <button type="submit">Sign In</button>
+        <button type="button" id="signup" class="secondary">Create Account</button>
       </form>
-      <p class="small">New staff: create an account with the email the owner added in Settings.
-        You'll get a confirmation email – click the link, then come back here and sign in.</p>
+      <p class="small">New staff: create an account with the email the owner added in Settings, confirm it from your inbox, then sign in.</p>
     </div>`);
   const form = document.getElementById('auth');
-  onSubmit('#auth', async ({ email, password }) => {
+  onSubmit($view, '#auth', async ({ email, password }) => {
     const { error } = await sb.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) throw new Error(/Invalid login/.test(error.message) ? 'Email or password is incorrect.' : error.message);
   });
-  document.getElementById('signup').addEventListener('click', async () => {
+  document.getElementById('signup').addEventListener('click', (e) => {
     if (!form.reportValidity()) return;
     const { email, password } = Object.fromEntries(new FormData(form));
-    const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
-    if (error) return flash(friendly(error), 'error');
-    flash(data.session ? 'Account created' : 'Account created. Check your email for the confirmation link, then sign in.');
+    act(e.currentTarget, async () => {
+      const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin } });
+      if (error) throw error;
+      toast(data.session ? 'Account created.' : 'Check your email to confirm the account, then sign in.');
+    });
   });
 }
 
-// ---------- views ----------
+// ---------- Tables ----------
 
-async function dashboard() {
-  const [rooms, active, payments, open] = await Promise.all([
-    q(sb.from('rooms').select('*').order('number')),
-    q(sb.from('bookings').select('id, room_id, guest_name, check_out').eq('status', 'checked_in')),
-    q(sb.from('payments').select('amount').gte('paid_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString())),
-    loadOutstanding(),
+async function tablesView(token) {
+  const [tables, open, settings] = await Promise.all([
+    q(sb.from('dining_tables').select('*').order('sort').order('name')),
+    q(sb.from('orders').select('*, order_items(quantity, unit_price, name)').eq('status', 'open')),
+    getSettings(),
   ]);
-  const byRoom = Object.fromEntries(active.map((b) => [b.room_id, b]));
-  render(html`
-    <h1>Dashboard</h1>
-    <div class="stats">
-      <div class="stat"><span>Occupied rooms</span><strong>${active.length} / ${rooms.length}</strong></div>
-      <div class="stat"><span>Collected today</span><strong>${rupees(payments.reduce((s, p) => s + p.amount, 0))}</strong></div>
-      <div class="stat"><span>Outstanding balance</span><strong>${rupees(open)}</strong></div>
-    </div>
-    <h2>Rooms</h2>
-    ${rooms.length ? '' : html`<p>No rooms yet. <a href="#/rooms">Add your rooms</a> to get started.</p>`}
-    <div class="room-grid">
-      ${rooms.map((r) => { const b = byRoom[r.id]; return html`
-        <div class="room ${b ? 'occupied' : 'free'}">
-          <strong>${r.number}</strong><span>${r.room_type}</span>
-          ${b ? html`<a href="#/booking/${b.id}">${b.guest_name}</a><small>Out: ${b.check_out}</small>`
-              : html`<small>Available · ${rupees(r.rate)}/night</small>`}
-        </div>`; })}
-    </div>`);
-}
-
-async function loadOutstanding() {
-  const [settings, bookings] = await Promise.all([
-    q(sb.from('settings').select('tax_rate_bp').single()),
-    q(sb.from('bookings').select('*, rooms(*), extras(*), payments(*)')),
-  ]);
-  return bookings.reduce((sum, b) => {
-    const bill = buildBill(b, b.rooms, b.extras, b.payments, b.tax_rate_bp ?? settings.tax_rate_bp);
-    return sum + Math.max(0, bill.balance);
-  }, 0);
-}
-
-async function roomsView() {
-  const [rooms, active, used] = await Promise.all([
-    q(sb.from('rooms').select('*').order('number')),
-    q(sb.from('bookings').select('room_id').eq('status', 'checked_in')),
-    q(sb.from('bookings').select('room_id')),
-  ]);
-  const occupied = new Set(active.map((b) => b.room_id));
-  const hasBookings = new Set(used.map((b) => b.room_id));
-  render(html`
-    <h1>Rooms</h1>
-    <form id="add-room" class="inline-form">
-      <input name="number" placeholder="Room no." required>
-      <input name="room_type" placeholder="Type (e.g. Deluxe)" required>
-      <input name="rate" placeholder="Rate per night" inputmode="decimal" required>
-      <button>Add room</button>
-    </form>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Room</th><th>Type</th><th>Rate / night (₹)</th><th>Status</th><th></th></tr></thead>
-      <tbody>
-      ${rooms.length ? rooms.map((r) => html`
-        <tr>
-          <td>${r.number}</td><td>${r.room_type}</td>
-          <td><form class="rate-form inline-form compact" data-id="${r.id}">
-            <input name="rate" value="${plain(r.rate)}" inputmode="decimal" required>
-            <button class="secondary">Save</button></form></td>
-          <td>${occupied.has(r.id) ? 'Occupied' : 'Available'}</td>
-          <td>${hasBookings.has(r.id) ? '' : html`<form class="del-room" data-id="${r.id}" data-confirm="Delete room ${r.number}?"><button class="danger">Delete</button></form>`}</td>
-        </tr>`) : html`<tr><td colspan="5">No rooms yet.</td></tr>`}
-      </tbody>
-    </table></div>`);
-  onSubmit('#add-room', async (f) => {
-    await q(sb.from('rooms').insert({ number: f.number.trim(), room_type: f.room_type.trim(), rate: toPaise(f.rate) }));
-    flash(`Room ${f.number} added`);
-    roomsView();
-  });
-  onSubmit('.rate-form', async (f, form) => {
-    await q(sb.from('rooms').update({ rate: toPaise(f.rate) }).eq('id', form.dataset.id));
-    flash('Rate updated');
-  });
-  onSubmit('.del-room', async (_f, form) => {
-    await q(sb.from('rooms').delete().eq('id', form.dataset.id));
-    flash('Room deleted');
-    roomsView();
-  });
-}
-
-async function bookingsView(status = '') {
-  let query = sb.from('bookings').select('*, rooms(number)').order('id', { ascending: false });
-  if (status) query = query.eq('status', status);
-  const rows = await q(query);
-  const tab = (s, label) => html`<a href="#/bookings${s ? '/' + s : ''}" class="${status === s ? 'active' : ''}">${label}</a>`;
-  render(html`
-    <h1>Bookings</h1>
-    <p class="filters">${tab('', 'All')}${tab('checked_in', 'In house')}${tab('checked_out', 'Checked out')}</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>#</th><th>Guest</th><th>Room</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Invoice</th></tr></thead>
-      <tbody>
-      ${rows.length ? rows.map((b) => html`
-        <tr>
-          <td><a href="#/booking/${b.id}">${b.id}</a></td>
-          <td><a href="#/booking/${b.id}">${b.guest_name}</a></td>
-          <td>${b.rooms.number}</td><td>${b.check_in}</td><td>${b.check_out}</td>
-          <td>${b.status === 'checked_in' ? 'In house' : 'Checked out'}</td>
-          <td>${b.invoice_no ? html`<a href="#/invoice/${b.id}">${b.invoice_no}</a>` : ''}</td>
-        </tr>`) : html`<tr><td colspan="7">No bookings.</td></tr>`}
-      </tbody>
-    </table></div>`);
-}
-
-async function checkinView() {
-  const [rooms, active] = await Promise.all([
-    q(sb.from('rooms').select('*').order('number')),
-    q(sb.from('bookings').select('room_id').eq('status', 'checked_in')),
-  ]);
-  const busy = new Set(active.map((b) => b.room_id));
-  const free = rooms.filter((r) => !busy.has(r.id));
-  if (!free.length) return render(html`<h1>Check in guest</h1><p>No rooms are available. <a href="#/rooms">Manage rooms</a></p>`);
-  render(html`
-    <h1>Check in guest</h1>
-    <form id="checkin" class="stack">
-      <label>Room <select name="room_id" required>
-        ${free.map((r) => html`<option value="${r.id}">${r.number} – ${r.room_type} (${rupees(r.rate)}/night)</option>`)}
-      </select></label>
-      <label>Guest name <input name="guest_name" required></label>
-      <label>Phone <input name="guest_phone" type="tel"></label>
-      <label>Address <textarea name="guest_address" rows="2"></textarea></label>
-      <label>Guest GSTIN (optional) <input name="guest_gstin"></label>
-      <div class="row">
-        <label>Check-in <input type="date" name="check_in" value="${today()}" required></label>
-        <label>Expected check-out <input type="date" name="check_out" required></label>
+  if (token !== renderToken) return;
+  const byTable = Object.fromEntries(open.map((o) => [o.table_id, o]));
+  const running = open.map((o) => orderBill(o, o.order_items, settings.tax_rate_bp));
+  const onTables = running.reduce((s, b) => s + b.total, 0);
+  setHTML($view, html`
+    <div class="page-head">
+      <div>
+        <h1>Tables</h1>
+        <p class="muted">${open.length ? `${open.length} running · ${rs(onTables)} on tables` : 'All tables are free'}</p>
       </div>
-      <label>Rate per night (leave blank for room's default) <input name="rate" inputmode="decimal"></label>
-      <button>Check in</button>
-    </form>`);
-  onSubmit('#checkin', async (f) => {
-    nightsBetween(f.check_in, f.check_out);
-    const room = free.find((r) => r.id === Number(f.room_id));
-    const booking = await q(sb.from('bookings').insert({
-      room_id: room.id, guest_name: f.guest_name.trim(), guest_phone: f.guest_phone.trim(),
-      guest_address: f.guest_address.trim(), guest_gstin: f.guest_gstin.trim().toUpperCase(),
-      check_in: f.check_in, check_out: f.check_out, rate: toPaise(f.rate) || room.rate,
-    }).select().single());
-    flash(`${booking.guest_name} checked in to room ${room.number}`);
-    location.hash = `#/booking/${booking.id}`;
-  });
-}
-
-async function loadBooking(id) {
-  const [booking, settings] = await Promise.all([
-    q(sb.from('bookings').select('*, rooms(*), extras(*), payments(*)').eq('id', id).order('id', { referencedTable: 'extras' }).order('id', { referencedTable: 'payments' }).single()),
-    q(sb.from('settings').select('*').single()),
-  ]);
-  const taxRateBp = booking.tax_rate_bp ?? settings.tax_rate_bp;
-  const bill = buildBill(booking, booking.rooms, booking.extras, booking.payments, taxRateBp);
-  return { booking, room: booking.rooms, settings, taxRateBp, bill };
-}
-
-function billTable({ bill, taxRateBp }, editable) {
-  const extraCol = editable ? html`<td class="no-print"></td>` : '';
-  const row = (label, value, cls = '') => html`<tr class="${cls}"><td colspan="3">${label}</td><td class="num">${value}</td>${extraCol}</tr>`;
-  return html`
-    <div class="table-wrap"><table class="bill">
-      <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate (₹)</th><th class="num">Amount (₹)</th>${editable ? html`<th class="no-print"></th>` : ''}</tr></thead>
-      <tbody>
-        ${bill.lines.map((l, i) => html`
-          <tr>
-            <td>${l.description}</td><td class="num">${l.quantity}</td>
-            <td class="num">${fmt(l.unitPrice)}</td><td class="num">${fmt(l.quantity * l.unitPrice)}</td>
-            ${editable ? html`<td class="no-print">${i ? html`<form class="del-extra" data-id="${l.id}"><button class="link danger" title="Remove">✕</button></form>` : ''}</td>` : ''}
-          </tr>`)}
-      </tbody>
-      <tfoot>
-        ${row('Subtotal', fmt(bill.subtotal))}
-        ${bill.discount ? row('Discount', `-${fmt(bill.discount)}`) : ''}
-        ${bill.tax ? [row(`CGST @ ${pct(taxRateBp / 2)}`, fmt(bill.cgst)), row(`SGST @ ${pct(taxRateBp / 2)}`, fmt(bill.sgst))] : ''}
-        ${row('Total', rupees(bill.total), 'total')}
-        ${row('Paid', fmt(bill.paid))}
-        ${row(bill.balance >= 0 ? 'Balance due' : 'Refund due', rupees(Math.abs(bill.balance)), 'total')}
-      </tfoot>
-    </table></div>`;
-}
-
-async function bookingView(id) {
-  const ctx = await loadBooking(id);
-  const { booking, room, bill } = ctx;
-  const open = booking.status === 'checked_in';
-  render(html`
-    <h1>${booking.guest_name} <small>· Room ${room.number} · ${open ? 'In house' : 'Checked out'}</small></h1>
-    <p>${booking.check_in} → ${booking.check_out}
-      ${booking.guest_phone ? html`· ${booking.guest_phone}` : ''}
-      ${booking.invoice_no ? html`· Invoice <strong>${booking.invoice_no}</strong>` : ''}</p>
-    ${billTable(ctx, open)}
-    <div class="panels">
-      ${open ? html`
-      <section>
-        <h2>Add charge</h2>
-        <form id="add-extra" class="stack">
-          <input name="description" placeholder="e.g. Restaurant, Laundry, Minibar" list="extra-suggestions" required>
-          <datalist id="extra-suggestions">
-            ${['Restaurant', 'Room service', 'Laundry', 'Minibar', 'Extra bed', 'Airport transfer'].map((s) => html`<option value="${s}">`)}
-          </datalist>
-          <div class="row">
-            <input name="quantity" type="number" min="1" value="1" aria-label="Quantity">
-            <input name="unit_price" placeholder="Unit price" inputmode="decimal" required>
-          </div>
-          <button>Add charge</button>
-        </form>
-      </section>
-      <section>
-        <h2>Stay</h2>
-        <form id="stay" class="stack">
-          <label>Check-out date <input type="date" name="check_out" value="${booking.check_out}" min="${booking.check_in}" required></label>
-          <label>Discount (₹) <input name="discount" inputmode="decimal" value="${plain(booking.discount)}"></label>
-          <button class="secondary">Update</button>
-        </form>
-      </section>` : ''}
-      <section>
-        <h2>Record payment</h2>
-        <form id="pay" class="stack">
-          <input name="amount" placeholder="Amount" inputmode="decimal" value="${bill.balance > 0 ? plain(bill.balance) : ''}" required>
-          <select name="method">${PAYMENT_METHODS.map((m) => html`<option>${m}</option>`)}</select>
-          <button>Record payment</button>
-        </form>
-        ${booking.payments.length ? html`<ul class="payments">${booking.payments.map((p) => html`
-          <li>${new Date(p.paid_at).toLocaleString('en-IN')} · ${p.method} · ${rupees(p.amount)}</li>`)}</ul>` : ''}
-      </section>
     </div>
-    <div class="actions">
-      ${open ? html`<form id="checkout" data-confirm="Check out and generate the final invoice? Charges cannot be changed afterwards."><button>Check out &amp; generate invoice</button></form>` : ''}
-      <a class="button secondary" href="#/invoice/${booking.id}">${open ? 'Preview bill' : 'Print invoice'}</a>
+    ${tables.length ? '' : html`<div class="card empty">No tables yet. <a href="#/settings">Add tables in Settings</a>.</div>`}
+    <div class="tables">
+      ${tables.map((t) => {
+        const o = byTable[t.id];
+        if (!o) return html`<a class="table-tile" href="#/table/${t.id}" aria-label="${t.name}, free">
+          <span class="name">${t.name}</span><span class="state">Free</span></a>`;
+        const bill = orderBill(o, o.order_items, settings.tax_rate_bp);
+        return html`<a class="table-tile busy" href="#/table/${t.id}" aria-label="${t.name}, running, ${rs(bill.total)}">
+          <span><span class="name">${t.name}</span></span>
+          <span><span class="amount">${rs(bill.total)}</span><br>
+          <span class="state">${bill.itemCount} item${bill.itemCount === 1 ? '' : 's'} · ${since(o.opened_at)}</span></span></a>`;
+      })}
     </div>`);
-
-  const reload = () => bookingView(id);
-  onSubmit('#add-extra', async (f) => {
-    const quantity = Number(f.quantity) || 1;
-    await q(sb.from('extras').insert({ booking_id: booking.id, description: f.description.trim(), quantity, unit_price: toPaise(f.unit_price) }));
-    reload();
-  });
-  onSubmit('.del-extra', async (_f, form) => {
-    await q(sb.from('extras').delete().eq('id', form.dataset.id));
-    reload();
-  });
-  onSubmit('#stay', async (f) => {
-    nightsBetween(booking.check_in, f.check_out);
-    await q(sb.from('bookings').update({ check_out: f.check_out, discount: toPaise(f.discount) }).eq('id', booking.id));
-    flash('Stay updated');
-    reload();
-  });
-  onSubmit('#pay', async (f) => {
-    const amount = toPaise(f.amount);
-    if (amount <= 0) throw new Error('Payment amount must be greater than zero');
-    await q(sb.from('payments').insert({ booking_id: booking.id, amount, method: f.method }));
-    flash('Payment recorded');
-    reload();
-  });
-  onSubmit('#checkout', async () => {
-    const invoiceNo = await q(sb.rpc('checkout', { p_booking_id: booking.id }));
-    flash(`Checked out. Invoice ${invoiceNo} generated`);
-    reload();
-  });
 }
 
-async function invoiceView(id) {
-  const ctx = await loadBooking(id);
-  const { booking, room, settings: s } = ctx;
-  render(html`
-    <p class="no-print"><a href="#/booking/${booking.id}">← Back to booking</a> <button id="print">Print</button></p>
-    <div class="invoice">
-      <header>
-        <div>
-          <h1>${s.hotel_name}</h1>
-          ${s.hotel_address ? html`<p>${s.hotel_address}</p>` : ''}
-          ${s.hotel_phone ? html`<p>Phone: ${s.hotel_phone}</p>` : ''}
-          ${s.hotel_gstin ? html`<p>GSTIN: ${s.hotel_gstin}</p>` : ''}
+// ---------- Order for a table ----------
+
+async function tableView(token, tableId) {
+  const [table, menu, settings, open] = await Promise.all([
+    q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
+    q(sb.from('menu_items').select('*').order('category').order('name')),
+    getSettings(),
+    q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()),
+  ]);
+  if (token !== renderToken) return;
+
+  const state = { order: open, items: open ? open.order_items : [], filter: 'All', search: '' };
+  const categories = ['All', ...new Set(menu.map((m) => m.category))];
+  let queue = Promise.resolve();
+
+  setHTML($view, html`
+    <div class="order-page">
+      <div class="page-head">
+        <div><h1>${table.name}</h1><p class="muted" id="order-sub"></p></div>
+        <a class="button secondary" href="#/">All Tables</a>
+      </div>
+      <div class="order-layout">
+        <section aria-label="Menu">
+          <div class="menu-tools">
+            <input type="search" id="search" placeholder="Search menu" aria-label="Search menu" autocomplete="off">
+            <div class="chips" role="toolbar" aria-label="Categories">
+              ${categories.map((c) => html`<button class="chip" type="button" data-cat="${c}" aria-pressed="${c === 'All'}">${c}</button>`)}
+            </div>
+          </div>
+          <div class="menu-grid" id="menu-grid"></div>
+        </section>
+        <aside class="order-panel" id="order-panel" aria-label="Order"></aside>
+      </div>
+      <div class="order-bar" id="order-bar"></div>
+    </div>
+    <dialog id="settle"></dialog>`);
+
+  const $grid = document.getElementById('menu-grid');
+  const $panel = document.getElementById('order-panel');
+  const $bar = document.getElementById('order-bar');
+  const $sub = document.getElementById('order-sub');
+  const $settle = document.getElementById('settle');
+  const qtyOf = (menuId) => state.items.find((i) => i.menu_item_id === menuId)?.quantity ?? 0;
+  const bill = () => orderBill(state.order, state.items, settings.tax_rate_bp);
+
+  function renderMenu() {
+    const term = state.search.trim().toLowerCase();
+    const shown = menu.filter((m) => (state.filter === 'All' || m.category === state.filter) && (!term || m.name.toLowerCase().includes(term)));
+    if (!menu.length) return setHTML($grid, html`<div class="card empty" style="grid-column: 1 / -1">Your menu is empty. <a href="#/menu">Add menu items</a> to start taking orders.</div>`);
+    if (!shown.length) return setHTML($grid, html`<p class="muted" style="grid-column: 1 / -1">No items match “${state.search}”.</p>`);
+    setHTML($grid, html`${shown.map((m) => {
+      const n = qtyOf(m.id);
+      return html`<button type="button" class="menu-item ${n ? 'in-order' : ''}" data-add="${m.id}" ${m.available ? '' : new Raw('disabled')}
+          aria-label="Add ${m.name}, ${rs(m.price)}${n ? `, ${n} in order` : ''}${m.available ? '' : ', sold out'}">
+        <span class="top"><span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span><span>${m.name}</span></span>
+        <span class="price">${m.available ? rs(m.price) : 'Sold out'}</span>
+        ${n ? html`<span class="count" aria-hidden="true">${n}</span>` : ''}
+      </button>`;
+    })}`);
+  }
+
+  function renderOrder() {
+    const b = bill();
+    $sub.textContent = state.order ? `Running since ${time(state.order.opened_at)}` : 'Free';
+    setHTML($panel, html`
+      <div class="order-head">
+        <span class="title">Order</span>
+        <span>
+          ${state.items.length ? html`<button type="button" class="destructive" id="clear">Clear Table</button>` : ''}
+          <button type="button" class="plain sheet-close" id="close-sheet" aria-label="Close order">Done</button>
+        </span>
+      </div>
+      ${state.items.length ? html`
+        <ul class="order-lines">
+          ${state.items.map((i) => html`
+            <li class="order-line">
+              <span><span class="name">${i.name}</span><span class="each">@ ${fmt(i.unit_price)}</span></span>
+              <span class="stepper" role="group" aria-label="Quantity of ${i.name}">
+                <button type="button" data-dec="${i.id}" aria-label="Remove one ${i.name}">−</button>
+                <output>${i.quantity}</output>
+                <button type="button" data-inc="${i.id}" aria-label="Add one ${i.name}">+</button>
+              </span>
+              <span class="line-total">${fmt(i.unit_price * i.quantity)}</span>
+            </li>`)}
+        </ul>
+        <div class="totals">
+          <div><span class="muted">Subtotal</span><span class="money">${fmt(b.subtotal)}</span></div>
+          <div class="discount-row"><label for="discount" class="muted" style="display:flex">Discount (₹)</label>
+            <input id="discount" inputmode="decimal" value="${state.order?.discount ? plain(state.order.discount) : ''}" placeholder="0"></div>
+          ${b.tax ? html`
+            <div><span class="muted">CGST ${pct(settings.tax_rate_bp / 2)}</span><span class="money">${fmt(b.cgst)}</span></div>
+            <div><span class="muted">SGST ${pct(settings.tax_rate_bp / 2)}</span><span class="money">${fmt(b.sgst)}</span></div>` : ''}
+          ${b.roundOff ? html`<div><span class="muted">Round off</span><span class="money">${fmt(b.roundOff)}</span></div>` : ''}
+          <div class="grand"><span>Total</span><span class="money">${rs(b.total)}</span></div>
         </div>
-        <div class="meta">
-          <h2>${booking.invoice_no ? 'TAX INVOICE' : 'PROFORMA BILL'}</h2>
-          ${booking.invoice_no ? html`<p>Invoice no: <strong>${booking.invoice_no}</strong></p>` : ''}
-          <p>Booking #${booking.id}</p>
+        <div class="order-actions">
+          <a class="button secondary" href="#/bill/${state.order?.id ?? ''}" id="print-bill">Print Bill</a>
+          <button type="button" id="open-settle">Settle ${rs(b.total)}</button>
+        </div>`
+      : html`<div class="empty">No items yet.<br>Tap dishes from the menu to add them.</div>`}`);
+    setHTML($bar, state.items.length
+      ? html`<span><span class="money">${rs(b.total)}</span> · ${b.itemCount} item${b.itemCount === 1 ? '' : 's'}</span><button type="button" id="view-order">View Order</button>`
+      : html``);
+    $bar.hidden = !state.items.length;
+    if (!state.items.length) document.body.classList.remove('sheet-open');
+  }
+
+  const render = () => { renderMenu(); renderOrder(); };
+
+  /** Queue server writes so rapid taps apply in order. Each write sends the latest local quantity. */
+  function enqueue(fn) {
+    queue = queue.then(fn).catch(async (err) => {
+      toast(friendly(err), 'error');
+      const fresh = await q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()).catch(() => null);
+      state.order = fresh; state.items = fresh ? fresh.order_items : [];
+      render();
+    });
+    return queue;
+  }
+
+  async function ensureOrder() {
+    if (state.order) return state.order;
+    state.order = await q(sb.from('orders').insert({ table_id: table.id }).select().single());
+    return state.order;
+  }
+
+  function changeQty(item, delta) {
+    item.quantity += delta;
+    if (item.quantity <= 0) state.items = state.items.filter((i) => i !== item);
+    render();
+    enqueue(async () => {
+      const order = await ensureOrder();
+      if (item.quantity <= 0) {
+        if (item.id > 0) await q(sb.from('order_items').delete().eq('id', item.id));
+      } else if (item.id > 0) {
+        await q(sb.from('order_items').update({ quantity: item.quantity }).eq('id', item.id));
+      } else {
+        const row = await q(sb.from('order_items').insert({
+          order_id: order.id, menu_item_id: item.menu_item_id, name: item.name, unit_price: item.unit_price, quantity: item.quantity,
+        }).select().single());
+        item.id = row.id;
+        if (item.quantity !== row.quantity) await q(sb.from('order_items').update({ quantity: item.quantity }).eq('id', item.id));
+      }
+    });
+  }
+
+  let tempId = 0;
+  $grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-add]');
+    if (!btn) return;
+    const m = menu.find((x) => x.id === Number(btn.dataset.add));
+    let item = state.items.find((i) => i.menu_item_id === m.id);
+    if (!item) {
+      item = { id: --tempId, menu_item_id: m.id, name: m.name, unit_price: m.price, quantity: 0 };
+      state.items.push(item);
+    }
+    changeQty(item, 1);
+  });
+
+  $panel.addEventListener('click', (e) => {
+    const t = e.target.closest('button, a');
+    if (!t) return;
+    const find = (id) => state.items.find((i) => i.id === Number(id));
+    if (t.dataset.inc) changeQty(find(t.dataset.inc), 1);
+    else if (t.dataset.dec) changeQty(find(t.dataset.dec), -1);
+    else if (t.id === 'close-sheet') document.body.classList.remove('sheet-open');
+    else if (t.id === 'open-settle') queue.then(openSettle);
+    else if (t.id === 'print-bill') { e.preventDefault(); queue.then(() => { document.body.classList.remove('sheet-open'); location.hash = `#/bill/${state.order.id}`; }); }
+    else if (t.id === 'clear') {
+      if (!confirm(`Clear all items from ${table.name}? This can’t be undone.`)) return;
+      enqueue(async () => {
+        await q(sb.from('orders').delete().eq('id', state.order.id));
+        state.order = null; state.items = [];
+        render();
+        toast(`${table.name} cleared`);
+      });
+    }
+  });
+
+  $panel.addEventListener('change', (e) => {
+    if (e.target.id !== 'discount') return;
+    let paise;
+    try { paise = toPaise(e.target.value); } catch (err) { toast(err.message, 'error'); return; }
+    enqueue(async () => {
+      const order = await ensureOrder();
+      order.discount = paise;
+      renderOrder();
+      await q(sb.from('orders').update({ discount: paise }).eq('id', order.id));
+    });
+  });
+
+  $bar.addEventListener('click', (e) => { if (e.target.closest('#view-order')) document.body.classList.add('sheet-open'); });
+  document.getElementById('search').addEventListener('input', (e) => { state.search = e.target.value; renderMenu(); });
+  $view.querySelector('.chips').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-cat]');
+    if (!c) return;
+    state.filter = c.dataset.cat;
+    $view.querySelectorAll('[data-cat]').forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
+    renderMenu();
+  });
+
+  function openSettle() {
+    const b = bill();
+    setHTML($settle, html`
+      <form method="dialog" class="dialog-body" id="settle-form">
+        <h2 style="margin:0">Settle ${table.name}</h2>
+        <div class="due"><span class="muted">Amount due</span><span class="money">${rs(b.total)}</span></div>
+        <fieldset class="segmented" style="border:0;margin:0" aria-label="Payment method">
+          ${METHODS.map((m, i) => html`<label><input type="radio" name="method" value="${m}" ${i === 0 ? new Raw('checked') : ''}><span>${m}</span></label>`)}
+        </fieldset>
+        <button type="submit" value="ok" class="wide">Confirm Payment</button>
+        <button type="submit" value="cancel" class="secondary wide" formnovalidate>Cancel</button>
+      </form>`);
+    $settle.showModal();
+    $settle.querySelector('#settle-form').addEventListener('submit', (e) => {
+      if (e.submitter?.value !== 'ok') return;
+      e.preventDefault();
+      const method = new FormData(e.target).get('method');
+      act(e.submitter, async () => {
+        const billNo = await q(sb.rpc('settle_order', { p_order_id: state.order.id, p_method: method }));
+        $settle.close();
+        document.body.classList.remove('sheet-open');
+        toast(`Bill ${billNo} settled · ${method}`);
+        location.hash = `#/bill/${state.order.id}`;
+      });
+    });
+  }
+
+  render();
+}
+
+// ---------- Bill / receipt ----------
+
+async function billView(token, orderId) {
+  const [order, settings] = await Promise.all([
+    q(sb.from('orders').select('*, dining_tables(name), order_items(*)').eq('id', orderId).order('id', { referencedTable: 'order_items' }).single()),
+    getSettings(),
+  ]);
+  if (token !== renderToken) return;
+  const paid = order.status === 'paid';
+  const rate = order.tax_rate_bp ?? settings.tax_rate_bp;
+  const b = orderBill(order, order.order_items, rate);
+  const kv = (k, v, cls = '') => html`<div class="kv ${cls}"><span>${k}</span><span>${v}</span></div>`;
+  setHTML($view, html`
+    <div class="receipt-wrap">
+      <div class="receipt-actions no-print">
+        <a class="button secondary" href="${paid ? '#/bills' : `#/table/${order.table_id}`}">${paid ? 'All Bills' : `Back to ${order.dining_tables.name}`}</a>
+        <button type="button" id="print">Print</button>
+        ${paid ? html`<a class="button secondary" href="#/">Tables</a>` : ''}
+      </div>
+      <article class="receipt" aria-label="Bill">
+        <div class="center">
+          <div class="shop">${settings.hotel_name}</div>
+          ${settings.hotel_address ? html`<div>${settings.hotel_address}</div>` : ''}
+          ${settings.hotel_phone ? html`<div>Ph: ${settings.hotel_phone}</div>` : ''}
+          ${settings.hotel_gstin ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
+          ${paid ? '' : html`<div class="stamp">NOT PAID</div>`}
         </div>
-      </header>
-      <section class="guest">
-        <div>
-          <strong>Billed to</strong>
-          <p>${booking.guest_name}</p>
-          ${booking.guest_address ? html`<p>${booking.guest_address}</p>` : ''}
-          ${booking.guest_phone ? html`<p>${booking.guest_phone}</p>` : ''}
-          ${booking.guest_gstin ? html`<p>GSTIN: ${booking.guest_gstin}</p>` : ''}
-        </div>
-        <div>
-          <p>Room: ${room.number} (${room.room_type})</p>
-          <p>Check-in: ${booking.check_in}</p>
-          <p>Check-out: ${booking.check_out}</p>
-        </div>
-      </section>
-      ${billTable(ctx, false)}
-      ${booking.payments.length ? html`<p class="small">Payments: ${booking.payments.map((p) => `${p.method} ${rupees(p.amount)}`).join(', ')}</p>` : ''}
-      <footer>Thank you for staying with us!</footer>
+        <div class="rule"></div>
+        ${kv(paid ? `Bill: ${order.bill_no}` : 'Proforma bill', `Table: ${order.dining_tables.name}`)}
+        ${kv(dateTime(order.closed_at ?? new Date().toISOString()), paid ? order.payment_method : '')}
+        <div class="rule"></div>
+        <table>
+          <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Amt</th></tr></thead>
+          <tbody>${order.order_items.map((i) => html`
+            <tr><td>${i.name}<br><small>@ ${fmt(i.unit_price)}</small></td><td class="r">${i.quantity}</td><td class="r">${fmt(i.unit_price * i.quantity)}</td></tr>`)}
+          </tbody>
+        </table>
+        <div class="rule"></div>
+        ${kv(`Subtotal (${b.itemCount} items)`, fmt(b.subtotal))}
+        ${b.discount ? kv('Discount', `-${fmt(b.discount)}`) : ''}
+        ${b.tax ? [kv(`CGST @ ${pct(rate / 2)}`, fmt(b.cgst)), kv(`SGST @ ${pct(rate / 2)}`, fmt(b.sgst))] : ''}
+        ${b.roundOff ? kv('Round off', fmt(b.roundOff)) : ''}
+        <div class="rule"></div>
+        ${kv('TOTAL', rs(b.total), 'grand')}
+        <div class="rule"></div>
+        <div class="center">Thank you! Visit again.</div>
+      </article>
     </div>`);
   document.getElementById('print').addEventListener('click', () => window.print());
 }
 
-async function settingsView() {
-  const [s, staff] = await Promise.all([
-    q(sb.from('settings').select('*').single()),
-    q(sb.from('staff').select('*').order('created_at')),
+// ---------- Bills (history) ----------
+
+async function billsView(token, day = localDay()) {
+  const start = new Date(`${day}T00:00:00`);
+  const end = new Date(start); end.setDate(end.getDate() + 1);
+  const [orders, settings] = await Promise.all([
+    q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'paid')
+      .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString()).order('closed_at', { ascending: false })),
+    getSettings(),
   ]);
-  const me = staff.find((m) => m.user_id === session.user.id);
-  const isOwner = me?.role === 'owner';
-  render(html`
-    <h1>Settings</h1>
-    <form id="settings" class="stack">
-      <label>Hotel name <input name="hotel_name" value="${s.hotel_name}" required></label>
-      <label>Address <textarea name="hotel_address" rows="2">${s.hotel_address}</textarea></label>
-      <label>Phone <input name="hotel_phone" value="${s.hotel_phone}"></label>
-      <label>GSTIN <input name="hotel_gstin" value="${s.hotel_gstin}"></label>
-      <label>GST rate (%) – split equally into CGST and SGST on the invoice
-        <input name="tax_rate" inputmode="decimal" value="${+(s.tax_rate_bp / 100).toFixed(2)}"></label>
-      <p class="small">The rate applies to open bookings. Issued invoices keep the rate they were created with.</p>
-      <button>Save settings</button>
-    </form>
-    <h2>Staff access</h2>
-    <p class="small">Only these email addresses can use the app. New staff create an account on the sign-in page using the email added here.</p>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Email</th><th>Role</th><th>Account</th><th></th></tr></thead>
-      <tbody>${staff.map((m) => html`<tr>
-        <td>${m.email}</td><td>${m.role}</td><td>${m.user_id ? 'Active' : 'Not signed up yet'}</td>
-        <td>${isOwner && m.role !== 'owner' ? html`<form class="del-staff" data-email="${m.email}" data-confirm="Remove ${m.email}?"><button class="danger">Remove</button></form>` : ''}</td>
-      </tr>`)}</tbody>
-    </table></div>
-    ${isOwner ? html`<form id="add-staff" class="inline-form">
-      <input type="email" name="email" placeholder="staff@example.com" required><button>Add staff</button></form>` : ''}`);
-  onSubmit('#settings', async (f) => {
-    const taxRateBp = toPaise(f.tax_rate);
-    if (taxRateBp > 10000) throw new Error('Tax rate cannot exceed 100%');
+  if (token !== renderToken) return;
+  const rows = orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp) }));
+  const sum = (f) => rows.filter(f).reduce((s, r) => s + r.b.total, 0);
+  const isToday = day === localDay();
+  setHTML($view, html`
+    <div class="page-head">
+      <div><h1>Bills</h1><p class="muted">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
+      <label style="min-width:180px">Date <input type="date" id="day" value="${day}" max="${localDay()}"></label>
+    </div>
+    <div class="stats">
+      <div class="stat lead"><span>Total sales</span><strong>${rs(sum(() => true))}</strong></div>
+      ${METHODS.map((m) => html`<div class="stat"><span>${m}</span><strong>${rs(sum((r) => r.o.payment_method === m))}</strong></div>`)}
+      <div class="stat"><span>Bills</span><strong>${rows.length}</strong></div>
+    </div>
+    ${rows.length ? html`<div class="list">${rows.map(({ o, b }) => html`
+      <a class="list-row" href="#/bill/${o.id}">
+        <span class="grow"><strong>${o.bill_no}</strong> · ${o.dining_tables.name}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
+        <span class="money">${rs(b.total)}</span><span class="chevron" aria-hidden="true">›</span>
+      </a>`)}</div>`
+    : html`<div class="card empty">No bills ${isToday ? 'yet today' : 'on this day'}. Settled bills appear here.</div>`}`);
+  document.getElementById('day').addEventListener('change', (e) => { location.hash = `#/bills/${e.target.value}`; });
+}
+
+// ---------- Menu ----------
+
+async function menuView(token) {
+  const menu = await q(sb.from('menu_items').select('*').order('category').order('name'));
+  if (token !== renderToken) return;
+  const categories = [...new Set(menu.map((m) => m.category))];
+  const root = mount(html`
+    <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'}</p></div></div>
+    <div class="two-col">
+      <div>
+        ${menu.length ? categories.map((c) => html`
+          <h3>${c}</h3>
+          <div class="list">${menu.filter((m) => m.category === c).map((m) => html`
+            <div class="list-row">
+              <span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span>
+              <span class="grow">${m.name}${m.available ? '' : html`<div class="sub">Sold out</div>`}</span>
+              <input class="price-input" data-price="${m.id}" inputmode="decimal" value="${plain(m.price)}" aria-label="Price of ${m.name} in rupees">
+              <label class="toggle" title="Available"><input type="checkbox" data-avail="${m.id}" ${m.available ? new Raw('checked') : ''} aria-label="${m.name} available"></label>
+              <button type="button" class="destructive" data-del="${m.id}" aria-label="Delete ${m.name}">Delete</button>
+            </div>`)}
+          </div>`)
+        : html`<div class="card empty">Add your first dish using the form.</div>`}
+      </div>
+      <form id="add-item" class="card form">
+        <h2 style="margin:0">Add Item</h2>
+        <label>Name <input name="name" required autocomplete="off" placeholder="e.g. Paneer Butter Masala"></label>
+        <div class="row">
+          <label>Category <input name="category" list="cats" required placeholder="e.g. Main Course" value="${categories[0] ?? ''}"></label>
+          <label>Price (₹) <input name="price" inputmode="decimal" required placeholder="0"></label>
+        </div>
+        <datalist id="cats">${['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', ...categories]
+          .filter((c, i, a) => a.indexOf(c) === i).map((c) => html`<option value="${c}">`)}</datalist>
+        <label class="toggle"><input type="checkbox" name="is_veg" checked> Vegetarian</label>
+        <button type="submit">Add to Menu</button>
+      </form>
+    </div>`);
+  onSubmit(root, '#add-item', async (f, form) => {
+    const price = toPaise(f.price);
+    await q(sb.from('menu_items').insert({ name: f.name.trim(), category: f.category.trim(), price, is_veg: f.is_veg === 'on' }));
+    toast(`${f.name.trim()} added`);
+    form.reset();
+    menuView(renderToken);
+  });
+  root.addEventListener('change', (e) => {
+    const el = e.target;
+    if (el.dataset.price) {
+      act(null, async () => {
+        await q(sb.from('menu_items').update({ price: toPaise(el.value) }).eq('id', el.dataset.price));
+        toast('Price updated');
+      });
+    } else if (el.dataset.avail) {
+      act(null, async () => {
+        await q(sb.from('menu_items').update({ available: el.checked }).eq('id', el.dataset.avail));
+        menuView(renderToken);
+      });
+    }
+  });
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-del]');
+    if (!b) return;
+    const m = menu.find((x) => x.id === Number(b.dataset.del));
+    if (!confirm(`Delete ${m.name} from the menu? Past bills keep it.`)) return;
+    act(b, async () => {
+      await q(sb.from('menu_items').delete().eq('id', m.id));
+      toast(`${m.name} deleted`);
+      menuView(renderToken);
+    });
+  });
+}
+
+// ---------- Settings ----------
+
+async function settingsView(token) {
+  const [s, staff, tables] = await Promise.all([
+    getSettings(),
+    q(sb.from('staff').select('*').order('created_at')),
+    q(sb.from('dining_tables').select('*').order('sort').order('name')),
+  ]);
+  if (token !== renderToken) return;
+  const isOwner = staff.find((m) => m.user_id === session.user.id)?.role === 'owner';
+  const root = mount(html`
+    <div class="page-head"><div><h1>Settings</h1><p class="muted">${session.user.email}</p></div>
+      <button type="button" class="secondary" id="signout">Sign Out</button></div>
+    <div class="two-col">
+      <form id="settings" class="card form">
+        <h2 style="margin:0">Bill Details</h2>
+        <label>Restaurant name <input name="hotel_name" value="${s.hotel_name}" required></label>
+        <label>Address <textarea name="hotel_address" rows="2">${s.hotel_address}</textarea></label>
+        <div class="row">
+          <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}"></label>
+          <label>GSTIN <input name="hotel_gstin" value="${s.hotel_gstin}" autocapitalize="characters"></label>
+        </div>
+        <label>GST rate (%) <input name="tax_rate" inputmode="decimal" value="${+(s.tax_rate_bp / 100).toFixed(2)}"></label>
+        <p class="small" style="margin:0">Split equally into CGST and SGST. Settled bills keep the rate they were issued with.</p>
+        <button type="submit">Save Changes</button>
+      </form>
+      <div>
+        <div class="card">
+          <h2>Tables</h2>
+          <div class="table-chips">${tables.map((t) => html`
+            <span class="table-chip">${t.name}<button type="button" class="destructive" data-del-table="${t.id}" aria-label="Remove table ${t.name}">✕</button></span>`)}
+          </div>
+          <form id="add-table" class="row">
+            <input name="name" placeholder="e.g. T9 or Parcel" required aria-label="New table name">
+            <button type="submit" class="secondary">Add Table</button>
+          </form>
+        </div>
+        <div class="card" style="margin-top:20px">
+          <h2>Staff</h2>
+          <p class="small" style="margin-top:-6px">Only these emails can sign in. New staff create an account with the email added here.</p>
+          <div class="list" style="box-shadow:none">${staff.map((m) => html`
+            <div class="list-row">
+              <span class="grow">${m.email}<div class="sub">${m.role === 'owner' ? 'Owner' : 'Staff'} · ${m.user_id ? 'Active' : 'Hasn’t signed up yet'}</div></span>
+              ${isOwner && m.role !== 'owner' ? html`<button type="button" class="destructive" data-del-staff="${m.email}">Remove</button>` : ''}
+            </div>`)}
+          </div>
+          ${isOwner ? html`<form id="add-staff" class="row" style="margin-top:12px">
+            <input type="email" name="email" placeholder="staff@example.com" required aria-label="Staff email">
+            <button type="submit" class="secondary">Add Staff</button></form>` : ''}
+        </div>
+      </div>
+    </div>`);
+  onSubmit(root, '#settings', async (f) => {
+    const rate = toPaise(f.tax_rate);
+    if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
     await q(sb.from('settings').update({
       hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
-      hotel_gstin: f.hotel_gstin.trim().toUpperCase(), tax_rate_bp: taxRateBp,
+      hotel_gstin: f.hotel_gstin.trim().toUpperCase(), tax_rate_bp: rate,
     }).eq('id', 1));
-    flash('Settings saved');
+    document.getElementById('brand').textContent = f.hotel_name.trim();
+    toast('Changes saved');
   });
-  onSubmit('#add-staff', async (f) => {
+  onSubmit(root, '#add-table', async (f) => {
+    await q(sb.from('dining_tables').insert({ name: f.name.trim(), sort: tables.length + 1 }));
+    toast(`Table ${f.name.trim()} added`);
+    settingsView(renderToken);
+  });
+  onSubmit(root, '#add-staff', async (f) => {
     await q(sb.from('staff').insert({ email: f.email.trim().toLowerCase() }));
-    flash('Staff member added');
-    settingsView();
+    toast('Staff added');
+    settingsView(renderToken);
   });
-  onSubmit('.del-staff', async (_f, form) => {
-    await q(sb.from('staff').delete().eq('email', form.dataset.email));
-    settingsView();
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.id === 'signout') sb.auth.signOut();
+    else if (t.dataset.delTable) {
+      const name = tables.find((x) => x.id === Number(t.dataset.delTable)).name;
+      if (!confirm(`Remove table ${name}?`)) return;
+      act(t, async () => { await q(sb.from('dining_tables').delete().eq('id', t.dataset.delTable)); toast(`Table ${name} removed`); settingsView(renderToken); });
+    } else if (t.dataset.delStaff) {
+      if (!confirm(`Remove ${t.dataset.delStaff}? They won’t be able to sign in.`)) return;
+      act(t, async () => { await q(sb.from('staff').delete().eq('email', t.dataset.delStaff)); settingsView(renderToken); });
+    }
   });
 }
 
 // ---------- routing ----------
 
 const routes = [
-  [/^\/?$/, dashboard],
-  [/^\/rooms$/, roomsView],
-  [/^\/bookings(?:\/(checked_in|checked_out))?$/, bookingsView],
-  [/^\/checkin$/, checkinView],
-  [/^\/booking\/(\d+)$/, bookingView],
-  [/^\/invoice\/(\d+)$/, invoiceView],
-  [/^\/settings$/, settingsView],
+  [/^\/?$/, tablesView, 'tables'],
+  [/^\/table\/(\d+)$/, tableView, 'tables'],
+  [/^\/bill\/(\d+)$/, billView, 'bills'],
+  [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills'],
+  [/^\/menu$/, menuView, 'menu'],
+  [/^\/settings$/, settingsView, 'settings'],
 ];
 
 async function route() {
-  if (!session) return loginView();
+  const token = ++renderToken;
+  document.body.classList.remove('sheet-open');
+  if (!session) return signInView();
   staffCheck ??= sb.rpc('is_staff').then((r) => r.data === true);
   if (!(await staffCheck)) {
     staffCheck = null;
-    $nav.hidden = true;
-    return render(html`<div class="login"><h1>No access</h1>
-      <p>${session.user.email} is not on the staff list. Ask the hotel owner to add this email in Settings, then sign in again.</p>
-      <button id="logout2">Sign out</button></div>`), document.getElementById('logout2').onclick = () => sb.auth.signOut();
+    document.body.classList.add('signed-out');
+    setHTML($view, html`<div class="signin"><h1>No Access</h1>
+      <p>${session.user.email} isn’t on the staff list. Ask the owner to add this email in Settings, then sign in again.</p>
+      <button type="button" id="signout2" class="secondary">Sign Out</button></div>`);
+    document.getElementById('signout2').onclick = () => sb.auth.signOut();
+    return;
   }
-  $nav.hidden = false;
+  document.body.classList.remove('signed-out');
   document.getElementById('who').textContent = session.user.email;
   const path = location.hash.replace(/^#/, '') || '/';
-  for (const [re, view] of routes) {
+  for (const [re, view, tab] of routes) {
     const m = path.match(re);
-    if (m) {
-      try { await view(...m.slice(1)); } catch (err) { render(html`<p class="flash error">${friendly(err)}</p>`); }
-      return;
+    if (!m) continue;
+    document.querySelectorAll('[data-tab]').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+    try {
+      await view(token, ...m.slice(1).filter(Boolean));
+      if (token === renderToken) window.scrollTo(0, 0);
+    } catch (err) {
+      if (token === renderToken) setHTML($view, html`<div class="card empty">${friendly(err)}<br><br><a href="#/">Back to Tables</a></div>`);
     }
+    return;
   }
-  render(html`<h1>Not found</h1><p><a href="#/">Go to dashboard</a></p>`);
+  setHTML($view, html`<div class="card empty">Page not found. <a href="#/">Back to Tables</a></div>`);
 }
 
 document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
@@ -492,3 +666,5 @@ sb.auth.onAuthStateChange((event, s) => {
   // Defer: calling Supabase from inside this callback can deadlock the auth client.
   if (changed || event === 'INITIAL_SESSION') setTimeout(route, 0);
 });
+// Show the restaurant name in the top bar once signed in.
+sb.auth.getSession().then(({ data }) => data.session && getSettings().then((s) => { document.getElementById('brand').textContent = s.hotel_name; }).catch(() => {}));

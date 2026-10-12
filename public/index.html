@@ -2,26 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F2F2EF" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0F1012" media="(prefers-color-scheme: dark)">
   <title>Hotel Billing</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233043C9'/%3E%3Cpath d='M9 8h14v17l-2.3-1.6L18.3 25 16 23.4 13.7 25l-2.4-1.6L9 25z' fill='%23fff'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <nav id="nav" class="no-print" hidden>
-    <a class="brand" href="#/">Hotel Billing</a>
-    <a href="#/">Dashboard</a>
-    <a href="#/checkin">Check in</a>
-    <a href="#/bookings">Bookings</a>
-    <a href="#/rooms">Rooms</a>
-    <a href="#/settings">Settings</a>
-    <span class="spacer"></span>
-    <span id="who" class="small"></span>
-    <button id="logout" class="link">Sign out</button>
+<body class="signed-out">
+  <nav class="tabbar" aria-label="Sections">
+    <span class="brand" id="brand">Hotel Billing</span>
+    <a class="tab" href="#/" data-tab="tables">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
+      <span>Tables</span></a>
+    <a class="tab" href="#/bills" data-tab="bills">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2.5h14v19l-2.33-1.6L14.33 21.5 12 19.9l-2.33 1.6-2.34-1.6L5 21.5zM8 7v1.6h8V7zm0 4v1.6h8V11zm0 4v1.6h5V15z" fill-rule="evenodd"/></svg>
+      <span>Bills</span></a>
+    <a class="tab" href="#/menu" data-tab="menu">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 3h2v8a2 2 0 0 0 1 1.73V21h2v-8.27A2 2 0 0 0 10 11V3H8v6H7V3H5v6H4zm11 0c-1.66 0-3 2.24-3 5v5h2v8h2V3z"/></svg>
+      <span>Menu</span></a>
+    <a class="tab" href="#/settings" data-tab="settings">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.3 2h3.4l.5 2.6a8 8 0 0 1 1.9 1.1l2.5-.9 1.7 2.9-2 1.7a8 8 0 0 1 0 2.2l2 1.7-1.7 2.9-2.5-.9a8 8 0 0 1-1.9 1.1l-.5 2.6h-3.4l-.5-2.6a8 8 0 0 1-1.9-1.1l-2.5.9-1.7-2.9 2-1.7a8 8 0 0 1 0-2.2l-2-1.7 1.7-2.9 2.5.9a8 8 0 0 1 1.9-1.1zM12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z"/></svg>
+      <span>Settings</span></a>
+    <span class="who"><span id="who"></span><button id="logout" class="plain">Sign Out</button></span>
   </nav>
-  <main>
-    <div id="flash"></div>
-    <div id="view"><p class="small">Loading…</p></div>
-  </main>
+  <main id="view" aria-live="polite"><p class="muted">Loading…</p></main>
+  <div id="toast" class="toast" role="status" hidden></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>
