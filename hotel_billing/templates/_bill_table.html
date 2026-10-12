@@ -1,0 +1,33 @@
+<table class="bill">
+  <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate (₹)</th><th class="num">Amount (₹)</th>{% if editable %}<th class="no-print"></th>{% endif %}</tr></thead>
+  <tbody>
+    {% for line in bill.lines %}
+    <tr>
+      <td>{{ line.description }}</td>
+      <td class="num">{{ line.quantity }}</td>
+      <td class="num">{{ line.unit_price|money }}</td>
+      <td class="num">{{ line.amount|money }}</td>
+      {% if editable %}
+      <td class="no-print">
+        {% if not loop.first %}
+        <form method="post" action="{{ url_for('main.delete_extra', booking_id=booking.id, extra_id=extras[loop.index0 - 1].id) }}">
+          <button class="link danger" title="Remove">✕</button>
+        </form>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td colspan="3">Subtotal</td><td class="num">{{ bill.subtotal|money }}</td>{% if editable %}<td></td>{% endif %}</tr>
+    {% if bill.discount %}<tr><td colspan="3">Discount</td><td class="num">-{{ bill.discount|money }}</td>{% if editable %}<td></td>{% endif %}</tr>{% endif %}
+    {% if bill.tax %}
+    <tr><td colspan="3">CGST @ {{ '%g'|format(tax_rate / 2) }}%</td><td class="num">{{ bill.cgst|money }}</td>{% if editable %}<td></td>{% endif %}</tr>
+    <tr><td colspan="3">SGST @ {{ '%g'|format(tax_rate / 2) }}%</td><td class="num">{{ bill.sgst|money }}</td>{% if editable %}<td></td>{% endif %}</tr>
+    {% endif %}
+    <tr class="total"><td colspan="3">Total</td><td class="num">₹{{ bill.total|money }}</td>{% if editable %}<td></td>{% endif %}</tr>
+    <tr><td colspan="3">Paid</td><td class="num">{{ bill.paid|money }}</td>{% if editable %}<td></td>{% endif %}</tr>
+    <tr class="total"><td colspan="3">{{ 'Balance due' if bill.balance >= 0 else 'Refund due' }}</td><td class="num">₹{{ (bill.balance|abs)|money }}</td>{% if editable %}<td></td>{% endif %}</tr>
+  </tfoot>
+</table>

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+<form method="post" class="stack">
+  <label>Hotel name <input name="hotel_name" value="{{ settings.hotel_name }}" required></label>
+  <label>Address <textarea name="hotel_address" rows="2">{{ settings.hotel_address }}</textarea></label>
+  <label>Phone <input name="hotel_phone" value="{{ settings.hotel_phone }}"></label>
+  <label>GSTIN <input name="hotel_gstin" value="{{ settings.hotel_gstin }}"></label>
+  <label>GST rate (%) – split equally into CGST and SGST on the invoice
+    <input name="tax_rate" inputmode="decimal" value="{{ '%g'|format(tax_rate) }}">
+  </label>
+  <p class="small">The rate applies to open bookings. Issued invoices keep the rate they were created with.</p>
+  <button>Save settings</button>
+</form>
+{% endblock %}

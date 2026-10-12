@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Bookings{% endblock %}
+{% block content %}
+<h1>Bookings</h1>
+<p class="filters">
+  <a href="{{ url_for('main.bookings') }}" class="{{ 'active' if not status }}">All</a>
+  <a href="{{ url_for('main.bookings', status='checked_in') }}" class="{{ 'active' if status == 'checked_in' }}">In house</a>
+  <a href="{{ url_for('main.bookings', status='checked_out') }}" class="{{ 'active' if status == 'checked_out' }}">Checked out</a>
+</p>
+<table>
+  <thead><tr><th>#</th><th>Guest</th><th>Room</th><th>Check-in</th><th>Check-out</th><th>Status</th><th>Invoice</th></tr></thead>
+  <tbody>
+  {% for b in bookings %}
+    <tr>
+      <td><a href="{{ url_for('main.booking_detail', booking_id=b.id) }}">{{ b.id }}</a></td>
+      <td><a href="{{ url_for('main.booking_detail', booking_id=b.id) }}">{{ b.guest_name }}</a></td>
+      <td>{{ b.room_number }}</td>
+      <td>{{ b.check_in }}</td>
+      <td>{{ b.check_out }}</td>
+      <td>{{ 'In house' if b.status == 'checked_in' else 'Checked out' }}</td>
+      <td>{% if b.invoice_no %}<a href="{{ url_for('main.invoice', booking_id=b.id) }}">{{ b.invoice_no }}</a>{% endif %}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7">No bookings.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

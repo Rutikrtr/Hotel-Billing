@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Rooms{% endblock %}
+{% block content %}
+<h1>Rooms</h1>
+<form method="post" class="inline-form">
+  <input name="number" placeholder="Room no." required>
+  <input name="room_type" placeholder="Type (e.g. Deluxe)" required>
+  <input name="rate" placeholder="Rate per night" inputmode="decimal" required>
+  <button>Add room</button>
+</form>
+<table>
+  <thead><tr><th>Room</th><th>Type</th><th>Rate / night (₹)</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rooms %}
+    <tr>
+      <td>{{ r.number }}</td>
+      <td>{{ r.room_type }}</td>
+      <td>
+        <form method="post" action="{{ url_for('main.update_room_rate', room_id=r.id) }}" class="inline-form compact">
+          <input name="rate" value="{{ r.rate|money|replace(',', '') }}" inputmode="decimal" required>
+          <button class="secondary">Save</button>
+        </form>
+      </td>
+      <td>{{ 'Occupied' if r.occupied else 'Available' }}</td>
+      <td>
+        {% if not r.has_bookings %}
+        <form method="post" action="{{ url_for('main.delete_room', room_id=r.id) }}"
+              onsubmit="return confirm('Delete room {{ r.number }}?')">
+          <button class="danger">Delete</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5">No rooms yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Hotel Billing{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="no-print">
+    <a class="brand" href="{{ url_for('main.dashboard') }}">Hotel Billing</a>
+    <a href="{{ url_for('main.dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('main.new_booking') }}">Check in</a>
+    <a href="{{ url_for('main.bookings') }}">Bookings</a>
+    <a href="{{ url_for('main.rooms') }}">Rooms</a>
+    <a href="{{ url_for('main.settings') }}">Settings</a>
+  </nav>
+  <main>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="flash {{ category }} no-print">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
