@@ -27,6 +27,9 @@ function mount(tpl) {
   return root;
 }
 const rs = (p) => `₹${fmt(p)}`;
+/** "T1" for the first (or only) section of a table, "T1-B" for the others. */
+const tableLabel = (name, section) => (section && section !== 'A' ? `${name}-${section}` : name);
+const SECTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const pct = (bp) => `${+(bp / 100).toFixed(2)}%`;
 const time = (iso) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 const dateTime = (iso) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -45,7 +48,8 @@ function toast(message, kind = '') {
 
 function friendly(error) {
   const msg = error?.message || String(error);
-  if (/orders_one_open_per_table/.test(msg)) return 'This table already has a running order. Refresh to see it.';
+  if (/orders_one_open_per_table_section/.test(msg)) return 'This section already has a running order. Refresh to see it.';
+  if (/orders_one_open_per_table/.test(msg)) return 'Sections need one last database step. Ask your admin to finish the setup.';
   if (/menu_items_restaurant_name_key|menu_items_name_key/.test(msg)) return 'An item with that name is already on the menu.';
   if (/dining_tables_restaurant_name_key|dining_tables_name_key/.test(msg)) return 'A table with that name already exists.';
   if (/orders_table_id_fkey/.test(msg)) return 'This table has bills, so it can’t be removed. Rename it instead.';
@@ -349,7 +353,8 @@ async function tablesView(token) {
     getSettings(),
   ]);
   if (token !== renderToken) return;
-  const byTable = Object.fromEntries(open.map((o) => [o.table_id, o]));
+  const byTable = {};
+  open.forEach((o) => { (byTable[o.table_id] ??= []).push(o); });
   const waiting = open.filter((o) => o.billed_at).length;
   const eating = open.length - waiting;
   const summary = open.length
@@ -365,28 +370,33 @@ async function tablesView(token) {
     ${tables.length ? '' : html`<div class="card empty">No tables yet. <a href="#/settings">Add tables in Settings</a>.</div>`}
     <div class="tables">
       ${tables.map((t) => {
-        const o = byTable[t.id];
-        if (!o) return html`<a class="table-tile" href="#/table/${t.id}" aria-label="${t.name}, free">
+        const orders = (byTable[t.id] ?? []).sort((a, b) => a.section.localeCompare(b.section));
+        if (!orders.length) return html`<a class="table-tile" href="#/table/${t.id}" aria-label="${t.name}, free">
           <span class="name">${t.name}</span><span class="state">Free</span></a>`;
-        const bill = orderBill(o, o.order_items, settings.tax_rate_bp);
-        const billed = Boolean(o.billed_at);
+        const bills = orders.map((o) => orderBill(o, o.order_items, settings.tax_rate_bp));
+        const total = bills.reduce((sum, b) => sum + b.total, 0);
+        const billed = orders.every((o) => o.billed_at);
         const label = billed ? 'Bill printed' : 'Eating';
-        return html`<a class="table-tile busy ${billed ? 'billed' : ''}" href="#/table/${t.id}" aria-label="${t.name}, ${label}, ${rs(bill.total)}">
-          <span class="tile-top"><span class="name">${t.name}</span><span class="tag">${label}</span></span>
-          <span><span class="amount">${rs(bill.total)}</span><br>
-          <span class="state">${billed ? `Waiting to pay · ${since(o.billed_at)}` : `${bill.itemCount} item${bill.itemCount === 1 ? '' : 's'} · ${since(o.opened_at)}`}</span></span></a>`;
+        const o = orders[0];
+        const detail = orders.length > 1
+          ? orders.map((x, i) => `${x.section} ${rs(bills[i].total)}${x.billed_at ? ' (billed)' : ''}`).join(' · ')
+          : billed ? `Waiting to pay · ${since(o.billed_at)}` : `${bills[0].itemCount} item${bills[0].itemCount === 1 ? '' : 's'} · ${since(o.opened_at)}`;
+        return html`<a class="table-tile busy ${billed ? 'billed' : ''}" href="#/table/${t.id}" aria-label="${t.name}, ${orders.length > 1 ? `${orders.length} sections, ` : ''}${label}, ${rs(total)}">
+          <span class="tile-top"><span class="name">${t.name}</span><span class="tag">${orders.length > 1 ? `${orders.length} sections` : label}</span></span>
+          <span><span class="amount">${rs(total)}</span><br>
+          <span class="state">${detail}</span></span></a>`;
       })}
     </div>`);
 }
 
 // ---------- Order for a table ----------
 
-async function tableView(token, tableId) {
+async function tableView(token, tableId, sectionArg) {
   const [table, menu, settings, open, sales] = await Promise.all([
     q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
     q(sb.from('menu_items').select('*').order('id')),
     getSettings(),
-    q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()),
+    q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('section').order('id', { referencedTable: 'order_items' })),
     // Best sellers are a convenience: if they can't load, the menu still works.
     sb.rpc('popular_menu_items', { p_days: 30, p_limit: 12 }).then((r) => r.data ?? [], () => []),
   ]);
@@ -398,7 +408,14 @@ async function tableView(token, tableId) {
   const bestSellers = sales.map((r) => menu.find((m) => m.id === r.menu_item_id)).filter((m) => m && !m.is_favorite);
   const POPULAR = '★ Popular';
   const hasPopular = favourites.length + bestSellers.length > 0;
-  const state = { order: open, items: open ? open.order_items : [], filter: hasPopular ? POPULAR : 'All', search: '' };
+  // Sections: different groups sharing one table each get their own order and bill.
+  const section = sectionArg || open[0]?.section || 'A';
+  const sections = [...new Set([...open.map((o) => o.section), section])].sort();
+  const multi = sections.length > 1;
+  const current = open.find((o) => o.section === section) ?? null;
+  const totals = Object.fromEntries(open.map((o) => [o.section, orderBill(o, o.order_items, settings.tax_rate_bp).total]));
+  const label = tableLabel(table.name, section);
+  const state = { order: current, items: current ? current.order_items : [], filter: hasPopular ? POPULAR : 'All', search: '' };
   const categories = [...(hasPopular ? [POPULAR] : []), 'All', ...new Set(menu.map((m) => m.category))];
   let queue = Promise.resolve();
 
@@ -406,8 +423,18 @@ async function tableView(token, tableId) {
     <div class="order-page">
       <div class="page-head">
         <div><h1>${table.name}</h1><p class="muted" id="order-sub"></p></div>
-        <a class="button secondary" href="#/">All Tables</a>
+        <div class="head-actions">
+          <button type="button" class="secondary" id="add-section" ${current?.order_items.length ? '' : new Raw('hidden')}
+            title="Two different groups at this table? Give each its own bill.">+ Add Section</button>
+          <a class="button secondary" href="#/">All Tables</a>
+        </div>
       </div>
+      ${multi ? html`
+        <nav class="sections" aria-label="Sections of ${table.name}">
+          ${sections.map((x) => html`<a class="section-tab" href="#/table/${table.id}/${x}" ${x === section ? new Raw('aria-current="page"') : ''}>
+            <span class="section-name">Section ${x}</span>
+            <span class="section-total">${totals[x] != null ? rs(totals[x]) : 'New'}</span></a>`)}
+        </nav>` : ''}
       <div class="order-layout">
         <section aria-label="Menu">
           <div class="menu-tools">
@@ -463,14 +490,17 @@ async function tableView(token, tableId) {
   function renderOrder() {
     const b = bill();
     const billed = Boolean(state.order?.billed_at);
-    $sub.textContent = !state.order ? 'Free · take the order'
+    document.getElementById('add-section').hidden = !state.items.length;
+    const tabTotal = document.querySelector('.section-tab[aria-current="page"] .section-total');
+    if (tabTotal) tabTotal.textContent = state.items.length ? rs(b.total) : 'New';
+    $sub.textContent = !state.order ? (multi ? `Section ${section} · take this group’s order` : 'Free · take the order')
       : billed ? `Bill ${state.order.bill_no} printed at ${time(state.order.billed_at)} · waiting to pay`
       : `Eating since ${time(state.order.opened_at)}`;
     setHTML($panel, html`
       <div class="order-head">
-        <span class="title">Order</span>
+        <span class="title">${multi ? `Order · Section ${section}` : 'Order'}</span>
         <span>
-          ${state.items.length && !state.order?.bill_no ? html`<button type="button" class="destructive" id="clear">Clear Table</button>` : ''}
+          ${state.items.length && !state.order?.bill_no ? html`<button type="button" class="destructive" id="clear">${multi ? 'Clear Section' : 'Clear Table'}</button>` : ''}
           <button type="button" class="plain sheet-close" id="close-sheet" aria-label="Close order">Done</button>
         </span>
       </div>
@@ -519,7 +549,7 @@ async function tableView(token, tableId) {
   function enqueue(fn) {
     queue = queue.then(fn).catch(async (err) => {
       toast(friendly(err), 'error');
-      const fresh = await q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()).catch(() => null);
+      const fresh = await q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('section', section).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()).catch(() => null);
       state.order = fresh; state.items = fresh ? fresh.order_items : [];
       render();
     });
@@ -528,7 +558,7 @@ async function tableView(token, tableId) {
 
   async function ensureOrder() {
     if (state.order) return state.order;
-    state.order = await q(sb.from('orders').insert({ table_id: table.id }).select().single());
+    state.order = await q(sb.from('orders').insert({ table_id: table.id, section }).select().single());
     return state.order;
   }
 
@@ -576,7 +606,7 @@ async function tableView(token, tableId) {
       act(t, async () => {
         await queue;
         document.body.classList.remove('sheet-open');
-        toast(`${table.name} order saved`);
+        toast(`${label} order saved`);
         location.hash = '#/';
       });
     } else if (t.id === 'print-bill') {
@@ -589,17 +619,18 @@ async function tableView(token, tableId) {
     } else if (t.id === 'pay') {
       act(t, async () => {
         await queue;
-        const paid = await receivePayment({ orderId: state.order.id, tableName: table.name, total: bill().total });
+        const paid = await receivePayment({ orderId: state.order.id, tableName: label, total: bill().total });
         if (paid) { document.body.classList.remove('sheet-open'); location.hash = '#/'; }
       });
     }
     else if (t.id === 'clear') {
-      if (!confirm(`Clear all items from ${table.name}? This can’t be undone.`)) return;
+      if (!confirm(`Clear all items from ${multi ? `Section ${section} of ${table.name}` : table.name}? This can’t be undone.`)) return;
       enqueue(async () => {
         await q(sb.from('orders').delete().eq('id', state.order.id));
         state.order = null; state.items = [];
-        render();
-        toast(`${table.name} cleared`);
+        toast(`${label} cleared`);
+        if (multi) location.hash = `#/table/${table.id}`;
+        else render();
       });
     }
   });
@@ -617,6 +648,14 @@ async function tableView(token, tableId) {
   });
 
   $bar.addEventListener('click', (e) => { if (e.target.closest('#view-order')) document.body.classList.add('sheet-open'); });
+  document.getElementById('add-section').addEventListener('click', () => {
+    const next = [...SECTION_LETTERS].find((x) => !sections.includes(x));
+    if (!next) return toast('This table already has the most sections it can.', 'error');
+    queue.then(() => {
+      toast(`Section ${next} added · take the second group’s order`);
+      location.hash = `#/table/${table.id}/${next}`;
+    });
+  });
   document.getElementById('search').addEventListener('input', (e) => { state.search = e.target.value; renderMenu(); });
   $view.querySelector('.chips').addEventListener('click', (e) => {
     const c = e.target.closest('[data-cat]');
@@ -648,12 +687,12 @@ async function billView(token, orderId, autoPrint) {
           ? html`<a class="button secondary" href="#/bills">All Bills</a>
                  <button type="button" class="secondary" id="print">Print</button>
                  <a class="button secondary" href="#/">Tables</a>`
-          : html`<a class="button secondary" href="#/table/${order.table_id}">Add Items</a>
+          : html`<a class="button secondary" href="#/table/${order.table_id}/${order.section}">Add Items</a>
                  <button type="button" class="secondary" id="print">Print Again</button>
                  <button type="button" id="pay">Receive Payment</button>`}
       </div>
       ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}</p>`
-             : html`<p class="paid-note no-print">Give this bill to ${order.dining_tables.name}. Tap Receive Payment once they pay.</p>`}
+             : html`<p class="paid-note no-print">Give this bill to ${tableLabel(order.dining_tables.name, order.section)}. Tap Receive Payment once they pay.</p>`}
       <article class="receipt" aria-label="Bill">
         <div class="center">
           <div class="shop">${settings.hotel_name}</div>
@@ -662,7 +701,7 @@ async function billView(token, orderId, autoPrint) {
           ${settings.hotel_gstin && rate > 0 ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
         </div>
         <div class="rule"></div>
-        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', `Table: ${order.dining_tables.name}`)}
+        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', `Table: ${tableLabel(order.dining_tables.name, order.section)}`)}
         ${kv(dateTime(order.closed_at ?? order.billed_at ?? new Date().toISOString()), paid ? order.payment_method : '')}
         <div class="rule"></div>
         <table>
@@ -684,7 +723,7 @@ async function billView(token, orderId, autoPrint) {
     </div>`);
   document.getElementById('print').addEventListener('click', () => window.print());
   document.getElementById('pay')?.addEventListener('click', async () => {
-    const billNo = await receivePayment({ orderId: order.id, tableName: order.dining_tables.name, total: b.total });
+    const billNo = await receivePayment({ orderId: order.id, tableName: tableLabel(order.dining_tables.name, order.section), total: b.total });
     if (billNo) location.hash = '#/';
   });
   if (autoPrint) {
@@ -718,7 +757,7 @@ async function billsView(token, day = localDay()) {
       <h3 style="margin-top:0">Waiting for payment</h3>
       <div class="list" style="margin-bottom:20px">${unpaid.map((o) => html`
         <a class="list-row" href="#/bill/${o.id}">
-          <span class="grow"><strong>${o.bill_no}</strong> · ${o.dining_tables.name}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
+          <span class="grow"><strong>${o.bill_no}</strong> · ${tableLabel(o.dining_tables.name, o.section)}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
           <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
         </a>`)}</div>` : ''}
     <h3 style="margin-top:0">Paid</h3>
@@ -729,7 +768,7 @@ async function billsView(token, day = localDay()) {
     </div>
     ${rows.length ? html`<div class="list">${rows.map(({ o, b }) => html`
       <a class="list-row" href="#/bill/${o.id}">
-        <span class="grow"><strong>${o.bill_no}</strong> · ${o.dining_tables.name}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
+        <span class="grow"><strong>${o.bill_no}</strong> · ${tableLabel(o.dining_tables.name, o.section)}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
         <span class="money">${rs(b.total)}</span><span class="chevron" aria-hidden="true">›</span>
       </a>`)}</div>`
     : html`<div class="card empty">No bills ${isToday ? 'yet today' : 'on this day'}. Settled bills appear here.</div>`}`);
@@ -1009,7 +1048,7 @@ async function settingsView(token) {
 
 const routes = [
   [/^\/?$/, tablesView, 'tables'],
-  [/^\/table\/(\d+)$/, tableView, 'tables'],
+  [/^\/table\/(\d+)(?:\/([A-Z]))?$/, tableView, 'tables'],
   [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables'],
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills'],
   [/^\/menu$/, menuView, 'menu'],
