@@ -12,7 +12,7 @@ Each table goes through three steps:
 2. **Print the bill** after they've eaten: open the table and tap **Print Bill**. The bill gets its number (`B00001`, `B00002`, …) and prints straight away, and the table shows *Bill printed* in amber. If items change after printing, use **Reprint Bill**.
 3. **Receive payment**: tap **Receive Payment** and choose Cash, UPI or Card. The table is free again.
 
-**Two groups at one table?** After the first group's order is in, tap **+ Add Section** at the top of the table. You get tabs **Section A** and **Section B**, each with its own order, bill (printed as `T1-B`) and payment. A table has one section by default.
+**Two groups at one table?** After the first group's order is in, tap **+ Add Section** at the top of the table. You get tabs **Section A** and **Section B**, each with its own order, bill and payment. Once a table is split, both groups are labelled with their letter (`T1-A`, `T1-B`) on screen and on the printed bill. A table has one section by default.
 
 Other screens:
 

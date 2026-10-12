@@ -27,8 +27,8 @@ function mount(tpl) {
   return root;
 }
 const rs = (p) => `₹${fmt(p)}`;
-/** "T1" for the first (or only) section of a table, "T1-B" for the others. */
-const tableLabel = (name, section) => (section && section !== 'A' ? `${name}-${section}` : name);
+/** "T2" for a table with one group; "T2-A", "T2-B" once the table has been split into sections. */
+const tableLabel = (name, section, split = false) => (section && (split || section !== 'A') ? `${name}-${section}` : name);
 const SECTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const pct = (bp) => `${+(bp / 100).toFixed(2)}%`;
 const time = (iso) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
@@ -437,7 +437,7 @@ async function tableView(token, tableId, sectionArg) {
   const multi = sections.length > 1;
   const current = open.find((o) => o.section === section) ?? null;
   const totals = Object.fromEntries(open.map((o) => [o.section, orderBill(o, o.order_items, settings.tax_rate_bp).total]));
-  const label = tableLabel(table.name, section);
+  const label = tableLabel(table.name, section, multi || Boolean(current?.is_split));
   const state = { order: current, items: current ? current.order_items : [], filter: hasPopular ? POPULAR : 'All', search: '' };
   const categories = [...(hasPopular ? [POPULAR] : []), 'All', ...new Set(menu.map((m) => m.category))];
   let queue = Promise.resolve();
@@ -737,7 +737,7 @@ async function billView(token, orderId, autoPrint) {
                  <button type="button" id="pay">Receive Payment</button>`}
       </div>
       ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}</p>`
-             : html`<p class="paid-note no-print">Give this bill to ${tableLabel(order.dining_tables.name, order.section)}. Tap Receive Payment once they pay.</p>`}
+             : html`<p class="paid-note no-print">Give this bill to ${tableLabel(order.dining_tables.name, order.section, order.is_split)}. Tap Receive Payment once they pay.</p>`}
       <article class="receipt" aria-label="Bill">
         <div class="center">
           <div class="shop">${settings.hotel_name}</div>
@@ -746,7 +746,7 @@ async function billView(token, orderId, autoPrint) {
           ${settings.hotel_gstin && rate > 0 ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
         </div>
         <div class="rule"></div>
-        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', `Table: ${tableLabel(order.dining_tables.name, order.section)}`)}
+        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', `Table: ${tableLabel(order.dining_tables.name, order.section, order.is_split)}`)}
         ${kv(dateTime(order.closed_at ?? order.billed_at ?? new Date().toISOString()), paid ? order.payment_method : '')}
         <div class="rule"></div>
         <table>
@@ -768,7 +768,7 @@ async function billView(token, orderId, autoPrint) {
     </div>`);
   document.getElementById('print').addEventListener('click', () => window.print());
   document.getElementById('pay')?.addEventListener('click', async () => {
-    const billNo = await receivePayment({ orderId: order.id, tableName: tableLabel(order.dining_tables.name, order.section), total: b.total });
+    const billNo = await receivePayment({ orderId: order.id, tableName: tableLabel(order.dining_tables.name, order.section, order.is_split), total: b.total });
     if (billNo) location.hash = '#/';
   });
   if (autoPrint) {
@@ -813,14 +813,14 @@ async function billsView(token, day = localDay()) {
       <div class="list" style="margin-bottom:20px">${unpaid.map((o) => html`
         <a class="list-row" href="#/bill/${o.id}">
           <span class="method-badge m-wait" aria-hidden="true">⏳</span>
-          <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section)}</strong> · ${o.bill_no}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
+          <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section, o.is_split)}</strong> · ${o.bill_no}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
           <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
         </a>`)}</div>` : ''}
     <h3 style="margin-top:0">Paid bills</h3>
     ${rows.length ? html`<div class="list">${rows.map(({ o, b }) => html`
       <a class="list-row" href="#/bill/${o.id}">
         ${badge(o.payment_method)}
-        <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section)}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
+        <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section, o.is_split)}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
         <span class="money">${rs(b.total)}</span><span class="chevron" aria-hidden="true">›</span>
       </a>`)}</div>`
     : html`<div class="card empty"><span class="emoji" aria-hidden="true">🧾</span>No bills ${isToday ? 'yet today' : 'on this day'}. Paid bills appear here.</div>`}`);
