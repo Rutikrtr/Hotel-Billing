@@ -654,6 +654,8 @@ async function menuView(token) {
   const menu = await q(sb.from('menu_items').select('*').order('category').order('name'));
   if (token !== renderToken) return;
   const categories = [...new Set(menu.map((m) => m.category))];
+  const suggestions = ['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', ...categories]
+    .filter((c, i, a) => a.indexOf(c) === i);
   const root = mount(html`
     <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'}</p></div></div>
     <div class="two-col">
@@ -661,12 +663,14 @@ async function menuView(token) {
         ${menu.length ? categories.map((c) => html`
           <h3>${c}</h3>
           <div class="list">${menu.filter((m) => m.category === c).map((m) => html`
-            <div class="list-row">
+            <div class="list-row menu-row">
               <span class="diet ${m.is_veg ? 'veg' : 'nonveg'}" title="${m.is_veg ? 'Veg' : 'Non-veg'}"></span>
-              <span class="grow">${m.name}${m.available ? '' : html`<div class="sub">Sold out</div>`}</span>
-              <input class="price-input" data-price="${m.id}" inputmode="decimal" value="${plain(m.price)}" aria-label="Price of ${m.name} in rupees">
-              <label class="toggle" title="Available"><input type="checkbox" data-avail="${m.id}" ${m.available ? new Raw('checked') : ''} aria-label="${m.name} available"></label>
-              <button type="button" class="destructive" data-del="${m.id}" aria-label="Delete ${m.name}">Delete</button>
+              <button type="button" class="row-main" data-edit="${m.id}" aria-label="Edit ${m.name}">
+                <span class="row-name">${m.name}</span>
+                <span class="sub"><span class="money">${rs(m.price)}</span>${m.available ? '' : ' · Sold out'}</span>
+              </button>
+              <label class="toggle" title="${m.available ? 'Available' : 'Sold out'}"><input type="checkbox" data-avail="${m.id}" ${m.available ? new Raw('checked') : ''} aria-label="${m.name} available today"></label>
+              <button type="button" class="secondary edit-btn" data-edit="${m.id}" aria-label="Edit ${m.name}">Edit</button>
             </div>`)}
           </div>`)
         : html`<div class="card empty">Add your first dish using the form.</div>`}
@@ -676,15 +680,78 @@ async function menuView(token) {
         <label>Name <input name="name" required autocomplete="off" placeholder="e.g. Paneer Butter Masala"></label>
         <div class="row">
           <label>Category <input name="category" list="cats" required placeholder="e.g. Main Course" value="${categories[0] ?? ''}"></label>
-          <label>Price (₹) <input name="price" inputmode="decimal" required placeholder="0"></label>
+          <label>Rate (₹) <input name="price" inputmode="decimal" required placeholder="0"></label>
         </div>
-        <datalist id="cats">${['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', ...categories]
-          .filter((c, i, a) => a.indexOf(c) === i).map((c) => html`<option value="${c}">`)}</datalist>
         <label class="toggle"><input type="checkbox" name="is_veg" checked> Vegetarian</label>
         <button type="submit">Add to Menu</button>
       </form>
-    </div>`);
+    </div>
+    <datalist id="cats">${suggestions.map((c) => html`<option value="${c}">`)}</datalist>
+    <dialog id="edit-item" aria-labelledby="edit-title"></dialog>`);
+
+  const $dialog = root.querySelector('#edit-item');
+
+  function openEditor(m) {
+    setHTML($dialog, html`
+      <form class="dialog-body" id="edit-form" novalidate>
+        <h2 id="edit-title" style="margin:0">Edit Item</h2>
+        <div class="auth-alert error" role="alert" hidden></div>
+        <label>Name <input name="name" value="${m.name}" required autocomplete="off"></label>
+        <div class="row">
+          <label>Category <input name="category" list="cats" value="${m.category}" required></label>
+          <label>Rate (₹) <input name="price" inputmode="decimal" value="${plain(m.price)}" required></label>
+        </div>
+        <label class="toggle"><input type="checkbox" name="is_veg" ${m.is_veg ? new Raw('checked') : ''}> Vegetarian</label>
+        <label class="toggle"><input type="checkbox" name="available" ${m.available ? new Raw('checked') : ''}> Available today</label>
+        <p class="hint">Tables already running keep the old rate. New orders use the new one.</p>
+        <button type="submit" value="save" class="wide">Save Changes</button>
+        <button type="button" class="secondary wide" data-close>Cancel</button>
+        <button type="button" class="destructive wide" data-remove>Delete Item</button>
+      </form>`);
+    const form = $dialog.querySelector('form');
+    const alertBox = form.querySelector('[role=alert]');
+    const fail = (message) => { alertBox.textContent = message; alertBox.hidden = false; };
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(form));
+      alertBox.hidden = true;
+      if (!f.name.trim()) return fail('Enter a name for this item.');
+      if (!f.category.trim()) return fail('Enter a category, like Starters or Main Course.');
+      let price;
+      try { price = toPaise(f.price); } catch (err) { return fail(err.message); }
+      if (!f.price.trim()) return fail('Enter the rate in rupees.');
+      const btn = form.querySelector('button[type=submit]');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      sb.from('menu_items').update({
+        name: f.name.trim(), category: f.category.trim(), price, is_veg: f.is_veg === 'on', available: f.available === 'on',
+      }).eq('id', m.id).then(({ error }) => {
+        if (error) {
+          btn.disabled = false;
+          btn.textContent = 'Save Changes';
+          return fail(friendly(error));
+        }
+        $dialog.close();
+        toast(`${f.name.trim()} updated`);
+        menuView(renderToken);
+      });
+    });
+    form.querySelector('[data-close]').addEventListener('click', () => $dialog.close());
+    form.querySelector('[data-remove]').addEventListener('click', (e) => {
+      if (!confirm(`Delete ${m.name} from the menu? Past bills keep it.`)) return;
+      act(e.currentTarget, async () => {
+        await q(sb.from('menu_items').delete().eq('id', m.id));
+        $dialog.close();
+        toast(`${m.name} deleted`);
+        menuView(renderToken);
+      });
+    });
+    $dialog.showModal();
+    form.querySelector('[name=name]').focus();
+  }
+
   onSubmit(root, '#add-item', async (f, form) => {
+    if (!f.price.trim()) throw new Error('Enter the rate in rupees.');
     const price = toPaise(f.price);
     await q(sb.from('menu_items').insert({ name: f.name.trim(), category: f.category.trim(), price, is_veg: f.is_veg === 'on' }));
     toast(`${f.name.trim()} added`);
@@ -693,28 +760,15 @@ async function menuView(token) {
   });
   root.addEventListener('change', (e) => {
     const el = e.target;
-    if (el.dataset.price) {
-      act(null, async () => {
-        await q(sb.from('menu_items').update({ price: toPaise(el.value) }).eq('id', el.dataset.price));
-        toast('Price updated');
-      });
-    } else if (el.dataset.avail) {
-      act(null, async () => {
-        await q(sb.from('menu_items').update({ available: el.checked }).eq('id', el.dataset.avail));
-        menuView(renderToken);
-      });
-    }
-  });
-  root.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-del]');
-    if (!b) return;
-    const m = menu.find((x) => x.id === Number(b.dataset.del));
-    if (!confirm(`Delete ${m.name} from the menu? Past bills keep it.`)) return;
-    act(b, async () => {
-      await q(sb.from('menu_items').delete().eq('id', m.id));
-      toast(`${m.name} deleted`);
+    if (!el.dataset.avail) return;
+    act(null, async () => {
+      await q(sb.from('menu_items').update({ available: el.checked }).eq('id', el.dataset.avail));
       menuView(renderToken);
     });
+  });
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-edit]');
+    if (b) openEditor(menu.find((x) => x.id === Number(b.dataset.edit)));
   });
 }
 
