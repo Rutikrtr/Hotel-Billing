@@ -14,6 +14,8 @@ Each table goes through three steps:
 
 **Two groups at one table?** After the first group's order is in, tap **+ Add Section** at the top of the table. You get tabs **Section A** and **Section B**, each with its own order, bill and payment. Once a table is split, both groups are labelled with their letter (`T1-A`, `T1-B`) on screen and on the printed bill. A table has one section by default.
 
+**No printer yet?** By default, **Print Bill** finishes the bill and frees the table in one tap (recorded as Cash), with no print popup and no Receive Payment step. Turn off **Settings → Print Bill clears the table** to use the full print → Receive Payment flow.
+
 Other screens:
 
 - **Bills**: bills waiting for payment, the day's sales split by payment method, and every paid bill. Pick a date to see past days.

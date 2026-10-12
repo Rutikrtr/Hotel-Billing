@@ -657,8 +657,15 @@ async function tableView(token, tableId, sectionArg) {
     } else if (t.id === 'print-bill') {
       act(t, async () => {
         await queue;
-        await q(sb.rpc('generate_bill', { p_order_id: state.order.id }));
         document.body.classList.remove('sheet-open');
+        if (settings.quick_close !== false) {
+          // No printer / no separate payment step: the bill is created and the table is freed at once.
+          const billNo = await q(sb.rpc('settle_order', { p_order_id: state.order.id, p_method: 'Cash' }));
+          toast(`Bill ${billNo} done · ${label} is free`);
+          location.hash = `#/bill/${state.order.id}`;
+          return;
+        }
+        await q(sb.rpc('generate_bill', { p_order_id: state.order.id }));
         location.hash = `#/bill/${state.order.id}/print`;
       });
     } else if (t.id === 'pay') {
@@ -994,6 +1001,10 @@ async function settingsView(token) {
             <p class="small" style="margin:0">Shown on the bill as CGST + SGST (half each). Bills already settled don’t change.</p>
           </div>
         </div>
+        <div class="gst-box">
+          <label class="toggle"><input type="checkbox" name="quick_close" ${s.quick_close !== false ? new Raw('checked') : ''}> Print Bill clears the table</label>
+          <p class="small" style="margin:0">On: tapping Print Bill finishes the bill and frees the table straight away (recorded as Cash). Turn off when you have a printer and want to choose Cash / UPI / Card with Receive Payment.</p>
+        </div>
         <button type="submit">Save Changes</button>
       </form>
       <div>
@@ -1030,7 +1041,7 @@ async function settingsView(token) {
     if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
     await q(sb.from('restaurants').update({
       hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
-      hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate,
+      hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate, quick_close: f.quick_close === 'on',
     }).eq('id', s.id));
     document.getElementById('brand').textContent = f.hotel_name.trim();
     toast('Changes saved');
