@@ -50,7 +50,7 @@ function friendly(error) {
   const msg = error?.message || String(error);
   if (/orders_one_open_per_table_section/.test(msg)) return 'This section already has a running order. Refresh to see it.';
   if (/orders_one_open_per_table/.test(msg)) return 'Sections need one last database step. Ask your admin to finish the setup.';
-  if (/menu_items_restaurant_name_key|menu_items_name_key/.test(msg)) return 'An item with that name is already on the menu.';
+  if (/menu_items_restaurant_name_key|menu_items_name_key/.test(msg)) return 'Another dish already has this exact name. Add a word to tell them apart, like “Icecream (Mango)”.';
   if (/dining_tables_restaurant_name_key|dining_tables_name_key/.test(msg)) return 'A table with that name already exists.';
   if (/orders_table_id_fkey/.test(msg)) return 'This table has bills, so it can’t be removed. Rename it instead.';
   if (/row-level security|Not authorised/.test(msg)) return 'You don’t have permission to do that.';
@@ -840,8 +840,19 @@ async function menuView(token) {
   const menu = await q(sb.from('menu_items').select('*').order('id'));
   if (token !== renderToken) return;
   const categories = [...new Set(menu.map((m) => m.category))];
-  const suggestions = ['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', ...categories]
+  const suggestions = [...categories, ...['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', 'Others']]
     .filter((c, i, a) => a.indexOf(c) === i);
+  const NEW_CATEGORY = '__new__';
+  // A real dropdown of categories, with "+ New category" revealing a text box.
+  const categoryField = (selected) => html`
+    <label>Category
+      <select name="category_pick" data-category-pick>
+        ${suggestions.map((c) => html`<option value="${c}" ${c === selected ? new Raw('selected') : ''}>${c}</option>`)}
+        <option value="${NEW_CATEGORY}">+ New category…</option>
+      </select>
+      <input name="category_new" placeholder="New category name" autocomplete="off" hidden>
+    </label>`;
+  const readCategory = (f) => (f.category_pick === NEW_CATEGORY ? (f.category_new || '').trim() : (f.category_pick || '').trim());
   const root = mount(html`
     <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'} · tap ☆ to show a dish first when taking orders</p></div></div>
     <div class="two-col">
@@ -866,14 +877,13 @@ async function menuView(token) {
         <h2 style="margin:0">Add Item</h2>
         <label>Name <input name="name" required autocomplete="off" placeholder="e.g. Paneer Butter Masala"></label>
         <div class="row">
-          <label>Category <input name="category" list="cats" required placeholder="e.g. Main Course" value="${categories[0] ?? ''}"></label>
+          ${categoryField(categories[0] ?? 'Others')}
           <label>Rate (₹) <input name="price" inputmode="decimal" required placeholder="0"></label>
         </div>
         <label class="toggle"><input type="checkbox" name="is_veg" checked> Vegetarian</label>
         <button type="submit">Add to Menu</button>
       </form>
     </div>
-    <datalist id="cats">${suggestions.map((c) => html`<option value="${c}">`)}</datalist>
     <dialog id="edit-item" aria-labelledby="edit-title"></dialog>`);
 
   const $dialog = root.querySelector('#edit-item');
@@ -885,7 +895,7 @@ async function menuView(token) {
         <div class="auth-alert error" role="alert" hidden></div>
         <label>Name <input name="name" value="${m.name}" required autocomplete="off"></label>
         <div class="row">
-          <label>Category <input name="category" list="cats" value="${m.category}" required></label>
+          ${categoryField(m.category)}
           <label>Rate (₹) <input name="price" inputmode="decimal" value="${plain(m.price)}" required></label>
         </div>
         <label class="toggle"><input type="checkbox" name="is_veg" ${m.is_veg ? new Raw('checked') : ''}> Vegetarian</label>
@@ -904,7 +914,8 @@ async function menuView(token) {
       const f = Object.fromEntries(new FormData(form));
       alertBox.hidden = true;
       if (!f.name.trim()) return fail('Enter a name for this item.');
-      if (!f.category.trim()) return fail('Enter a category, like Starters or Main Course.');
+      const category = readCategory(f);
+      if (!category) return fail('Type a name for the new category, like Ice Cream.');
       let price;
       try { price = toPaise(f.price); } catch (err) { return fail(err.message); }
       if (!f.price.trim()) return fail('Enter the rate in rupees.');
@@ -912,7 +923,7 @@ async function menuView(token) {
       btn.disabled = true;
       btn.textContent = 'Saving…';
       sb.from('menu_items').update({
-        name: f.name.trim(), category: f.category.trim(), price, is_veg: f.is_veg === 'on', available: f.available === 'on',
+        name: f.name.trim(), category, price, is_veg: f.is_veg === 'on', available: f.available === 'on',
         is_favorite: f.is_favorite === 'on',
       }).eq('id', m.id).then(({ error }) => {
         if (error) {
@@ -942,12 +953,20 @@ async function menuView(token) {
   onSubmit(root, '#add-item', async (f, form) => {
     if (!f.price.trim()) throw new Error('Enter the rate in rupees.');
     const price = toPaise(f.price);
-    await q(sb.from('menu_items').insert({ name: f.name.trim(), category: f.category.trim(), price, is_veg: f.is_veg === 'on' }));
+    const category = readCategory(f);
+    if (!category) throw new Error('Type a name for the new category, like Ice Cream.');
+    await q(sb.from('menu_items').insert({ name: f.name.trim(), category, price, is_veg: f.is_veg === 'on' }));
     toast(`${f.name.trim()} added`);
     form.reset();
     menuView(renderToken);
   });
   root.addEventListener('change', (e) => {
+    if (e.target.matches('[data-category-pick]')) {
+      const box = e.target.parentElement.querySelector('[name=category_new]');
+      box.hidden = e.target.value !== NEW_CATEGORY;
+      if (!box.hidden) box.focus();
+      return;
+    }
     const el = e.target;
     if (!el.dataset.avail) return;
     act(null, async () => {
