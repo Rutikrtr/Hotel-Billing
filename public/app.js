@@ -299,6 +299,46 @@ const authViews = {
 
 const signInView = () => authViews.signIn();
 
+// ---------- Payment ----------
+
+/** Ask for the payment method and close the order. Resolves with the bill number, or null if cancelled. */
+function receivePayment({ orderId, tableName, total }) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    document.body.append(dialog);
+    setHTML(dialog, html`
+      <form class="dialog-body" id="pay-form">
+        <h2 style="margin:0">Receive Payment · ${tableName}</h2>
+        <div class="auth-alert error" role="alert" hidden></div>
+        <div class="due"><span class="muted">Amount to collect</span><span class="money">${rs(total)}</span></div>
+        <fieldset class="segmented" style="border:0;margin:0" aria-label="Payment method">
+          ${METHODS.map((m, i) => html`<label><input type="radio" name="method" value="${m}" ${i === 0 ? new Raw('checked') : ''}><span>${m}</span></label>`)}
+        </fieldset>
+        <button type="submit" class="wide">Mark as Paid</button>
+        <button type="button" class="secondary wide" data-cancel>Cancel</button>
+      </form>`);
+    const finish = (value) => { dialog.close(); dialog.remove(); resolve(value); };
+    dialog.addEventListener('cancel', (e) => { e.preventDefault(); finish(null); });
+    dialog.querySelector('[data-cancel]').addEventListener('click', () => finish(null));
+    dialog.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = e.submitter ?? e.target.querySelector('button[type=submit]');
+      const method = new FormData(e.target).get('method');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      const { data, error } = await sb.rpc('settle_order', { p_order_id: orderId, p_method: method });
+      if (error) {
+        btn.disabled = false; btn.textContent = 'Mark as Paid';
+        const box = dialog.querySelector('[role=alert]');
+        box.textContent = friendly(error); box.hidden = false;
+        return;
+      }
+      finish(data);
+      toast(`${tableName} paid · ${method} · ${rs(total)}`);
+    });
+    dialog.showModal();
+  });
+}
+
 // ---------- Tables ----------
 
 async function tablesView(token) {
@@ -309,13 +349,16 @@ async function tablesView(token) {
   ]);
   if (token !== renderToken) return;
   const byTable = Object.fromEntries(open.map((o) => [o.table_id, o]));
-  const running = open.map((o) => orderBill(o, o.order_items, settings.tax_rate_bp));
-  const onTables = running.reduce((s, b) => s + b.total, 0);
+  const waiting = open.filter((o) => o.billed_at).length;
+  const eating = open.length - waiting;
+  const summary = open.length
+    ? [eating && `${eating} eating`, waiting && `${waiting} waiting to pay`].filter(Boolean).join(' · ')
+    : 'All tables are free';
   setHTML($view, html`
     <div class="page-head">
       <div>
         <h1>Tables</h1>
-        <p class="muted">${open.length ? `${open.length} running · ${rs(onTables)} on tables` : 'All tables are free'}</p>
+        <p class="muted">${summary}</p>
       </div>
     </div>
     ${tables.length ? '' : html`<div class="card empty">No tables yet. <a href="#/settings">Add tables in Settings</a>.</div>`}
@@ -325,10 +368,12 @@ async function tablesView(token) {
         if (!o) return html`<a class="table-tile" href="#/table/${t.id}" aria-label="${t.name}, free">
           <span class="name">${t.name}</span><span class="state">Free</span></a>`;
         const bill = orderBill(o, o.order_items, settings.tax_rate_bp);
-        return html`<a class="table-tile busy" href="#/table/${t.id}" aria-label="${t.name}, running, ${rs(bill.total)}">
-          <span><span class="name">${t.name}</span></span>
+        const billed = Boolean(o.billed_at);
+        const label = billed ? 'Bill printed' : 'Eating';
+        return html`<a class="table-tile busy ${billed ? 'billed' : ''}" href="#/table/${t.id}" aria-label="${t.name}, ${label}, ${rs(bill.total)}">
+          <span class="tile-top"><span class="name">${t.name}</span><span class="tag">${label}</span></span>
           <span><span class="amount">${rs(bill.total)}</span><br>
-          <span class="state">${bill.itemCount} item${bill.itemCount === 1 ? '' : 's'} · ${since(o.opened_at)}</span></span></a>`;
+          <span class="state">${billed ? `Waiting to pay · ${since(o.billed_at)}` : `${bill.itemCount} item${bill.itemCount === 1 ? '' : 's'} · ${since(o.opened_at)}`}</span></span></a>`;
       })}
     </div>`);
 }
@@ -367,14 +412,12 @@ async function tableView(token, tableId) {
         <aside class="order-panel" id="order-panel" aria-label="Order"></aside>
       </div>
       <div class="order-bar" id="order-bar"></div>
-    </div>
-    <dialog id="settle"></dialog>`);
+    </div>`);
 
   const $grid = document.getElementById('menu-grid');
   const $panel = document.getElementById('order-panel');
   const $bar = document.getElementById('order-bar');
   const $sub = document.getElementById('order-sub');
-  const $settle = document.getElementById('settle');
   const qtyOf = (menuId) => state.items.find((i) => i.menu_item_id === menuId)?.quantity ?? 0;
   const bill = () => orderBill(state.order, state.items, settings.tax_rate_bp);
 
@@ -396,12 +439,15 @@ async function tableView(token, tableId) {
 
   function renderOrder() {
     const b = bill();
-    $sub.textContent = state.order ? `Running since ${time(state.order.opened_at)}` : 'Free';
+    const billed = Boolean(state.order?.billed_at);
+    $sub.textContent = !state.order ? 'Free · take the order'
+      : billed ? `Bill ${state.order.bill_no} printed at ${time(state.order.billed_at)} · waiting to pay`
+      : `Eating since ${time(state.order.opened_at)}`;
     setHTML($panel, html`
       <div class="order-head">
         <span class="title">Order</span>
         <span>
-          ${state.items.length ? html`<button type="button" class="destructive" id="clear">Clear Table</button>` : ''}
+          ${state.items.length && !state.order?.bill_no ? html`<button type="button" class="destructive" id="clear">Clear Table</button>` : ''}
           <button type="button" class="plain sheet-close" id="close-sheet" aria-label="Close order">Done</button>
         </span>
       </div>
@@ -428,9 +474,13 @@ async function tableView(token, tableId) {
           ${b.roundOff ? html`<div><span class="muted">Round off</span><span class="money">${fmt(b.roundOff)}</span></div>` : ''}
           <div class="grand"><span>Total</span><span class="money">${rs(b.total)}</span></div>
         </div>
+        ${billed ? html`<p class="order-note">Bill printed. Added or removed items? Print it again so the customer gets the right total.</p>` : ''}
         <div class="order-actions">
-          <a class="button secondary" href="#/bill/${state.order?.id ?? ''}" id="print-bill">Print Bill</a>
-          <button type="button" id="open-settle">Settle ${rs(b.total)}</button>
+          ${billed
+            ? html`<button type="button" class="secondary" id="print-bill">Reprint Bill</button>
+                   <button type="button" id="pay">Receive Payment</button>`
+            : html`<button type="button" class="secondary" id="print-bill">Print Bill</button>
+                   <button type="button" id="save-order">Save Order</button>`}
         </div>`
       : html`<div class="empty">No items yet.<br>Tap dishes from the menu to add them.</div>`}`);
     setHTML($bar, state.items.length
@@ -499,8 +549,27 @@ async function tableView(token, tableId) {
     if (t.dataset.inc) changeQty(find(t.dataset.inc), 1);
     else if (t.dataset.dec) changeQty(find(t.dataset.dec), -1);
     else if (t.id === 'close-sheet') document.body.classList.remove('sheet-open');
-    else if (t.id === 'open-settle') queue.then(openSettle);
-    else if (t.id === 'print-bill') { e.preventDefault(); queue.then(() => { document.body.classList.remove('sheet-open'); location.hash = `#/bill/${state.order.id}`; }); }
+    else if (t.id === 'save-order') {
+      act(t, async () => {
+        await queue;
+        document.body.classList.remove('sheet-open');
+        toast(`${table.name} order saved`);
+        location.hash = '#/';
+      });
+    } else if (t.id === 'print-bill') {
+      act(t, async () => {
+        await queue;
+        await q(sb.rpc('generate_bill', { p_order_id: state.order.id }));
+        document.body.classList.remove('sheet-open');
+        location.hash = `#/bill/${state.order.id}/print`;
+      });
+    } else if (t.id === 'pay') {
+      act(t, async () => {
+        await queue;
+        const paid = await receivePayment({ orderId: state.order.id, tableName: table.name, total: bill().total });
+        if (paid) { document.body.classList.remove('sheet-open'); location.hash = '#/'; }
+      });
+    }
     else if (t.id === 'clear') {
       if (!confirm(`Clear all items from ${table.name}? This can’t be undone.`)) return;
       enqueue(async () => {
@@ -534,39 +603,12 @@ async function tableView(token, tableId) {
     renderMenu();
   });
 
-  function openSettle() {
-    const b = bill();
-    setHTML($settle, html`
-      <form method="dialog" class="dialog-body" id="settle-form">
-        <h2 style="margin:0">Settle ${table.name}</h2>
-        <div class="due"><span class="muted">Amount due</span><span class="money">${rs(b.total)}</span></div>
-        <fieldset class="segmented" style="border:0;margin:0" aria-label="Payment method">
-          ${METHODS.map((m, i) => html`<label><input type="radio" name="method" value="${m}" ${i === 0 ? new Raw('checked') : ''}><span>${m}</span></label>`)}
-        </fieldset>
-        <button type="submit" value="ok" class="wide">Confirm Payment</button>
-        <button type="submit" value="cancel" class="secondary wide" formnovalidate>Cancel</button>
-      </form>`);
-    $settle.showModal();
-    $settle.querySelector('#settle-form').addEventListener('submit', (e) => {
-      if (e.submitter?.value !== 'ok') return;
-      e.preventDefault();
-      const method = new FormData(e.target).get('method');
-      act(e.submitter, async () => {
-        const billNo = await q(sb.rpc('settle_order', { p_order_id: state.order.id, p_method: method }));
-        $settle.close();
-        document.body.classList.remove('sheet-open');
-        toast(`Bill ${billNo} settled · ${method}`);
-        location.hash = `#/bill/${state.order.id}`;
-      });
-    });
-  }
-
   render();
 }
 
 // ---------- Bill / receipt ----------
 
-async function billView(token, orderId) {
+async function billView(token, orderId, autoPrint) {
   const [order, settings] = await Promise.all([
     q(sb.from('orders').select('*, dining_tables(name), order_items(*)').eq('id', orderId).order('id', { referencedTable: 'order_items' }).single()),
     getSettings(),
@@ -579,21 +621,26 @@ async function billView(token, orderId) {
   setHTML($view, html`
     <div class="receipt-wrap">
       <div class="receipt-actions no-print">
-        <a class="button secondary" href="${paid ? '#/bills' : `#/table/${order.table_id}`}">${paid ? 'All Bills' : `Back to ${order.dining_tables.name}`}</a>
-        <button type="button" id="print">Print</button>
-        ${paid ? html`<a class="button secondary" href="#/">Tables</a>` : ''}
+        ${paid
+          ? html`<a class="button secondary" href="#/bills">All Bills</a>
+                 <button type="button" class="secondary" id="print">Print</button>
+                 <a class="button secondary" href="#/">Tables</a>`
+          : html`<a class="button secondary" href="#/table/${order.table_id}">Add Items</a>
+                 <button type="button" class="secondary" id="print">Print Again</button>
+                 <button type="button" id="pay">Receive Payment</button>`}
       </div>
+      ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}</p>`
+             : html`<p class="paid-note no-print">Give this bill to ${order.dining_tables.name}. Tap Receive Payment once they pay.</p>`}
       <article class="receipt" aria-label="Bill">
         <div class="center">
           <div class="shop">${settings.hotel_name}</div>
           ${settings.hotel_address ? html`<div>${settings.hotel_address}</div>` : ''}
           ${settings.hotel_phone ? html`<div>Ph: ${settings.hotel_phone}</div>` : ''}
           ${settings.hotel_gstin && rate > 0 ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
-          ${paid ? '' : html`<div class="stamp">NOT PAID</div>`}
         </div>
         <div class="rule"></div>
-        ${kv(paid ? `Bill: ${order.bill_no}` : 'Proforma bill', `Table: ${order.dining_tables.name}`)}
-        ${kv(dateTime(order.closed_at ?? new Date().toISOString()), paid ? order.payment_method : '')}
+        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', `Table: ${order.dining_tables.name}`)}
+        ${kv(dateTime(order.closed_at ?? order.billed_at ?? new Date().toISOString()), paid ? order.payment_method : '')}
         <div class="rule"></div>
         <table>
           <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Amt</th></tr></thead>
@@ -613,6 +660,14 @@ async function billView(token, orderId) {
       </article>
     </div>`);
   document.getElementById('print').addEventListener('click', () => window.print());
+  document.getElementById('pay')?.addEventListener('click', async () => {
+    const billNo = await receivePayment({ orderId: order.id, tableName: order.dining_tables.name, total: b.total });
+    if (billNo) location.hash = '#/';
+  });
+  if (autoPrint) {
+    history.replaceState(null, '', `#/bill/${order.id}`);
+    setTimeout(() => window.print(), 300);
+  }
 }
 
 // ---------- Bills (history) ----------
@@ -620,10 +675,12 @@ async function billView(token, orderId) {
 async function billsView(token, day = localDay()) {
   const start = new Date(`${day}T00:00:00`);
   const end = new Date(start); end.setDate(end.getDate() + 1);
-  const [orders, settings] = await Promise.all([
+  const [orders, settings, unpaid] = await Promise.all([
     q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'paid')
       .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString()).order('closed_at', { ascending: false })),
     getSettings(),
+    q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'open')
+      .not('billed_at', 'is', null).order('billed_at')),
   ]);
   if (token !== renderToken) return;
   const rows = orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp) }));
@@ -634,6 +691,14 @@ async function billsView(token, day = localDay()) {
       <div><h1>Bills</h1><p class="muted">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p></div>
       <label style="min-width:180px">Date <input type="date" id="day" value="${day}" max="${localDay()}"></label>
     </div>
+    ${unpaid.length ? html`
+      <h3 style="margin-top:0">Waiting for payment</h3>
+      <div class="list" style="margin-bottom:20px">${unpaid.map((o) => html`
+        <a class="list-row" href="#/bill/${o.id}">
+          <span class="grow"><strong>${o.bill_no}</strong> · ${o.dining_tables.name}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
+          <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
+        </a>`)}</div>` : ''}
+    <h3 style="margin-top:0">Paid</h3>
     <div class="stats">
       <div class="stat lead"><span>Total sales</span><strong>${rs(sum(() => true))}</strong></div>
       ${METHODS.map((m) => html`<div class="stat"><span>${m}</span><strong>${rs(sum((r) => r.o.payment_method === m))}</strong></div>`)}
@@ -872,7 +937,7 @@ async function settingsView(token) {
 const routes = [
   [/^\/?$/, tablesView, 'tables'],
   [/^\/table\/(\d+)$/, tableView, 'tables'],
-  [/^\/bill\/(\d+)$/, billView, 'bills'],
+  [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables'],
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills'],
   [/^\/menu$/, menuView, 'menu'],
   [/^\/settings$/, settingsView, 'settings'],

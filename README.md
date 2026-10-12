@@ -6,13 +6,17 @@ It runs in the browser, keeps its data in **Supabase**, and is hosted on **Netli
 
 ## How it works
 
-1. **Tables**: every table at a glance. Free tables are plain; running tables show the amount due and how long the order has been open.
-2. **Order**: tap a table, then tap dishes to add them. Use − / + to change quantities and add a discount if needed. Search the menu or filter it by category.
-3. **Settle**: choose Cash, UPI or Card. The bill gets the next number (`B00001`, `B00002` and so on), its GST rate is locked, and the table is free again.
-4. **Bill**: an 80 mm receipt layout that prints on thermal bill printers, or to any printer or PDF.
-5. **Bills**: the day's sales split by payment method, and every settled bill. Pick a date to see past days.
-6. **Menu**: add dishes with a category, price and veg/non-veg mark. Change prices, or mark an item sold out for the day.
-7. **Settings**: restaurant name, address, and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables, and staff access.
+Each table goes through three steps:
+
+1. **Take the order**: tap a free table and tap dishes to add them (use − / + for quantities). Tap **Save Order** and the table shows as *Eating*. You can come back and add more at any time.
+2. **Print the bill** after they've eaten: open the table and tap **Print Bill**. The bill gets its number (`B00001`, `B00002`, …) and prints straight away, and the table shows *Bill printed* in amber. If items change after printing, use **Reprint Bill**.
+3. **Receive payment**: tap **Receive Payment** and choose Cash, UPI or Card. The table is free again.
+
+Other screens:
+
+- **Bills**: bills waiting for payment, the day's sales split by payment method, and every paid bill. Pick a date to see past days.
+- **Menu**: add dishes, or tap **Edit** to change a dish's name, rate, category, veg/non-veg or availability.
+- **Settings**: restaurant name, address and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables, and staff access.
 
 Bills round to the nearest rupee and show the round-off. Amounts are stored in whole paise, so totals are exact.
 

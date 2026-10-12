@@ -14,6 +14,8 @@
   --veg: #1B7F3B;
   --nonveg: #9A3412;
   --danger: #C0262D;
+  --billed: #9A5B00;
+  --billed-bg: #FFF4E0;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 16px rgb(0 0 0 / 0.04);
   --radius: 14px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", system-ui, sans-serif;
@@ -34,6 +36,8 @@
     --veg: #4CC27A;
     --nonveg: #F0875A;
     --danger: #FF7B7B;
+    --billed: #F5B54A;
+    --billed-bg: #33270F;
     --shadow: none;
   }
 }
@@ -316,3 +320,11 @@ body.signed-out main { min-height: 100vh; min-height: 100dvh; display: grid; pla
 
 .gst-box { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .gst-fields { display: grid; gap: 10px; }
+
+/* Table states: eating (accent) and bill printed / waiting to pay (amber). Labels carry the meaning, not colour alone. */
+.table-tile .tile-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+.table-tile.billed { background: var(--billed-bg); border-color: color-mix(in srgb, var(--billed) 45%, var(--line)); }
+.table-tile.billed::before { background: var(--billed); }
+.table-tile.billed .amount, .table-tile.billed .tag { color: var(--billed); }
+.order-note { margin: 0 16px; padding: 10px 12px; border-radius: 10px; font-size: 14px; background: var(--billed-bg); color: var(--text); }
+.paid-note { margin: -6px 0 0; color: var(--muted); text-align: center; }
