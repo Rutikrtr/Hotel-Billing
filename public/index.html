@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hotel Billing</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav id="nav" class="no-print" hidden>
+    <a class="brand" href="#/">Hotel Billing</a>
+    <a href="#/">Dashboard</a>
+    <a href="#/checkin">Check in</a>
+    <a href="#/bookings">Bookings</a>
+    <a href="#/rooms">Rooms</a>
+    <a href="#/settings">Settings</a>
+    <span class="spacer"></span>
+    <span id="who" class="small"></span>
+    <button id="logout" class="link">Sign out</button>
+  </nav>
+  <main>
+    <div id="flash"></div>
+    <div id="view"><p class="small">Loading…</p></div>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

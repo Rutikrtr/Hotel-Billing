@@ -59,7 +59,6 @@ button.link { border: none; background: none; padding: 0 4px; }
 .center { text-align: center; }
 
 /* Printable invoice */
-.invoice-page { background: #fff; color: #111; }
 .invoice { max-width: 780px; margin: 24px auto; padding: 32px; background: #fff; color: #111; }
 .invoice header, .invoice .guest { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 .invoice header { border-bottom: 2px solid #111; padding-bottom: 12px; }
@@ -75,3 +74,16 @@ button.link { border: none; background: none; padding: 0 4px; }
   .no-print { display: none !important; }
   .invoice { margin: 0; padding: 0; }
 }
+
+/* Hosted app additions */
+nav .spacer { flex: 1; }
+.login { max-width: 420px; margin: 8vh auto 0; }
+.table-wrap { overflow-x: auto; }
+.table-wrap table { min-width: 520px; }
+.invoice .table-wrap table { min-width: 0; }
+button:disabled { opacity: 0.6; cursor: wait; }
+@media print {
+  body { background: #fff; }
+  main { padding: 0; max-width: none; }
+}
+nav button.link { color: var(--accent); }
