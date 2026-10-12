@@ -18,7 +18,8 @@ Each table goes through three steps:
 
 Other screens:
 
-- **Bills**: bills waiting for payment, the day's sales split by payment method, and every paid bill. Pick a date to see past days.
+- **Bills**: (owner) **Edit Bill** / **Delete** on any paid bill, with a reason; every change is kept in **Bills → Change Log** (who, when, old → new total, items before and after).
+- **Bills list**: bills waiting for payment, the day's sales split by payment method, and every paid bill. Pick a date to see past days.
 - **Menu**: add dishes, tap ☆ to make a dish a favourite, or tap **Edit** to change its name, rate, category, veg/non-veg or availability.
 - **Settings**: restaurant name, address and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables (default T1–T8; tap a table to rename it), and staff access.
 

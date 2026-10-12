@@ -7,6 +7,8 @@ const METHODS = ['Cash', 'UPI', 'Card'];
 const $view = document.getElementById('view');
 let session = null;
 let staffCheck = null; // cached is_staff() result for the current session
+let ownerCheck = null; // cached is_owner() result for the current session
+const isOwner = () => (ownerCheck ??= sb.rpc('is_owner').then((r) => r.data === true, () => false));
 let renderToken = 0;   // guards against a slow view finishing after the person navigated away
 
 // ---------- helpers ----------
@@ -54,6 +56,7 @@ function friendly(error) {
   if (/dining_tables_restaurant_name_key|dining_tables_name_key/.test(msg)) return 'A table with that name already exists.';
   if (/orders_table_id_fkey/.test(msg)) return 'This table has bills, so it can’t be removed. Rename it instead.';
   if (/row-level security|Not authorised/.test(msg)) return 'You don’t have permission to do that.';
+  if (/edit_paid_bill|delete_paid_bill/.test(msg) && /function|schema cache/i.test(msg)) return 'Editing bills needs one last database step. Ask your admin to finish the setup.';
   if (/Failed to fetch|NetworkError/.test(msg)) return 'No connection. Check the internet and try again.';
   return msg;
 }
@@ -723,10 +726,14 @@ async function tableView(token, tableId, sectionArg) {
 // ---------- Bill / receipt ----------
 
 async function billView(token, orderId, autoPrint) {
-  const [order, settings] = await Promise.all([
+  const [order, settings, owner] = await Promise.all([
     q(sb.from('orders').select('*, dining_tables(name), order_items(*)').eq('id', orderId).order('id', { referencedTable: 'order_items' }).single()),
     getSettings(),
+    isOwner(),
   ]);
+  const history = owner && order.edit_count
+    ? await q(sb.from('bill_logs').select('*').eq('order_id', order.id).order('created_at', { ascending: false })).catch(() => [])
+    : [];
   if (token !== renderToken) return;
   const paid = order.status === 'paid';
   const rate = order.tax_rate_bp ?? settings.tax_rate_bp;
@@ -738,12 +745,13 @@ async function billView(token, orderId, autoPrint) {
         ${paid
           ? html`<a class="button secondary" href="#/bills">All Bills</a>
                  <button type="button" class="secondary" id="print">Print</button>
-                 <a class="button secondary" href="#/">Tables</a>`
+                 ${owner ? html`<button type="button" class="secondary" id="edit-bill">Edit Bill</button>
+                   <button type="button" class="secondary danger-outline" id="delete-bill">Delete</button>` : html`<a class="button secondary" href="#/">Tables</a>`}`
           : html`<a class="button secondary" href="#/table/${order.table_id}/${order.section}">Add Items</a>
                  <button type="button" class="secondary" id="print">Print Again</button>
                  <button type="button" id="pay">Receive Payment</button>`}
       </div>
-      ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}</p>`
+      ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}${order.edit_count ? html` · <span class="edited-tag">Edited ${order.edit_count}×</span>` : ''}</p>`
              : html`<p class="paid-note no-print">Give this bill to ${tableLabel(order.dining_tables.name, order.section, order.is_split)}. Tap Receive Payment once they pay.</p>`}
       <article class="receipt" aria-label="Bill">
         <div class="center">
@@ -772,8 +780,14 @@ async function billView(token, orderId, autoPrint) {
         <div class="rule"></div>
         <div class="center">Thank you! Visit again.</div>
       </article>
+      ${history.length ? html`<section class="history no-print" aria-label="Changes to this bill">
+        <h3>Changes to this bill</h3>
+        <div class="list">${history.map(logRow)}</div>
+      </section>` : ''}
     </div>`);
   document.getElementById('print').addEventListener('click', () => window.print());
+  document.getElementById('edit-bill')?.addEventListener('click', () => editBill(order, rate));
+  document.getElementById('delete-bill')?.addEventListener('click', () => deleteBill(order, b.total));
   document.getElementById('pay')?.addEventListener('click', async () => {
     const billNo = await receivePayment({ orderId: order.id, tableName: tableLabel(order.dining_tables.name, order.section, order.is_split), total: b.total });
     if (billNo) location.hash = '#/';
@@ -789,12 +803,13 @@ async function billView(token, orderId, autoPrint) {
 async function billsView(token, day = localDay()) {
   const start = new Date(`${day}T00:00:00`);
   const end = new Date(start); end.setDate(end.getDate() + 1);
-  const [orders, settings, unpaid] = await Promise.all([
+  const [orders, settings, unpaid, owner] = await Promise.all([
     q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'paid')
       .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString()).order('closed_at', { ascending: false })),
     getSettings(),
     q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'open')
       .not('billed_at', 'is', null).order('billed_at')),
+    isOwner(),
   ]);
   if (token !== renderToken) return;
   const rows = orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp) }));
@@ -807,7 +822,10 @@ async function billsView(token, day = localDay()) {
     <div class="page-head">
       <div><p class="eyebrow">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long' })}</p>
         <h1>Bills</h1></div>
-      <label class="date-pick"><span class="sr-only">Date</span><input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
+      <div class="head-actions">
+        ${owner ? html`<a class="button secondary" href="#/bills/log">Change Log</a>` : ''}
+        <label class="date-pick"><span class="sr-only">Date</span><input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
+      </div>
     </div>
     <section class="sales-card" aria-label="Sales">
       <span class="label">${isToday ? 'Today’s sales' : `Sales on ${new Date(start).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}`} · ${rows.length} bill${rows.length === 1 ? '' : 's'}</span>
@@ -827,11 +845,179 @@ async function billsView(token, day = localDay()) {
     ${rows.length ? html`<div class="list">${rows.map(({ o, b }) => html`
       <a class="list-row" href="#/bill/${o.id}">
         ${badge(o.payment_method)}
-        <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section, o.is_split)}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}</div></span>
+        <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section, o.is_split)}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}${o.edit_count ? html` · <span class="edited-tag">Edited</span>` : ''}</div></span>
         <span class="money">${rs(b.total)}</span><span class="chevron" aria-hidden="true">›</span>
       </a>`)}</div>`
     : html`<div class="card empty"><span class="emoji" aria-hidden="true">🧾</span>No bills ${isToday ? 'yet today' : 'on this day'}. Paid bills appear here.</div>`}`);
   document.getElementById('day').addEventListener('change', (e) => { location.hash = `#/bills/${e.target.value}`; });
+}
+
+// ---------- Edit / delete paid bills (owner), with a change log ----------
+
+const logItems = (snap) => (snap?.items ?? []).map((i) => `${i.name} ×${i.qty}`).join(', ');
+function logRow(l) {
+  const before = l.before?.total ?? 0;
+  const after = l.after?.total;
+  const changes = [];
+  if (l.after) {
+    if (logItems(l.before) !== logItems(l.after)) changes.push(['Items', logItems(l.before), logItems(l.after)]);
+    if ((l.before.discount ?? 0) !== (l.after.discount ?? 0)) changes.push(['Discount', rs(l.before.discount ?? 0), rs(l.after.discount ?? 0)]);
+    if (l.before.method !== l.after.method) changes.push(['Payment', l.before.method, l.after.method]);
+  }
+  return html`<details class="log-row">
+    <summary>
+      <span class="log-badge ${l.action}">${l.action === 'edit' ? 'Edited' : 'Deleted'}</span>
+      <span class="grow"><strong>${l.bill_no ?? 'Bill'}</strong>${l.table_label ? ` · ${l.table_label}` : ''}
+        <div class="sub">${dateTime(l.created_at)} · ${l.user_email ?? 'Unknown'}</div>
+        ${l.reason ? html`<div class="log-reason">“${l.reason}”</div>` : ''}</span>
+      <span class="log-amount">${l.after ? html`<s>${rs(before)}</s> ${rs(after)}` : html`<s>${rs(before)}</s>`}</span>
+    </summary>
+    <div class="log-detail">
+      ${l.after
+        ? (changes.length ? changes.map(([k, a, b]) => html`<div class="log-change"><span class="k">${k}</span><span class="was">${a || '—'}</span><span class="now">${b || '—'}</span></div>`)
+          : html`<p class="small">No visible changes.</p>`)
+        : html`<div class="log-change"><span class="k">Items</span><span class="was">${logItems(l.before)}</span></div>
+               <div class="log-change"><span class="k">Payment</span><span class="was">${l.before?.method ?? '—'}</span></div>`}
+    </div>
+  </details>`;
+}
+
+async function editBill(order, rate) {
+  const menu = await q(sb.from('menu_items').select('id, name, price, category').order('id')).catch(() => []);
+  // Work on a copy; nothing is saved until the owner taps Save.
+  const items = order.order_items.map((i) => ({ menu_item_id: i.menu_item_id, name: i.name, unit_price: i.unit_price, quantity: i.quantity }));
+  const draft = { discount: order.discount, method: order.payment_method };
+  const dialog = document.createElement('dialog');
+  dialog.className = 'tall';
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  const draw = () => {
+    const b = orderBill({ discount: draft.discount }, items, rate);
+    setHTML(dialog, html`
+      <form class="dialog-body" novalidate>
+        <h2 style="margin:0">Edit Bill ${order.bill_no}</h2>
+        <div class="auth-alert error" role="alert" hidden></div>
+        <ul class="edit-lines">${items.map((i, n) => html`
+          <li><span class="grow"><strong>${i.name}</strong><div class="sub">${rs(i.unit_price)} each</div></span>
+            <span class="qty" role="group" aria-label="Quantity of ${i.name}">
+              <button type="button" data-dec="${n}" aria-label="One less ${i.name}">−</button><output>${i.quantity}</output>
+              <button type="button" data-inc="${n}" aria-label="One more ${i.name}">+</button></span></li>`)}
+          ${items.length ? '' : html`<li class="small">No items. Add a dish below, or delete the bill instead.</li>`}
+        </ul>
+        <label>Add a dish
+          <select data-add-dish><option value="">Choose a dish…</option>
+            ${menu.map((m) => html`<option value="${m.id}">${m.name} · ${rs(m.price).replace('.00', '')}</option>`)}</select></label>
+        <div class="row">
+          <label>Discount (₹) <input name="discount" inputmode="decimal" value="${draft.discount ? plain(draft.discount) : ''}" placeholder="0"></label>
+          <div class="edit-total"><span class="small">New total</span><strong>${rs(b.total)}</strong>
+            <span class="small">was ${rs(orderBill(order, order.order_items, rate).total)}</span></div>
+        </div>
+        <fieldset class="segmented" style="border:0;margin:0" aria-label="Payment method">
+          ${METHODS.map((m) => html`<label><input type="radio" name="method" value="${m}" ${m === draft.method ? new Raw('checked') : ''}><span>${m}</span></label>`)}
+        </fieldset>
+        <label>Reason for the change <input name="reason" placeholder="e.g. Customer returned Lassi" maxlength="200" autocomplete="off"></label>
+        <button type="submit" class="wide">Save Changes</button>
+        <button type="button" class="secondary wide" data-cancel>Cancel</button>
+      </form>`);
+  };
+  const keepInputs = () => {
+    const form = dialog.querySelector('form');
+    if (!form) return {};
+    const f = Object.fromEntries(new FormData(form));
+    if (f.method) draft.method = f.method;
+    return f;
+  };
+  dialog.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.cancel !== undefined) return close();
+    const reason = dialog.querySelector('[name=reason]')?.value ?? '';
+    if (t.dataset.inc) items[t.dataset.inc].quantity += 1;
+    else if (t.dataset.dec) { const i = items[t.dataset.dec]; i.quantity -= 1; if (i.quantity < 1) items.splice(Number(t.dataset.dec), 1); }
+    else return;
+    keepInputs(); draw();
+    dialog.querySelector('[name=reason]').value = reason;
+  });
+  dialog.addEventListener('change', (e) => {
+    const reason = dialog.querySelector('[name=reason]')?.value ?? '';
+    if (e.target.matches('[data-add-dish]') && e.target.value) {
+      const m = menu.find((x) => x.id === Number(e.target.value));
+      const existing = items.find((i) => i.menu_item_id === m.id);
+      if (existing) existing.quantity += 1;
+      else items.push({ menu_item_id: m.id, name: m.name, unit_price: m.price, quantity: 1 });
+    } else if (e.target.name === 'discount') {
+      try { draft.discount = toPaise(e.target.value); } catch { return; }
+    } else { keepInputs(); return; }
+    keepInputs(); draw();
+    dialog.querySelector('[name=reason]').value = reason;
+  });
+  dialog.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = keepInputs();
+    const alertBox = dialog.querySelector('[role=alert]');
+    const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; };
+    if (!items.length) return fail('A bill needs at least one item. To remove the whole bill, use Delete.');
+    try { draft.discount = toPaise(f.discount); } catch (err) { return fail(err.message); }
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const { error } = await sb.rpc('edit_paid_bill', {
+      p_order_id: order.id, p_items: items, p_discount: draft.discount, p_method: draft.method, p_reason: f.reason ?? '',
+    });
+    if (error) { btn.disabled = false; btn.textContent = 'Save Changes'; return fail(friendly(error)); }
+    close();
+    toast(`Bill ${order.bill_no} updated · saved in the change log`);
+    route();
+  });
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  draw();
+  dialog.showModal();
+}
+
+function deleteBill(order, total) {
+  const dialog = document.createElement('dialog');
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  setHTML(dialog, html`
+    <form class="dialog-body" novalidate>
+      <h2 style="margin:0">Delete Bill ${order.bill_no}?</h2>
+      <div class="auth-alert error" role="alert" hidden></div>
+      <div class="due"><span class="muted">Bill total</span><span class="money">${rs(total)}</span></div>
+      <p class="hint">The bill is removed from sales. A full copy is kept in the change log with your name and reason.</p>
+      <label>Reason <input name="reason" placeholder="e.g. Wrong table, entered twice" maxlength="200" autocomplete="off" required></label>
+      <button type="submit" class="wide danger-fill">Delete Bill</button>
+      <button type="button" class="secondary wide" data-cancel>Cancel</button>
+    </form>`);
+  dialog.querySelector('[data-cancel]').addEventListener('click', close);
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  dialog.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const reason = e.target.reason.value.trim();
+    const alertBox = dialog.querySelector('[role=alert]');
+    if (!reason) { alertBox.textContent = 'Write a short reason, so the log shows why this bill was deleted.'; alertBox.hidden = false; return; }
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Deleting…';
+    const { error } = await sb.rpc('delete_paid_bill', { p_order_id: order.id, p_reason: reason });
+    if (error) { btn.disabled = false; btn.textContent = 'Delete Bill'; alertBox.textContent = friendly(error); alertBox.hidden = false; return; }
+    close();
+    toast(`Bill ${order.bill_no} deleted · saved in the change log`);
+    location.hash = '#/bills';
+  });
+  dialog.showModal();
+}
+
+async function logView(token) {
+  const [owner, logs] = await Promise.all([
+    isOwner(),
+    q(sb.from('bill_logs').select('*').order('created_at', { ascending: false }).limit(200)).catch(() => null),
+  ]);
+  if (token !== renderToken) return;
+  setHTML($view, html`
+    <div class="page-head"><div><p class="eyebrow"><a href="#/bills">‹ Bills</a></p><h1>Change Log</h1>
+      <p class="muted">Every edited or deleted bill, with who did it and why.</p></div></div>
+    ${!owner ? html`<div class="card empty">Only the owner can see the change log.</div>`
+      : logs === null ? html`<div class="card empty">The change log isn’t set up yet. Run the last database step, then reload.</div>`
+      : logs.length ? html`<div class="list">${logs.map(logRow)}</div>`
+      : html`<div class="card empty"><span class="emoji" aria-hidden="true">📝</span>No changes yet. Edited and deleted bills will appear here.</div>`}`);
 }
 
 // ---------- Menu ----------
@@ -1132,6 +1318,7 @@ const routes = [
   [/^\/?$/, tablesView, 'tables'],
   [/^\/table\/(\d+)(?:\/([A-Z]))?$/, tableView, 'tables'],
   [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables'],
+  [/^\/bills\/log$/, logView, 'bills'],
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills'],
   [/^\/menu$/, menuView, 'menu'],
   [/^\/settings$/, settingsView, 'settings'],
@@ -1190,7 +1377,7 @@ window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
   session = s;
-  if (changed) staffCheck = null;
+  if (changed) { staffCheck = null; ownerCheck = null; }
   if (event === 'PASSWORD_RECOVERY') { recoveringPassword = true; setTimeout(route, 0); return; }
   if (event === 'SIGNED_OUT') { recoveringPassword = false; lastEmail = ''; }
   // Defer: calling Supabase from inside this callback can deadlock the auth client.
