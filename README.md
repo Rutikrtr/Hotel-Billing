@@ -16,7 +16,7 @@ Other screens:
 
 - **Bills**: bills waiting for payment, the day's sales split by payment method, and every paid bill. Pick a date to see past days.
 - **Menu**: add dishes, tap ☆ to make a dish a favourite, or tap **Edit** to change its name, rate, category, veg/non-veg or availability.
-- **Settings**: restaurant name, address and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables, and staff access.
+- **Settings**: restaurant name, address and phone, an optional **Charge GST on bills** switch (off by default; when on, the bill shows CGST + SGST), tables (default T1–T8; tap a table to rename it), and staff access.
 
 Bills round to the nearest rupee and show the round-off. Amounts are stored in whole paise, so totals are exact.
 

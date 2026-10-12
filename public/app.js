@@ -908,11 +908,12 @@ async function settingsView(token) {
       <div>
         <div class="card">
           <h2>Tables</h2>
+          <p class="small" style="margin-top:-6px">Tap a table to give it your own name, like “Garden 1” or “Family Hall”.</p>
           <div class="table-chips">${tables.map((t) => html`
-            <span class="table-chip">${t.name}<button type="button" class="destructive" data-del-table="${t.id}" aria-label="Remove table ${t.name}">✕</button></span>`)}
+            <span class="table-chip"><button type="button" class="chip-name" data-rename-table="${t.id}" aria-label="Rename table ${t.name}">${t.name} <span class="chip-edit" aria-hidden="true">✎</span></button><button type="button" class="destructive" data-del-table="${t.id}" aria-label="Remove table ${t.name}">✕</button></span>`)}
           </div>
           <form id="add-table" class="row">
-            <input name="name" placeholder="e.g. T9 or Parcel" required aria-label="New table name">
+            <input name="name" placeholder="e.g. T9, Parcel or Garden 1" required maxlength="30" aria-label="New table name">
             <button type="submit" class="secondary">Add Table</button>
           </form>
         </div>
@@ -953,10 +954,46 @@ async function settingsView(token) {
     toast('Staff added');
     settingsView(renderToken);
   });
+  function renameTable(table) {
+    const dialog = document.createElement('dialog');
+    document.body.append(dialog);
+    setHTML(dialog, html`
+      <form class="dialog-body" novalidate>
+        <h2 style="margin:0">Rename Table</h2>
+        <div class="auth-alert error" role="alert" hidden></div>
+        <label>Table name <input name="name" value="${table.name}" maxlength="30" required autocomplete="off"></label>
+        <p class="hint">Shown on the Tables screen and printed on the bill. Running orders and past bills move with it.</p>
+        <button type="submit" class="wide">Save Name</button>
+        <button type="button" class="secondary wide" data-cancel>Cancel</button>
+      </form>`);
+    const close = () => { dialog.close(); dialog.remove(); };
+    dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+    dialog.querySelector('[data-cancel]').addEventListener('click', close);
+    dialog.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = new FormData(e.target).get('name').trim();
+      const alertBox = dialog.querySelector('[role=alert]');
+      const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; };
+      if (!name) return fail('Enter a name for this table.');
+      if (name === table.name) return close();
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      const { error } = await sb.from('dining_tables').update({ name }).eq('id', table.id);
+      if (error) { btn.disabled = false; btn.textContent = 'Save Name'; return fail(friendly(error)); }
+      close();
+      toast(`${table.name} renamed to ${name}`);
+      settingsView(renderToken);
+    });
+    dialog.showModal();
+    const input = dialog.querySelector('[name=name]');
+    input.focus(); input.select();
+  }
+
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.id === 'signout') sb.auth.signOut();
+    else if (t.dataset.renameTable) renameTable(tables.find((x) => x.id === Number(t.dataset.renameTable)));
     else if (t.dataset.delTable) {
       const name = tables.find((x) => x.id === Number(t.dataset.delTable)).name;
       if (!confirm(`Remove table ${name}?`)) return;

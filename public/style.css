@@ -246,8 +246,11 @@ dialog .hint { margin: 0; }
 .two-col { display: grid; gap: 20px; }
 @media (min-width: 900px) { .two-col { grid-template-columns: 1fr 1fr; align-items: start; } }
 .table-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.table-chip { display: inline-flex; align-items: center; gap: 2px; padding-left: 14px; border-radius: 22px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; }
-.table-chip button { min-height: 40px; padding: 0 12px; }
+.table-chip { display: inline-flex; align-items: center; border-radius: 22px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; }
+.table-chip button { min-height: 44px; padding: 0 12px; }
+.table-chip .chip-name { background: none; color: var(--text); padding-left: 14px; padding-right: 4px; border-radius: 22px 0 0 22px; }
+.table-chip .chip-name:hover { color: var(--accent); }
+.chip-edit { color: var(--muted); font-weight: 400; }
 
 /* ---------- Toast ---------- */
 .toast {
