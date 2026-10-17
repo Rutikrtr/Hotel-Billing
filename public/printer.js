@@ -56,8 +56,8 @@ export class Slip {
   }
   rule(ch = '-') { return this.line(ch.repeat(this.width)); }
   feed(n = 1) { return this.raw(ESC, 0x64, n); }
-  /** Feed past the tear bar and cut (printers without a cutter ignore the cut). */
-  cut() { return this.feed(4).raw(GS, 0x56, 0x42, 0x00); }
+  /** Feed a little blank paper (set per phone, 2 lines by default) and cut; printers without a cutter ignore the cut. */
+  cut() { return this.feed(feedLines()).raw(GS, 0x56, 0x42, 0x00); }
   bytes() { return Uint8Array.from(this.out); }
 }
 
@@ -85,6 +85,8 @@ export function setPrinter(p) {
   try { localStorage.setItem(KEY, JSON.stringify(rest)); } catch { /* private mode */ }
 }
 export const paperWidth = () => (getPrinter().paper === 80 ? 48 : 32);
+/** Blank lines after each slip before tearing: 1 to 4 (default 2). */
+export const feedLines = () => Math.min(4, Math.max(1, Number(getPrinter().feed) || 2));
 export const directPrinting = () => getPrinter().method !== 'dialog';
 export const bluetoothSupported = () => Boolean(navigator.bluetooth);
 /** Chrome can only reconnect to a printer after the app is reopened when it can list remembered devices. */

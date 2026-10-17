@@ -3,7 +3,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
 import {
   Slip, bluetoothRemembers, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
-  getPrinter, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
+  feedLines, getPrinter, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
 } from './printer.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -926,6 +926,8 @@ function printerDialog() {
           <label class="feature-pick"><input type="radio" name="method" value="dialog" ${p.method === 'dialog' ? new Raw('checked') : ''}>
             <span><strong>Phone print dialog</strong><span class="small">The normal popup. For Wi-Fi printers, PDF or computers.</span></span></label>
         </fieldset>
+        <label>Blank space after each bill
+          <select name="feed">${[1, 2, 3, 4].map((n) => html`<option value="${n}" ${feedLines() === n ? new Raw('selected') : ''}>${n} line${n === 1 ? '' : 's'}${n === 2 ? ' (default)' : ''}</option>`)}</select></label>
         <fieldset class="segmented" style="border:0;margin:0" aria-label="Paper width">
           <label><input type="radio" name="paper" value="58" ${p.paper !== 80 ? new Raw('checked') : ''}><span>58 mm (2 inch)</span></label>
           <label><input type="radio" name="paper" value="80" ${p.paper === 80 ? new Raw('checked') : ''}><span>80 mm (3 inch)</span></label>
@@ -949,6 +951,7 @@ function printerDialog() {
   dialog.addEventListener('change', (e) => {
     if (e.target.name === 'method') setPrinter({ method: e.target.value });
     if (e.target.name === 'paper') setPrinter({ paper: Number(e.target.value) });
+    if (e.target.name === 'feed') setPrinter({ feed: Number(e.target.value) });
     if (e.target.name === 'kitchen_separate') setPrinter({ kitchen: { ...getPrinter().kitchen, separate: e.target.checked } });
     draw();
   });

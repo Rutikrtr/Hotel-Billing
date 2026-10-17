@@ -453,7 +453,7 @@ body.signed-out main { min-height: 100vh; min-height: 100dvh; display: grid; pla
 .receipt .grand { font-size: 18px; font-weight: 700; }
 
 @media print {
-  @page { size: 80mm auto; margin: 3mm; }
+  @page { size: 80mm auto; margin: 2mm 2mm 0; }
   body { background: #fff; padding: 0; }
   .tabbar, .no-print, .toast, .cart-bar, .sheet-backdrop { display: none !important; }
   main { padding: 0; max-width: none; }
@@ -628,3 +628,114 @@ button.room-edit strong { font-weight: 800; }
 .hotel-actions a.button { min-height: 44px; padding: 0 14px; font-size: 14.5px; flex: 1 1 auto; }
 .login-id { font-family: var(--mono); font-weight: 700; color: var(--text); }
 .qr-box.big { width: min(300px, 100%); }
+
+/* ---------- Phones: a more compact layout (more fits on screen, same tap-friendly controls) ---------- */
+@media (max-width: 599px) {
+  :root { --tabbar-h: 58px; --radius: 15px; }
+  body { font-size: 14.5px; line-height: 1.4; }
+  main { padding: 10px 12px 24px; }
+  h1 { font-size: 23px; }
+  h2 { font-size: 17px; margin-bottom: 10px; }
+  h3 { font-size: 12px; margin: 16px 0 8px; }
+  .small { font-size: 13px; }
+  .page-head { margin: 2px 0 12px; gap: 8px; }
+  .page-head p { margin-top: 2px; }
+  .eyebrow { font-size: 12px; }
+
+  /* Controls: 40-42px tall instead of 48px; inputs keep 16px text so phones don't zoom in. */
+  button, .button { min-height: 42px; padding: 0 14px; border-radius: 12px; font-size: 14.5px; }
+  input, select, textarea { min-height: 42px; padding: 8px 12px; border-radius: 11px; font-size: 16px; }
+  label { font-size: 13px; gap: 4px; }
+  .segmented span { min-height: 38px; font-size: 14px; }
+  .card { padding: 14px; }
+  .chip { min-height: 34px; padding: 0 12px; font-size: 13.5px; border-radius: 17px; }
+  .hotel-actions button, .hotel-actions a.button { min-height: 38px; font-size: 13.5px; padding: 0 10px; }
+  .head-actions { gap: 6px; }
+  .head-actions .button, .head-actions button { min-height: 36px; padding: 0 10px; font-size: 13.5px; }
+
+  /* Tab bar */
+  .tab { min-height: 46px; font-size: 10.5px; gap: 2px; }
+  .tab svg { width: 21px; height: 21px; padding: 2px 12px; }
+
+  /* Today summary */
+  .hero, .sales-card { padding: 13px 14px 12px; margin-bottom: 12px; border-radius: 18px; }
+  .hero .label, .sales-card .label { font-size: 13px; }
+  .hero .big, .sales-card .big { font-size: 27px; margin: 0 0 8px; }
+  .hero .fact { padding: 6px 8px; border-radius: 11px; }
+  .hero .fact strong { font-size: 16px; }
+  .hero .fact span { font-size: 11.5px; }
+  .filter-tabs { margin-bottom: 10px; gap: 6px; }
+
+  /* Table tiles */
+  .tables { gap: 9px; }
+  .table-tile { min-height: 100px; padding: 10px 10px 10px 12px; gap: 8px; }
+  .table-tile.free { min-height: 86px; }
+  .table-tile .name { font-size: 18px; }
+  .table-tile .amount { font-size: 18px; }
+  .table-tile .pill { font-size: 11px; padding: 3px 7px; }
+  .table-tile .state, .table-tile.free .tap { font-size: 12px; }
+  .table-tile.busy::before, .table-tile.billed::before { top: 12px; bottom: 12px; }
+
+  /* Order screen */
+  .order-top { margin-bottom: 8px; gap: 8px; }
+  .order-top h1 { font-size: 20px; }
+  .order-top p { font-size: 12.5px; }
+  .back { width: 38px; height: 38px; border-radius: 12px; font-size: 20px; }
+  .order-top .add-section { min-height: 36px; font-size: 13px; padding: 0 10px; }
+  .menu-tools { gap: 8px; padding-top: 4px; padding-bottom: 8px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+  .menu-list { gap: 7px; }
+  .dish { min-height: 56px; padding: 8px 8px 8px 11px; gap: 10px; border-radius: 13px; }
+  .dish .info { gap: 2px; }
+  .dish .dname { font-size: 14.5px; }
+  .dish .price { font-size: 14px; }
+  .dish .meta { font-size: 12px; }
+  .add-btn { min-width: 74px; min-height: 36px; padding: 0 12px; font-size: 13.5px; border-radius: 10px; }
+  .qty { min-width: 82px; height: 36px; border-radius: 10px; }
+  .qty button { min-height: 36px; width: 30px; font-size: 20px; }
+  .order-lines { padding: 2px 14px; }
+  .order-line { padding: 9px 0; }
+  .order-line .each { font-size: 12.5px; }
+  .order-line .qty { min-width: 94px; height: 34px; }
+  .order-line .qty button { min-height: 34px; width: 32px; }
+  .cart-bar .money { font-size: 17px; }
+  .cart-bar button { min-height: 40px; }
+
+  /* Lists, bills, dialogs */
+  .list-row { min-height: 50px; padding: 9px 12px; gap: 10px; }
+  .list-row .sub { font-size: 12.5px; }
+  .method-badge { width: 34px; height: 34px; border-radius: 10px; font-size: 11px; }
+  .rank-row { padding: 9px 12px; gap: 10px; }
+  dialog .dialog-body { padding: 16px; gap: 12px; }
+  dialog .due .money { font-size: 32px; }
+  .receipt { padding: 18px 14px 16px; font-size: 12.5px; }
+  .receipt-wrap { gap: 10px; }
+  .receipt-actions { gap: 8px; }
+  .empty { padding: 24px 14px; }
+
+  /* Sign in */
+  .auth-card { padding: 24px 18px 18px; gap: 12px; border-radius: 22px; }
+  .auth-icon { width: 50px; height: 50px; border-radius: 15px; }
+  .field label { font-size: 14px; }
+  .field input { min-height: 46px; font-size: 16px; }
+
+  .receipt-actions .button, .receipt-actions button { min-height: 38px; padding: 0 11px; font-size: 13.5px; }
+  .paid-note { font-size: 13px; margin: 0; }
+  .sections { gap: 7px; margin-bottom: 8px; }
+  .section-tab { min-height: 44px; min-width: 96px; padding: 5px 12px; border-radius: 12px; }
+  .section-tab .section-name { font-size: 13.5px; }
+  .section-tab .section-total { font-size: 14px; }
+
+  .order-head { padding-top: 10px; padding-bottom: 10px; }
+  .order-head .title { font-size: 19px; }
+  .totals { padding-top: 8px; padding-bottom: 8px; gap: 4px; }
+  .totals .grand { font-size: 21px; padding-top: 6px; }
+  .order-actions { padding-top: 8px; padding-bottom: 12px; gap: 8px; }
+  .order-actions button { min-height: 44px; font-size: 15px; }
+  .discount-row input { min-height: 38px; }
+
+  /* Super admin cards */
+  .hotel-card { gap: 10px; }
+  .hotel-stats strong { font-size: 15px; }
+  .hotel-stats div { padding: 6px 8px; }
+  .feature-chip { font-size: 12px; padding: 3px 8px; }
+}
