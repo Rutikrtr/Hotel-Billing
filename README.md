@@ -51,6 +51,16 @@ A super admin (Techyverve) signs in like anyone else and lands on **Hotels** (`#
 Super admins are rows in `public.super_admins`; to add one, insert the user's id there. Feature switches and the
 paused state are enforced in the database (`has_feature()`, `my_restaurant()`), not just hidden in the app.
 
+## Staff and parcels
+
+The owner creates staff logins in **Settings → Staff Logins**: a Login ID (like `ramesh`) and a password, as
+**Waiter** (only adds dishes to tables) or **Manager** (also prints bills, takes parcels and payments, sees Bills,
+Trending and Rooms). Staff sign in with their Login ID; it is stored as `ramesh@staff.login`. Menu, tables and
+settings stay with the owner, and the database enforces all of this (`can_bill()`, `is_owner()`).
+
+**New Parcel** (Tables screen) takes a takeaway order without a table. Print Bill prints two slips: the
+customer's bill and a kitchen copy, both with the bill number in large type (B00046 → **46**) to call out.
+
 ## Rooms
 
 When the Rooms feature is on, the **Rooms** tab shows every room as free or occupied. Tap a free room to check a guest in,

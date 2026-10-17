@@ -36,6 +36,10 @@ const rs = (p) => `₹${fmt(p)}`;
 /** "T2" for a table with one group; "T2-A", "T2-B" once the table has been split into sections. */
 const tableLabel = (name, section, split = false) => (section && (split || section !== 'A') ? `${name}-${section}` : name);
 const SECTION_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+/** "Parcel" for takeaway orders, otherwise the table label. */
+const orderLabel = (o) => (o.is_parcel ? 'Parcel' : tableLabel(o.dining_tables?.name ?? 'Table', o.section, o.is_split));
+/** The number to call out for a bill: B00046 → 46. */
+const tokenNo = (billNo) => String(Number(String(billNo ?? '').replace(/\D/g, '')) || '');
 const pct = (bp) => `${+(bp / 100).toFixed(2)}%`;
 const time = (iso) => new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 const dateTime = (iso) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
@@ -185,12 +189,17 @@ function authScreen({ iconName = 'receipt', title, subtitle, body, footer = '' }
   return { root, handle, showAlert };
 }
 
-const emailField = (autofocus = true) => html`
+const emailField = (autofocus = true, loginId = false) => html`
   <div class="field">
-    <label for="email">Email</label>
-    <input id="email" type="email" name="email" autocomplete="email" inputmode="email" required
-      value="${lastEmail}" ${autofocus ? new Raw('autofocus') : ''} placeholder="name@example.com">
+    <label for="email">${loginId ? 'Email or Login ID' : 'Email'}</label>
+    <input id="email" type="${loginId ? 'text' : 'email'}" name="email" autocomplete="username" ${loginId ? new Raw('autocapitalize="none" spellcheck="false"') : new Raw('inputmode="email"')} required
+      value="${lastEmail}" ${autofocus ? new Raw('autofocus') : ''} placeholder="${loginId ? 'name@example.com or your Login ID' : 'name@example.com'}">
   </div>`;
+// Staff logins made by the owner are a Login ID like "ramesh"; they sign in as ramesh@staff.login.
+const STAFF_DOMAIN = '@staff.login';
+const loginEmail = (v) => { const t = v.trim().toLowerCase(); return t.includes('@') ? t : t + STAFF_DOMAIN; };
+const ROLE_NAMES = { owner: 'Owner', manager: 'Manager', staff: 'Waiter' };
+const loginName = (email) => (email?.endsWith(STAFF_DOMAIN) ? email.slice(0, -STAFF_DOMAIN.length) : email);
 
 const authViews = {
   signIn() {
@@ -199,17 +208,17 @@ const authViews = {
       subtitle: 'Sign in to take orders and print bills.',
       body: html`
         <form class="auth-form" novalidate>
-          ${emailField()}
+          ${emailField(true, true)}
           ${passwordField('Password', 'current-password')}
           <div class="auth-row"><a href="#" data-go="forgot">Forgot password?</a></div>
           <button type="submit" class="wide">Sign In</button>
         </form>
         <p class="auth-switch">New staff member? <a href="#" data-go="signUp">Create an account</a></p>`,
-      footer: 'Only people the owner has added in Settings can sign in.',
+      footer: 'Staff: use the Login ID and password the owner gave you.',
     });
     handle('Signing In…', async ({ email, password }) => {
-      if (!email.trim() || !password) throw new Error('Enter your email and password.');
-      const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+      if (!email.trim() || !password) throw new Error('Enter your email or Login ID, and your password.');
+      const { error } = await sb.auth.signInWithPassword({ email: loginEmail(email), password });
       if (!error) return;
       const code = authError(error);
       if (code === 'unconfirmed') {
@@ -371,7 +380,9 @@ async function tablesView(token) {
   ]);
   if (token !== renderToken) return;
   const byTable = {};
-  open.forEach((o) => { (byTable[o.table_id] ??= []).push(o); });
+  open.filter((o) => !o.is_parcel).forEach((o) => { (byTable[o.table_id] ??= []).push(o); });
+  const parcels = open.filter((o) => o.is_parcel && o.order_items.length).sort((a, b) => a.opened_at.localeCompare(b.opened_at));
+  const canBill = account.can_bill === true;
   const sales = paidToday.reduce((sum, o) => sum + orderBill(o, o.order_items, o.tax_rate_bp ?? 0).total, 0);
   const runningTables = tables.filter((t) => byTable[t.id]?.length).length;
   const waiting = open.filter((o) => o.billed_at).length;
@@ -381,8 +392,23 @@ async function tablesView(token) {
   const today = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 
   const root = mount(html`
-    <div class="page-head"><div><p class="eyebrow">${today}</p><h1>Tables</h1></div></div>
-    <section class="hero" aria-label="Today">
+    <div class="page-head"><div><p class="eyebrow">${today}</p><h1>Tables</h1>
+      ${account.role === 'owner' ? '' : html`<p class="muted">${loginName(session.user.email)} · ${account.role === 'manager' ? 'Manager' : 'Waiter'}</p>`}</div>
+      <div class="head-actions">
+        ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
+        ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
+      </div>
+    </div>
+    ${parcels.length ? html`
+      <h3 style="margin-top:0">Parcels · ${parcels.length}</h3>
+      <div class="list" style="margin-bottom:20px">${parcels.map((o) => html`
+        <a class="list-row" href="${o.billed_at ? `#/bill/${o.id}` : `#/parcel/${o.id}`}">
+          <span class="method-badge m-wait" aria-hidden="true">🛍️</span>
+          <span class="grow"><strong>Parcel${o.bill_no ? ` #${tokenNo(o.bill_no)}` : ''}</strong>
+            <div class="sub">${o.billed_at ? `Bill printed ${time(o.billed_at)} · not paid yet` : `${orderBill(o, o.order_items, 0).itemCount} items · ${since(o.opened_at)}`}</div></span>
+          <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
+        </a>`)}</div>` : ''}
+    <section class="hero" aria-label="Today" ${canBill ? '' : new Raw('hidden')}>
       <span class="label">Today’s sales</span>
       <span class="big">${rs(sales)}</span>
       <div class="facts">
@@ -417,6 +443,7 @@ async function tablesView(token) {
       })}
     </div>
     ${tables.length && !visible.length ? html`<div class="card empty">${tableFilter === 'free' ? 'Every table is busy right now.' : 'No tables are running right now.'}</div>` : ''}`);
+  root.querySelector('#signout-head')?.addEventListener('click', () => sb.auth.signOut());
   root.addEventListener('click', (e) => {
     const f = e.target.closest('[data-filter]');
     if (!f) return;
@@ -427,12 +454,19 @@ async function tablesView(token) {
 
 // ---------- Order for a table ----------
 
-async function tableView(token, tableId, sectionArg) {
+/** A parcel (takeaway) order uses the same screen as a table, without a table. */
+const parcelView = (token, orderId = 'new') => tableView(token, null, null, orderId);
+
+async function tableView(token, tableId, sectionArg, parcelId) {
+  const parcel = parcelId !== undefined;
+  const openQuery = () => (parcel
+    ? sb.from('orders').select('*, order_items(*)').eq('id', parcelId === 'new' ? 0 : parcelId).eq('status', 'open')
+    : sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('section'));
   const [table, menu, settings, open, sales] = await Promise.all([
-    q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
+    parcel ? { id: null, name: 'Parcel' } : q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
     q(sb.from('menu_items').select('*').order('id')),
     getSettings(),
-    q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('section').order('id', { referencedTable: 'order_items' })),
+    q(openQuery().order('id', { referencedTable: 'order_items' })),
     // Best sellers are a convenience: if they can't load, the menu still works.
     sb.rpc('popular_menu_items', { p_days: 30, p_limit: 12 }).then((r) => r.data ?? [], () => []),
   ]);
@@ -450,7 +484,8 @@ async function tableView(token, tableId, sectionArg) {
   const multi = sections.length > 1;
   const current = open.find((o) => o.section === section) ?? null;
   const totals = Object.fromEntries(open.map((o) => [o.section, orderBill(o, o.order_items, settings.tax_rate_bp).total]));
-  const label = tableLabel(table.name, section, multi || Boolean(current?.is_split));
+  const label = parcel ? (current?.bill_no ? `Parcel #${tokenNo(current.bill_no)}` : 'Parcel') : tableLabel(table.name, section, multi || Boolean(current?.is_split));
+  const canBill = account.can_bill === true;
   const state = { order: current, items: current ? current.order_items : [], filter: hasPopular ? POPULAR : 'All', search: '' };
   const categories = [...(hasPopular ? [POPULAR] : []), 'All', ...new Set(menu.map((m) => m.category))];
   let queue = Promise.resolve();
@@ -460,8 +495,8 @@ async function tableView(token, tableId, sectionArg) {
     <div class="order-page">
       <div class="order-top">
         <a class="back" href="#/" aria-label="Back to all tables">‹</a>
-        <div class="titles"><h1>${table.name}</h1><p id="order-sub"></p></div>
-        <button type="button" class="secondary add-section" id="add-section" ${current?.order_items.length ? '' : new Raw('hidden')}
+        <div class="titles"><h1>${parcel ? html`🛍️ ${label}` : table.name}</h1><p id="order-sub"></p></div>
+        <button type="button" class="secondary add-section" id="add-section" ${current?.order_items.length && !parcel ? '' : new Raw('hidden')}
           title="Two different groups at this table? Give each its own bill.">+ Section</button>
       </div>
       ${multi ? html`
@@ -535,10 +570,10 @@ async function tableView(token, tableId, sectionArg) {
   function renderOrder() {
     const b = bill();
     const billed = Boolean(state.order?.billed_at);
-    document.getElementById('add-section').hidden = !state.items.length;
+    document.getElementById('add-section').hidden = !state.items.length || parcel;
     const tabTotal = document.querySelector('.section-tab[aria-current="page"] .section-total');
     if (tabTotal) tabTotal.textContent = state.items.length ? rs(b.total) : 'New';
-    $sub.textContent = !state.order ? (multi ? `Section ${section} · take this group’s order` : 'Free · take the order')
+    $sub.textContent = !state.order ? (parcel ? 'Takeaway · add the dishes' : multi ? `Section ${section} · take this group’s order` : 'Free · take the order')
       : billed ? `Bill ${state.order.bill_no} printed at ${time(state.order.billed_at)} · waiting to pay`
       : `Eating since ${time(state.order.opened_at)}`;
     setHTML($panel, html`
@@ -567,8 +602,8 @@ async function tableView(token, tableId, sectionArg) {
         </ul>
         <div class="totals">
           <div><span class="muted">Subtotal</span><span class="money">${fmt(b.subtotal)}</span></div>
-          <div class="discount-row"><label for="discount" class="muted" style="display:flex">Discount (₹)</label>
-            <input id="discount" inputmode="decimal" value="${state.order?.discount ? plain(state.order.discount) : ''}" placeholder="0"></div>
+          ${canBill ? html`<div class="discount-row"><label for="discount" class="muted" style="display:flex">Discount (₹)</label>
+            <input id="discount" inputmode="decimal" value="${state.order?.discount ? plain(state.order.discount) : ''}" placeholder="0"></div>` : ''}
           ${b.tax ? html`
             <div><span class="muted">CGST ${pct(settings.tax_rate_bp / 2)}</span><span class="money">${fmt(b.cgst)}</span></div>
             <div><span class="muted">SGST ${pct(settings.tax_rate_bp / 2)}</span><span class="money">${fmt(b.sgst)}</span></div>` : ''}
@@ -576,13 +611,17 @@ async function tableView(token, tableId, sectionArg) {
           <div class="grand"><span>Total</span><span class="money">${rs(b.total)}</span></div>
         </div>
         ${billed ? html`<p class="order-note">Bill printed. Added or removed items? Print it again so the customer gets the right total.</p>` : ''}
+        ${parcel && canBill ? html`<p class="order-note">Print Bill prints two slips: the customer’s bill and a kitchen copy, both with the bill number to call out.</p>` : ''}
         <div class="order-actions">
-          ${billed
+          ${!canBill
+            ? html`<button type="button" id="save-order" class="wide-action">Save Order</button>`
+            : billed
             ? html`<button type="button" class="secondary" id="print-bill">Reprint Bill</button>
                    <button type="button" id="pay">Receive Payment</button>`
             : html`<button type="button" class="secondary" id="print-bill">Print Bill</button>
                    <button type="button" id="save-order">Save Order</button>`}
-        </div>`
+        </div>
+        ${canBill ? '' : html`<p class="order-note">The manager prints the bill and takes payment.</p>`}`
       : html`<div class="empty"><span class="emoji" aria-hidden="true">🍛</span>No dishes yet.<br>Tap <strong>ADD</strong> on a dish to start the order.</div>`}`);
     setHTML($bar, state.items.length
       ? html`<span><span class="count">${b.itemCount} item${b.itemCount === 1 ? '' : 's'} · ${label}</span><span class="money">${rs(b.total)}</span></span>
@@ -598,7 +637,9 @@ async function tableView(token, tableId, sectionArg) {
   function enqueue(fn) {
     queue = queue.then(fn).catch(async (err) => {
       toast(friendly(err), 'error');
-      const fresh = await q(sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('section', section).eq('status', 'open').order('id', { referencedTable: 'order_items' }).maybeSingle()).catch(() => null);
+      const fresh = await q((parcel
+        ? sb.from('orders').select('*, order_items(*)').eq('id', state.order?.id ?? 0).eq('status', 'open')
+        : sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('section', section).eq('status', 'open')).order('id', { referencedTable: 'order_items' }).maybeSingle()).catch(() => null);
       state.order = fresh; state.items = fresh ? fresh.order_items : [];
       render();
     });
@@ -607,7 +648,9 @@ async function tableView(token, tableId, sectionArg) {
 
   async function ensureOrder() {
     if (state.order) return state.order;
-    state.order = await q(sb.from('orders').insert({ table_id: table.id, section }).select().single());
+    state.order = await q(sb.from('orders').insert(parcel ? { is_parcel: true } : { table_id: table.id, section }).select().single());
+    // Keep the parcel's own address so a refresh comes back to it.
+    if (parcel) history.replaceState(null, '', `#/parcel/${state.order.id}`);
     return state.order;
   }
 
@@ -672,10 +715,11 @@ async function tableView(token, tableId, sectionArg) {
         await queue;
         document.body.classList.remove('sheet-open');
         if (settings.quick_close !== false) {
-          // No printer / no separate payment step: the bill is created and the table is freed at once.
+          // No separate payment step: the bill is created and the table is freed at once.
           const billNo = await q(sb.rpc('settle_order', { p_order_id: state.order.id, p_method: 'Cash' }));
-          toast(`Bill ${billNo} done · ${label} is free`);
-          location.hash = `#/bill/${state.order.id}`;
+          toast(parcel ? `Parcel #${tokenNo(billNo)} · printing bill and kitchen copy` : `Bill ${billNo} done · ${label} is free`);
+          // Parcels always print: the customer keeps one slip, the kitchen gets the other.
+          location.hash = parcel ? `#/bill/${state.order.id}/print` : `#/bill/${state.order.id}`;
           return;
         }
         await q(sb.rpc('generate_bill', { p_order_id: state.order.id }));
@@ -689,12 +733,13 @@ async function tableView(token, tableId, sectionArg) {
       });
     }
     else if (t.id === 'clear') {
-      if (!confirm(`Clear all items from ${multi ? `Section ${section} of ${table.name}` : table.name}? This can’t be undone.`)) return;
+      if (!confirm(`Clear all items from ${parcel ? 'this parcel' : multi ? `Section ${section} of ${table.name}` : table.name}? This can’t be undone.`)) return;
       enqueue(async () => {
         await q(sb.from('orders').delete().eq('id', state.order.id));
         state.order = null; state.items = [];
         toast(`${label} cleared`);
-        if (multi) location.hash = `#/table/${table.id}`;
+        if (parcel) location.hash = '#/';
+        else if (multi) location.hash = `#/table/${table.id}`;
         else render();
       });
     }
@@ -757,12 +802,12 @@ async function billView(token, orderId, autoPrint) {
                  <button type="button" class="secondary" id="print">Print</button>
                  ${owner && feat('bill_edit') ? html`<button type="button" class="secondary" id="edit-bill">Edit Bill</button>
                    <button type="button" class="secondary danger-outline" id="delete-bill">Delete</button>` : html`<a class="button secondary" href="#/">Tables</a>`}`
-          : html`<a class="button secondary" href="#/table/${order.table_id}/${order.section}">Add Items</a>
+          : html`<a class="button secondary" href="${order.is_parcel ? `#/parcel/${order.id}` : `#/table/${order.table_id}/${order.section}`}">Add Items</a>
                  <button type="button" class="secondary" id="print">Print Again</button>
                  <button type="button" id="pay">Receive Payment</button>`}
       </div>
       ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}${order.edit_count ? html` · <span class="edited-tag">Edited ${order.edit_count}×</span>` : ''}</p>`
-             : html`<p class="paid-note no-print">Give this bill to ${tableLabel(order.dining_tables.name, order.section, order.is_split)}. Tap Receive Payment once they pay.</p>`}
+             : html`<p class="paid-note no-print">Give this bill to ${orderLabel(order)}. Tap Receive Payment once they pay.</p>`}
       <article class="receipt" aria-label="Bill">
         <div class="center">
           <div class="shop">${settings.hotel_name}</div>
@@ -771,7 +816,8 @@ async function billView(token, orderId, autoPrint) {
           ${settings.hotel_gstin && rate > 0 ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
         </div>
         <div class="rule"></div>
-        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', `Table: ${tableLabel(order.dining_tables.name, order.section, order.is_split)}`)}
+        ${order.is_parcel && order.bill_no ? html`<div class="token-box"><span>PARCEL · Bill No.</span><strong>${tokenNo(order.bill_no)}</strong></div><div class="rule"></div>` : ''}
+        ${kv(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', order.is_parcel ? 'Parcel' : `Table: ${orderLabel(order)}`)}
         ${kv(dateTime(order.closed_at ?? order.billed_at ?? new Date().toISOString()), paid ? order.payment_method : '')}
         <div class="rule"></div>
         <table>
@@ -790,6 +836,22 @@ async function billView(token, orderId, autoPrint) {
         <div class="rule"></div>
         <div class="center">Thank you! Visit again.</div>
       </article>
+      ${order.is_parcel && order.bill_no ? html`
+        <p class="paid-note no-print" style="margin-top:20px">Kitchen copy · prints on its own slip</p>
+        <article class="receipt kot" aria-label="Kitchen copy">
+          <div class="center"><div class="shop">KITCHEN · PARCEL</div></div>
+          <div class="rule"></div>
+          <div class="token-box"><span>Bill No.</span><strong>${tokenNo(order.bill_no)}</strong></div>
+          <div class="rule"></div>
+          ${kv(order.bill_no, time(order.billed_at ?? order.closed_at ?? new Date().toISOString()))}
+          <div class="rule"></div>
+          <table>
+            <thead><tr><th>Item</th><th class="r">Qty</th></tr></thead>
+            <tbody>${order.order_items.map((i) => html`<tr><td class="kot-item">${i.name}</td><td class="r kot-item">${i.quantity}</td></tr>`)}</tbody>
+          </table>
+          <div class="rule"></div>
+          ${kv(`${b.itemCount} item${b.itemCount === 1 ? '' : 's'}`, 'Pack for takeaway')}
+        </article>` : ''}
       ${history.length ? html`<section class="history no-print" aria-label="Changes to this bill">
         <h3>Changes to this bill</h3>
         <div class="list">${history.map(logRow)}</div>
@@ -799,11 +861,11 @@ async function billView(token, orderId, autoPrint) {
   document.getElementById('edit-bill')?.addEventListener('click', () => editBill(order, rate));
   document.getElementById('delete-bill')?.addEventListener('click', () => deleteBill(order, b.total));
   document.getElementById('pay')?.addEventListener('click', async () => {
-    const billNo = await receivePayment({ orderId: order.id, tableName: tableLabel(order.dining_tables.name, order.section, order.is_split), total: b.total });
+    const billNo = await receivePayment({ orderId: order.id, tableName: orderLabel(order), total: b.total });
     if (billNo) location.hash = '#/';
   });
   if (autoPrint) {
-    history.replaceState(null, '', `#/bill/${order.id}`);
+    window.history.replaceState(null, '', `#/bill/${order.id}`);
     setTimeout(() => window.print(), 300);
   }
 }
@@ -825,7 +887,7 @@ async function billsView(token, day = localDay()) {
   ]);
   if (token !== renderToken) return;
   const rows = [
-    ...orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp), href: `#/bill/${o.id}`, label: tableLabel(o.dining_tables.name, o.section, o.is_split) })),
+    ...orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp), href: `#/bill/${o.id}`, label: orderLabel(o) })),
     ...stays.map((st) => ({ o: st, b: stayBill(st), href: `#/stay/${st.id}`, label: `Room ${st.lodging_rooms.number} · ${st.guest_name}` })),
   ].sort((x, y) => y.o.closed_at.localeCompare(x.o.closed_at));
   const sum = (f) => rows.filter(f).reduce((s, r) => s + r.b.total, 0);
@@ -853,7 +915,7 @@ async function billsView(token, day = localDay()) {
       <div class="list" style="margin-bottom:20px">${unpaid.map((o) => html`
         <a class="list-row" href="#/bill/${o.id}">
           <span class="method-badge m-wait" aria-hidden="true">⏳</span>
-          <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section, o.is_split)}</strong> · ${o.bill_no}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
+          <span class="grow"><strong>${orderLabel(o)}</strong> · ${o.bill_no}<div class="sub">Printed ${time(o.billed_at)} · not paid yet</div></span>
           <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
         </a>`)}</div>` : ''}
     <h3 style="margin-top:0">Paid bills</h3>
@@ -1362,17 +1424,19 @@ async function settingsView(token) {
           </form>
         </div>` : ''}
         <div class="card" style="margin-top:20px">
-          <h2>Staff</h2>
-          <p class="small" style="margin-top:-6px">Only these emails can sign in. New staff create an account with the email added here.</p>
+          <h2>Staff Logins</h2>
+          <p class="small" style="margin-top:-6px"><strong>Waiter</strong>: only adds dishes to tables. <strong>Manager</strong>: also prints bills, takes parcels and payments, sees Bills.</p>
           <div class="list" style="box-shadow:none">${staff.map((m) => html`
-            <div class="list-row">
-              <span class="grow">${m.email}<div class="sub">${m.role === 'owner' ? 'Owner' : 'Staff'} · ${m.user_id ? 'Active' : 'Hasn’t signed up yet'}</div></span>
-              ${isOwner && m.role !== 'owner' ? html`<button type="button" class="destructive" data-del-staff="${m.email}">Remove</button>` : ''}
+            <div class="list-row staff-row">
+              <span class="grow"><strong>${loginName(m.email)}</strong>
+                <div class="sub">${ROLE_NAMES[m.role] ?? m.role} · ${m.user_id ? (m.email.endsWith(STAFF_DOMAIN) ? 'Login ID' : 'Email login') : 'Hasn’t signed up yet'}</div></span>
+              ${isOwner && m.role !== 'owner' ? html`<span class="staff-actions">
+                <button type="button" class="plain" data-role-staff="${m.email}">${m.role === 'manager' ? 'Make Waiter' : 'Make Manager'}</button>
+                <button type="button" class="plain" data-reset-staff="${m.email}">Password</button>
+                <button type="button" class="destructive" data-del-staff="${m.email}">Remove</button></span>` : ''}
             </div>`)}
           </div>
-          ${isOwner ? html`<form id="add-staff" class="row" style="margin-top:12px">
-            <input type="email" name="email" placeholder="staff@example.com" required aria-label="Staff email">
-            <button type="submit" class="secondary">Add Staff</button></form>` : ''}
+          ${isOwner ? html`<button type="button" class="wide" id="add-staff" style="margin-top:12px">＋ Add Staff Login</button>` : ''}
         </div>
       </div>
     </div>`);
@@ -1398,11 +1462,62 @@ async function settingsView(token) {
     toast(`Room ${f.number.trim()} added`);
     settingsView(renderToken);
   });
-  onSubmit(root, '#add-staff', async (f) => {
-    await q(sb.from('staff').insert({ email: f.email.trim().toLowerCase() }));
-    toast('Staff added');
-    settingsView(renderToken);
-  });
+  function addStaff() {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'tall';
+    document.body.append(dialog);
+    const close = () => { dialog.close(); dialog.remove(); };
+    setHTML(dialog, html`
+      <form class="dialog-body" novalidate>
+        <h2 style="margin:0">Add Staff Login</h2>
+        <div class="auth-alert error" role="alert" hidden></div>
+        <label>Login ID <input name="login" required maxlength="60" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. ramesh"></label>
+        <label>Password <input name="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters"></label>
+        <fieldset class="segmented" style="border:0;margin:0" aria-label="Role">
+          <label><input type="radio" name="role" value="staff" checked><span>Waiter</span></label>
+          <label><input type="radio" name="role" value="manager"><span>Manager</span></label>
+        </fieldset>
+        <p class="hint">Waiter only adds dishes to tables. Manager can also print bills, take parcels and payments. You can also type an email instead of a Login ID.</p>
+        <button type="submit" class="wide">Create Login</button>
+        <button type="button" class="secondary wide" data-cancel>Cancel</button>
+      </form>`);
+    dialog.querySelector('[data-cancel]').addEventListener('click', close);
+    dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+    dialog.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      const alertBox = dialog.querySelector('[role=alert]');
+      const btn = e.target.querySelector('button[type=submit]');
+      btn.disabled = true;
+      const { data, error } = await sb.rpc('owner_create_staff', { p_login: f.login, p_password: f.password, p_role: f.role });
+      if (error) { btn.disabled = false; alertBox.textContent = friendly(error); alertBox.hidden = false; return; }
+      // Show the details once so the owner can pass them on.
+      const link = location.origin + location.pathname;
+      setHTML(dialog, html`
+        <div class="dialog-body">
+          <h2 style="margin:0">Login created ✓</h2>
+          <p class="hint">Give these to your ${f.role === 'manager' ? 'manager' : 'waiter'}. They sign in at the same app link.</p>
+          <div class="cred-box">
+            <div><span>App</span><strong>${link}</strong></div>
+            <div><span>Login ID</span><strong>${loginName(data)}</strong></div>
+            <div><span>Password</span><strong>${f.password}</strong></div>
+          </div>
+          <button type="button" class="wide" id="share-cred">Share / Copy</button>
+          <button type="button" class="secondary wide" data-done>Done</button>
+        </div>`);
+      const text = `Hotel Billing login\nApp: ${link}\nLogin ID: ${loginName(data)}\nPassword: ${f.password}`;
+      dialog.querySelector('#share-cred').addEventListener('click', async () => {
+        try {
+          if (navigator.share) await navigator.share({ text });
+          else { await navigator.clipboard.writeText(text); toast('Copied'); }
+        } catch { /* cancelled */ }
+      });
+      dialog.querySelector('[data-done]').addEventListener('click', () => { close(); settingsView(renderToken); });
+    });
+    dialog.showModal();
+    dialog.querySelector('[name=login]').focus();
+  }
+  root.querySelector('#add-staff')?.addEventListener('click', addStaff);
   function renameTable(table) {
     const dialog = document.createElement('dialog');
     document.body.append(dialog);
@@ -1469,8 +1584,28 @@ async function settingsView(token) {
       const name = tables.find((x) => x.id === Number(t.dataset.delTable)).name;
       if (!confirm(`Remove table ${name}?`)) return;
       act(t, async () => { await q(sb.from('dining_tables').delete().eq('id', t.dataset.delTable)); toast(`Table ${name} removed`); settingsView(renderToken); });
+    } else if (t.dataset.resetStaff) {
+      const who = loginName(t.dataset.resetStaff);
+      formDialog({
+        title: `New password for ${who}`,
+        submit: 'Set Password',
+        hint: 'Tell them the new password. Their old one stops working.',
+        fields: [{ name: 'password', label: 'New password', attrs: { minlength: 6, required: '', autocomplete: 'new-password' } }],
+        async onSave(f) {
+          await q(sb.rpc('owner_reset_staff_password', { p_email: t.dataset.resetStaff, p_password: f.password }));
+          toast(`Password changed for ${who}`);
+        },
+      });
+    } else if (t.dataset.roleStaff) {
+      const m = staff.find((x) => x.email === t.dataset.roleStaff);
+      const role = m.role === 'manager' ? 'staff' : 'manager';
+      act(t, async () => {
+        await q(sb.rpc('owner_set_staff_role', { p_email: m.email, p_role: role }));
+        toast(`${loginName(m.email)} is now a ${ROLE_NAMES[role]}`);
+        settingsView(renderToken);
+      });
     } else if (t.dataset.delStaff) {
-      if (!confirm(`Remove ${t.dataset.delStaff}? They won’t be able to sign in.`)) return;
+      if (!confirm(`Remove ${loginName(t.dataset.delStaff)}? They won’t be able to sign in.`)) return;
       act(t, async () => { await q(sb.from('staff').delete().eq('email', t.dataset.delStaff)); settingsView(renderToken); });
     }
   });
@@ -1547,7 +1682,8 @@ async function roomsView(token) {
   const sales = paidToday.reduce((sum, st) => sum + stayBill(st).total, 0);
   const leaving = open.filter((st) => st.check_out <= today).length;
   const root = mount(html`
-    <div class="page-head"><div><p class="eyebrow">${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Rooms</h1></div></div>
+    <div class="page-head"><div><p class="eyebrow">${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Rooms</h1></div>
+      ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-rooms">Sign Out</button>`}</div>
     <section class="hero" aria-label="Rooms today">
       <span class="label">Room sales today</span>
       <span class="big">${rs(sales)}</span>
@@ -1572,6 +1708,7 @@ async function roomsView(token) {
           <span class="state">${st.guest_name} · till ${shortDate(st.check_out)}</span></span></a>`;
       })}
     </div>`);
+  root.querySelector('#signout-rooms')?.addEventListener('click', () => sb.auth.signOut());
   root.addEventListener('click', (e) => {
     const t = e.target.closest('[data-checkin]');
     if (t) checkIn(rooms.find((r) => r.id === Number(t.dataset.checkin)));
@@ -1997,21 +2134,23 @@ function hotelDialog(hotel, done) {
 
 // ---------- routing ----------
 
-// [pattern, view, tab, feature needed (or null)]
+// [pattern, view, tab, feature needed (or null), who may open it: any | bill (owner, manager) | owner]
 const routes = [
-  [/^\/?$/, tablesView, 'tables', 'tables'],
-  [/^\/table\/(\d+)(?:\/([A-Z]))?$/, tableView, 'tables', 'tables'],
-  [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables', null],
-  [/^\/rooms$/, roomsView, 'rooms', 'rooms'],
-  [/^\/stay\/(\d+)(\/print)?$/, stayView, 'rooms', 'rooms'],
-  [/^\/bills\/log$/, logView, 'bills', 'bill_edit'],
-  [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills', null],
-  [/^\/trending$/, trendingView, 'trending', 'trending'],
-  [/^\/menu$/, menuView, 'menu', 'tables'],
-  [/^\/settings$/, settingsView, 'settings', null],
+  [/^\/?$/, tablesView, 'tables', 'tables', 'any'],
+  [/^\/table\/(\d+)(?:\/([A-Z]))?$/, tableView, 'tables', 'tables', 'any'],
+  [/^\/parcel(?:\/(\d+))?$/, parcelView, 'tables', 'tables', 'bill'],
+  [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables', null, 'bill'],
+  [/^\/rooms$/, roomsView, 'rooms', 'rooms', 'bill'],
+  [/^\/stay\/(\d+)(\/print)?$/, stayView, 'rooms', 'rooms', 'bill'],
+  [/^\/bills\/log$/, logView, 'bills', 'bill_edit', 'owner'],
+  [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills', null, 'bill'],
+  [/^\/trending$/, trendingView, 'trending', 'trending', 'bill'],
+  [/^\/menu$/, menuView, 'menu', 'tables', 'owner'],
+  [/^\/settings$/, settingsView, 'settings', null, 'owner'],
 ];
+const allowed = (who) => who === 'any' || (who === 'bill' ? account.can_bill === true : account.role === 'owner');
 const adminRoutes = [
-  [/^\/admin$/, adminView, 'admin', null],
+  [/^\/admin$/, adminView, 'admin', null, 'any'],
 ];
 
 /** Full-screen notice shown instead of the app (no access yet, hotel paused, …). */
@@ -2029,14 +2168,16 @@ function blockedScreen({ iconName = 'lock', title, body, retry = true }) {
 /** Show only the tabs this account can use. */
 function setTabs(a) {
   const hotel = a.staff && a.active;
+  const bill = hotel && a.can_bill === true;
+  const owner = hotel && a.role === 'owner';
   const show = {
     admin: a.super_admin,
     tables: hotel && feat('tables'),
-    rooms: hotel && feat('rooms'),
-    bills: hotel,
-    trending: hotel && feat('tables') && feat('trending'),
-    menu: hotel && feat('tables'),
-    settings: hotel,
+    rooms: bill && feat('rooms'),
+    bills: bill,
+    trending: bill && feat('tables') && feat('trending'),
+    menu: owner && feat('tables'),
+    settings: owner,
   };
   document.querySelectorAll('[data-tab]').forEach((t) => { t.hidden = !show[t.dataset.tab]; });
 }
@@ -2079,14 +2220,18 @@ async function route() {
   const hotel = account.staff && account.active;
   let path = location.hash.replace(/^#/, '') || '/';
   // Pick a sensible home screen: the admin console, or Rooms for a hotel without tables.
-  if (path === '/' && (!hotel || (!feat('tables') && feat('rooms')))) {
+  if (path === '/' && (!hotel || (!feat('tables') && feat('rooms') && account.can_bill))) {
     path = hotel ? '/rooms' : '/admin';
     history.replaceState(null, '', `#${path}`);
   }
   const list = [...(account.super_admin ? adminRoutes : []), ...(hotel ? routes : [])];
-  for (const [re, view, tab, feature] of list) {
+  for (const [re, view, tab, feature, who] of list) {
     const m = path.match(re);
     if (!m) continue;
+    if (!allowed(who)) {
+      setHTML($view, html`<div class="card empty"><span class="emoji" aria-hidden="true">🔒</span>Only the ${who === 'owner' ? 'owner' : 'owner or a manager'} can open this.<br><br><a href="#/">Back to Tables</a></div>`);
+      return;
+    }
     document.querySelectorAll('[data-tab]').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
     if (feature && !feat(feature)) {
       setHTML($view, html`<div class="card empty"><span class="emoji" aria-hidden="true">🔒</span>This part of the app isn’t turned on for your hotel.

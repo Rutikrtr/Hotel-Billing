@@ -573,3 +573,23 @@ button.room-edit strong { font-weight: 800; }
 .feature-pick input { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
 .feature-pick > span { display: grid; gap: 2px; }
 .feature-pick strong { font-size: 15.5px; color: var(--text); }
+
+/* Parcel bill number and kitchen copy */
+.token-box { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 0; }
+.token-box span { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
+.token-box strong { font-size: 54px; line-height: 1.05; font-weight: 800; letter-spacing: -0.02em; }
+.receipt.kot .kot-item { font-size: 16px; font-weight: 700; padding: 4px 0; }
+@media print {
+  .receipt.kot { break-before: page; page-break-before: always; margin-top: 0; }
+  .token-box strong { font-size: 44px; }
+}
+
+/* Staff logins */
+.staff-row { flex-wrap: wrap; }
+.staff-actions { display: flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
+.staff-actions button { min-height: 40px; padding: 0 8px; font-size: 14px; }
+.cred-box { display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.cred-box div { display: grid; gap: 2px; }
+.cred-box span { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.cred-box strong { font-family: var(--mono); font-size: 16px; overflow-wrap: anywhere; }
+.order-actions .wide-action { grid-column: 1 / -1; }
