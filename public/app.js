@@ -1796,8 +1796,11 @@ async function adminView(token) {
   const shown = hotels.filter((h) => !needle || [h.name, h.address, h.phone, ...h.owners].join(' ').toLowerCase().includes(needle));
   const root = mount(html`
     <div class="page-head">
-      <div><p class="eyebrow">Techyverve · Super Admin</p><h1>Hotels</h1></div>
-      <button type="button" id="new-hotel">＋ New Hotel</button>
+      <div><p class="eyebrow">Techyverve · Super Admin</p><h1>Hotels</h1><p class="muted">${session.user.email}</p></div>
+      <div class="head-actions">
+        <button type="button" class="secondary" id="sa-signout">Sign Out</button>
+        <button type="button" id="new-hotel">＋ New Hotel</button>
+      </div>
     </div>
     <section class="hero" aria-label="All hotels today">
       <span class="label">Sales today · all hotels</span>
@@ -1854,7 +1857,8 @@ async function adminView(token) {
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;
-    if (t.id === 'new-hotel') hotelDialog(null, reload);
+    if (t.id === 'sa-signout') sb.auth.signOut();
+    else if (t.id === 'new-hotel') hotelDialog(null, reload);
     else if (t.dataset.edit) hotelDialog(byId(t.dataset.edit), reload);
     else if (t.dataset.reset) {
       const h = byId(t.dataset.reset);
