@@ -135,12 +135,14 @@ Settings → Pages → Source: **GitHub Actions**, plus the two repository varia
 **Cloudflare Pages on billing.techyverve.in (recommended for customers):** free, unlimited traffic, commercial use
 allowed. One-time setup:
 
-1. Create a free account at dash.cloudflare.com → **Workers & Pages → Create → Pages → Connect to Git** → pick
-   `Rutikrtr/Hotel-Billing`.
-2. Build command `node scripts/write-config.mjs`, output directory `public`. Under **Environment variables** add
-   `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. Save and deploy (you get `<name>.pages.dev`).
+1. Create a free account at dash.cloudflare.com → **Workers & Pages → Create → Import a repository** → pick
+   `Rutikrtr/Hotel-Billing`. `wrangler.jsonc` tells Cloudflare to serve `public/`.
+2. Build command (puts the two settings in Cloudflare, not in the code):
+   `SUPABASE_URL=https://<project>.supabase.co SUPABASE_PUBLISHABLE_KEY=<publishable key> node scripts/write-config.mjs`
+   Deploy command: `npx wrangler deploy`. You get `hotel-billing.<account>.workers.dev`.
+   (Alternatively set the two as build variables under Settings → Build → Variables and use the plain build command.)
 3. **Custom domains → Set up a domain → `billing.techyverve.in`**. Cloudflare shows one CNAME record:
-   at the company where techyverve.in's DNS is managed, add **CNAME `billing` → `<name>.pages.dev`**. Only the
+   at the company where techyverve.in's DNS is managed, add **CNAME `billing` →** the target Cloudflare shows. Only the
    `billing` name is added, so www.techyverve.in is not touched.
 4. In Supabase → Authentication → URL Configuration, set Site URL to `https://billing.techyverve.in/` and add it
    to Redirect URLs.

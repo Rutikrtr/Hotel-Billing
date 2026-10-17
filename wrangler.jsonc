@@ -1,0 +1,8 @@
+// Cloudflare deploy settings: serve the static app in public/ (built by scripts/write-config.mjs).
+{
+  "name": "hotel-billing",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./public"
+  }
+}
