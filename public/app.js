@@ -98,8 +98,21 @@ function onSubmit(root, selector, handler) {
   }));
 }
 
+// Small caches so every screen doesn't download the same settings and menu again (keeps data use low).
+function cached(load, ms) {
+  let value = null; let at = 0;
+  const get = () => {
+    if (!value || Date.now() - at > ms) { at = Date.now(); value = load().catch((err) => { value = null; throw err; }); }
+    return value;
+  };
+  get.clear = () => { value = null; };
+  return get;
+}
 // Each account belongs to one restaurant; row-level security returns only that one.
-const getSettings = () => q(sb.from('restaurants').select('*').single());
+const getSettings = cached(() => q(sb.from('restaurants').select('*').single()), 5 * 60 * 1000);
+// The menu refreshes every minute so "sold out" reaches other phones quickly.
+const getMenu = cached(() => q(sb.from('menu_items').select('*').order('id')), 60 * 1000);
+let lastPath = '';
 
 // ---------- sign in ----------
 
@@ -217,6 +230,7 @@ const authViews = {
           <div class="auth-row"><a href="#" data-go="forgot">Forgot password?</a></div>
           <button type="submit" class="wide">Sign In</button>
         </form>
+        <button type="button" class="secondary wide" data-install hidden style="margin-top:12px">📲 Install as App</button>
         <p class="auth-switch">New staff member? <a href="#" data-go="signUp">Create an account</a></p>`,
       footer: 'Staff: use the Login ID and password the owner gave you.',
     });
@@ -231,6 +245,7 @@ const authViews = {
       throw error;
     });
     if (lastEmail) document.getElementById('password')?.focus();
+    showInstall();
   },
 
   signUp() {
@@ -380,14 +395,15 @@ async function tablesView(token) {
     q(sb.from('dining_tables').select('*').order('sort').order('name')),
     q(sb.from('orders').select('*, order_items(quantity, unit_price, name)').eq('status', 'open')),
     getSettings(),
-    q(sb.from('orders').select('discount, tax_rate_bp, order_items(quantity, unit_price)').eq('status', 'paid').gte('closed_at', dayStart.toISOString())),
+    // Only the total is needed here, so the database adds it up instead of sending every bill.
+    account.can_bill ? q(sb.rpc('sales_total', { p_from: dayStart.toISOString() })) : 0,
   ]);
   if (token !== renderToken) return;
   const byTable = {};
   open.filter((o) => !o.is_parcel).forEach((o) => { (byTable[o.table_id] ??= []).push(o); });
   const parcels = open.filter((o) => o.is_parcel && o.order_items.length).sort((a, b) => a.opened_at.localeCompare(b.opened_at));
   const canBill = account.can_bill === true;
-  const sales = paidToday.reduce((sum, o) => sum + orderBill(o, o.order_items, o.tax_rate_bp ?? 0).total, 0);
+  const sales = Number(paidToday) || 0;
   const runningTables = tables.filter((t) => byTable[t.id]?.length).length;
   const waiting = open.filter((o) => o.billed_at).length;
   const onTables = open.reduce((sum, o) => sum + orderBill(o, o.order_items, settings.tax_rate_bp).total, 0);
@@ -399,6 +415,7 @@ async function tablesView(token) {
     <div class="page-head"><div><p class="eyebrow">${today}</p><h1>Tables</h1>
       ${account.role === 'owner' ? '' : html`<p class="muted">${loginName(session.user.email)} · ${account.role === 'manager' ? 'Manager' : 'Waiter'}</p>`}</div>
       <div class="head-actions">
+        <button type="button" class="secondary" data-install hidden>📲 Install App</button>
         ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
         ${canBill ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>
           <a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
@@ -470,7 +487,7 @@ async function tableView(token, tableId, sectionArg, parcelId) {
     : sb.from('orders').select('*, order_items(*)').eq('table_id', tableId).eq('status', 'open').order('section'));
   const [table, menu, settings, open, sales] = await Promise.all([
     parcel ? { id: null, name: 'Parcel' } : q(sb.from('dining_tables').select('*').eq('id', tableId).single()),
-    q(sb.from('menu_items').select('*').order('id')),
+    getMenu(),
     getSettings(),
     q(openQuery().order('id', { referencedTable: 'order_items' })),
     // Best sellers are a convenience: if they can't load, the menu still works.
@@ -725,14 +742,16 @@ async function tableView(token, tableId, sectionArg, parcelId) {
           // Straight to the Bluetooth / RawBT printer: no popup, no bill screen.
           const done = settings.quick_close !== false;
           const billNo = await q(sb.rpc(done ? 'settle_order' : 'generate_bill', done ? { p_order_id: state.order.id, p_method: 'Cash' } : { p_order_id: state.order.id }));
+          let result;
           try {
-            await printOrderDirect(state.order.id);
+            result = await printOrderDirect(state.order.id);
           } catch (err) {
             toast(`Bill ${billNo} saved, but printing failed: ${friendly(err)}`, 'error');
             location.hash = `#/bill/${state.order.id}`;
             return;
           }
-          location.hash = done ? '#/' : `#/bill/${state.order.id}`;
+          // No kitchen printer: the bill screen offers "Print Kitchen Copy" for the parcel.
+          location.hash = done && !result.kitchenPending ? '#/' : `#/bill/${state.order.id}`;
           return;
         }
         if (settings.quick_close !== false) {
@@ -803,73 +822,94 @@ async function tableView(token, tableId, sectionArg, parcelId) {
 
 /** Shop name, address and phone at the top of a slip. */
 function slipHeader(slip, settings, rate) {
-  slip.align('center').bold(true).size(2, 2).wrap(settings.hotel_name, Math.floor(slip.width / 2)).size(1, 1).bold(false);
-  if (settings.hotel_address) slip.wrap(settings.hotel_address);
-  if (settings.hotel_phone) slip.line(`Ph: ${settings.hotel_phone}`);
-  if (settings.hotel_gstin && rate > 0) slip.line(`GSTIN: ${settings.hotel_gstin}`);
+  // Compact: tall (not wide) name, one line for address and phone, so bills use less paper.
+  slip.align('center').bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
+  const phone = settings.hotel_phone ? `Ph ${settings.hotel_phone}` : '';
+  const both = [settings.hotel_address, phone].filter(Boolean).join(', ');
+  if (both.length <= slip.width) { if (both) slip.line(both); } else { slip.wrap(settings.hotel_address); if (phone) slip.line(phone); }
+  if (settings.hotel_gstin && rate > 0) slip.line(`GSTIN ${settings.hotel_gstin}`);
   return slip.align('left').rule();
 }
-/** Item lines and totals, shared by food and room bills. */
+const shortStamp = (iso) => new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: '2-digit', year: '2-digit', hour: 'numeric', minute: '2-digit' });
+
+/** One line per item ("2 Puneri Misal      180.00"), then the totals. Shared by food and room bills. */
 function slipBody(slip, lines, b, rate) {
+  const amtW = 9;
+  const nameW = slip.width - amtW;
   for (const l of lines) {
-    slip.bold(true).wrap(l.name).bold(false);
-    slip.cols(`  ${l.quantity} x ${fmt(l.unitPrice)}`, fmt(l.quantity * l.unitPrice));
+    const left = `${l.quantity} ${l.name}`;
+    if (left.length <= nameW - 1) slip.cols(left, fmt(l.quantity * l.unitPrice));
+    else { slip.wrap(left); slip.cols('', fmt(l.quantity * l.unitPrice)); }
   }
-  slip.rule().cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
-  if (b.discount) slip.cols('Discount', `-${fmt(b.discount)}`);
-  if (b.tax) slip.cols(`CGST @ ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST @ ${pct(rate / 2)}`, fmt(b.sgst));
-  if (b.roundOff) slip.cols('Round off', fmt(b.roundOff));
-  slip.rule().bold(true).size(1, 2).cols('TOTAL', `Rs.${fmt(b.total)}`).size(1, 1).bold(false).rule();
-  return slip;
+  slip.rule();
+  if (b.discount || b.tax || b.roundOff) {
+    slip.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
+    if (b.discount) slip.cols('Discount', `-${fmt(b.discount)}`);
+    if (b.tax) slip.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
+    if (b.roundOff) slip.cols('Round off', fmt(b.roundOff));
+  }
+  return slip.bold(true).size(1, 2).cols(`TOTAL (${b.itemCount})`, `Rs.${fmt(b.total)}`).size(1, 1).bold(false);
 }
 
-/** Customer bill, plus a kitchen copy for parcels. */
-function orderSlips(order, settings) {
+function kitchenSlip(order) {
+  const kot = new Slip(paperWidth(), 'kitchen');
+  kot.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(order.bill_no)}`).size(1, 1).bold(false)
+    .line(`Kitchen copy  ${time(order.billed_at ?? order.closed_at ?? new Date().toISOString())}`).align('left').rule();
+  for (const i of order.order_items) kot.bold(true).size(1, 2).wrap(`${i.quantity} x ${i.name}`).size(1, 1).bold(false);
+  return kot.cut();
+}
+
+/** The customer's bill. A parcel's bill shows its number big so it can be called out. */
+function billSlip(order, settings) {
   const rate = order.status === 'paid' ? order.tax_rate_bp ?? 0 : settings.tax_rate_bp;
   const b = orderBill(order, order.order_items, rate);
-  const when = dateTime(order.closed_at ?? order.billed_at ?? new Date().toISOString());
   const bill = slipHeader(new Slip(paperWidth()), settings, rate);
-  if (order.is_parcel && order.bill_no) {
-    bill.align('center').bold(true).line('PARCEL - BILL NO.').size(3, 3).line(tokenNo(order.bill_no)).size(1, 1).bold(false).align('left').rule();
-  }
-  bill.cols(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', order.is_parcel ? 'Parcel' : `Table: ${orderLabel(order)}`);
-  bill.cols(when, order.status === 'paid' ? order.payment_method ?? '' : '').rule();
-  slipBody(bill, b.lines, b, rate).align('center').line('Thank you! Visit again.').cut();
-  if (!order.is_parcel || !order.bill_no) return [bill];
-  const kot = new Slip(paperWidth(), 'kitchen');
-  kot.align('center').bold(true).line('KITCHEN - PARCEL').rule().line('BILL NO.').size(3, 3).line(tokenNo(order.bill_no)).size(1, 1)
-    .bold(false).line(`${order.bill_no}  ${time(order.billed_at ?? order.closed_at ?? new Date().toISOString())}`).align('left').rule();
-  for (const i of order.order_items) kot.bold(true).size(1, 2).wrap(`${i.quantity} x ${i.name}`).size(1, 1).bold(false);
-  kot.rule().align('center').line(`${b.itemCount} items - pack for takeaway`).cut();
-  return [bill, kot];
+  if (order.is_parcel && order.bill_no) bill.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(order.bill_no)}`).size(1, 1).bold(false).align('left');
+  bill.cols(`${order.bill_no ?? 'Bill'} ${order.is_parcel ? 'Parcel' : orderLabel(order)}`, order.status === 'paid' ? order.payment_method ?? '' : '');
+  bill.line(shortStamp(order.closed_at ?? order.billed_at ?? new Date().toISOString())).rule();
+  return slipBody(bill, b.lines, b, rate).align('center').line('Thank you! Visit again.').cut();
+}
+
+/** Slips for an order. which: 'auto' = the bill, plus the kitchen copy only when a kitchen printer is set; 'kitchen' = kitchen copy only. */
+function orderSlips(order, settings, which = 'auto') {
+  const kitchen = order.is_parcel && order.bill_no;
+  if (which === 'kitchen') return kitchen ? [kitchenSlip(order)] : [];
+  const p = getPrinter();
+  const autoKitchen = kitchen && p.method === 'bluetooth' && p.kitchen.separate;
+  return autoKitchen ? [billSlip(order, settings), kitchenSlip(order)] : [billSlip(order, settings)];
 }
 
 function staySlips(stay, settings) {
   const rate = stay.status === 'paid' ? stay.tax_rate_bp ?? 0 : settings.tax_rate_bp;
   const b = stayBill(stay, rate);
   const slip = slipHeader(new Slip(paperWidth()), settings, rate);
-  slip.cols(stay.bill_no ? `Bill: ${stay.bill_no}` : 'Room bill', `Room: ${stay.lodging_rooms.number}`)
-    .cols(`Guest: ${stay.guest_name}`, stay.guest_phone || '')
-    .cols(`${shortDate(stay.check_in)} - ${shortDate(stay.check_out)}`, `${b.nights} night${b.nights === 1 ? '' : 's'}`);
-  if (stay.status === 'paid') slip.cols(dateTime(stay.closed_at), stay.payment_method);
-  slip.rule();
+  slip.cols(`${stay.bill_no ?? 'Room bill'} Room ${stay.lodging_rooms.number}`, stay.status === 'paid' ? stay.payment_method : '')
+    .cols(stay.guest_name, stay.guest_phone || '')
+    .cols(`${shortDate(stay.check_in)} - ${shortDate(stay.check_out)}`, `${b.nights} night${b.nights === 1 ? '' : 's'}`).rule();
   return [slipBody(slip, b.lines, b, rate).align('center').line('Thank you for staying with us!').cut()];
 }
 
-/** Print an order straight to the printer. Call from a tap so a first-time Bluetooth connection can ask. */
-async function printOrderDirect(orderId) {
+/** Print an order straight to the printer. which: 'auto' or 'kitchen'. Call from a tap so Bluetooth can ask if needed. */
+async function printOrderDirect(orderId, which = 'auto') {
   const [order, settings] = await Promise.all([
     q(sb.from('orders').select('*, dining_tables(name), order_items(*)').eq('id', orderId).order('id', { referencedTable: 'order_items' }).single()),
     getSettings(),
   ]);
-  const slips = orderSlips(order, settings);
+  const slips = orderSlips(order, settings, which);
   const failed = await printSlips(slips, { pick: true });
   if (failed.length) {
-    const which = failed.map((f) => (f.slot === 'kitchen' ? 'kitchen copy' : 'bill')).join(' and ');
-    toast(`Couldn’t print the ${which}: ${friendly(failed[0].error)} Tap Print on the bill to try again.`, 'error');
-  } else {
-    toast(slips.length > 1 ? `Printed bill and kitchen copy · #${tokenNo(order.bill_no)}` : `Printed bill ${order.bill_no ?? ''}`);
-  }
+    const what = failed.map((f) => (f.slot === 'kitchen' ? 'kitchen copy' : 'bill')).join(' and ');
+    toast(`Couldn’t print the ${what}: ${friendly(failed[0].error)} Tap Print on the bill to try again.`, 'error');
+  } else if (which === 'kitchen') toast(`Kitchen copy printed · #${tokenNo(order.bill_no)}`);
+  else toast(slips.length > 1 ? `Printed bill and kitchen copy · #${tokenNo(order.bill_no)}` : `Printed bill ${order.bill_no ?? ''}`);
+  return { order, kitchenPending: which === 'auto' && order.is_parcel && slips.length === 1 };
+}
+
+/** Phone print dialog for just the bill or just the kitchen copy. */
+function printPage(which) {
+  document.body.classList.toggle('print-kot', which === 'kitchen');
+  window.print();
+  setTimeout(() => document.body.classList.remove('print-kot'), 1000);
 }
 
 /** Start the Bluetooth connection inside the tap, before any network call uses up the tap. */
@@ -1024,7 +1064,8 @@ async function billView(token, orderId, autoPrint) {
         <div class="center">Thank you! Visit again.</div>
       </article>
       ${order.is_parcel && order.bill_no ? html`
-        <p class="paid-note no-print" style="margin-top:20px">Kitchen copy · prints on its own slip</p>
+        <div class="kot-actions no-print"><button type="button" class="wide" id="print-kot">🍳 Print Kitchen Copy</button></div>
+        <p class="paid-note no-print" style="margin-top:12px">Kitchen copy</p>
         <article class="receipt kot" aria-label="Kitchen copy">
           <div class="center"><div class="shop">KITCHEN · PARCEL</div></div>
           <div class="rule"></div>
@@ -1045,8 +1086,12 @@ async function billView(token, orderId, autoPrint) {
       </section>` : ''}
     </div>`);
   document.getElementById('print').addEventListener('click', (e) => {
-    if (!directPrinting()) return window.print();
+    if (!directPrinting()) return printPage('bill');
     act(e.currentTarget, () => printOrderDirect(order.id));
+  });
+  document.getElementById('print-kot')?.addEventListener('click', (e) => {
+    if (!directPrinting()) return printPage('kitchen');
+    act(e.currentTarget, () => printOrderDirect(order.id, 'kitchen'));
   });
   document.getElementById('printer-setup')?.addEventListener('click', printerDialog);
   document.getElementById('edit-bill')?.addEventListener('click', () => editBill(order, rate));
@@ -1058,7 +1103,7 @@ async function billView(token, orderId, autoPrint) {
   if (autoPrint) {
     window.history.replaceState(null, '', `#/bill/${order.id}`);
     if (directPrinting()) printOrderDirect(order.id).catch((err) => toast(`${friendly(err)} Tap Print to try again.`, 'error'));
-    else setTimeout(() => window.print(), 300);
+    else setTimeout(() => printPage('bill'), 300);
   }
 }
 
@@ -1067,21 +1112,19 @@ async function billView(token, orderId, autoPrint) {
 async function billsView(token, day = localDay()) {
   const start = new Date(`${day}T00:00:00`);
   const end = new Date(start); end.setDate(end.getDate() + 1);
-  const [orders, settings, unpaid, owner, stays] = await Promise.all([
-    q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'paid')
-      .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString()).order('closed_at', { ascending: false })),
+  const [list, settings, unpaid, owner] = await Promise.all([
+    // Every bill of the day with its total, worked out in the database (no item lists downloaded).
+    q(sb.rpc('bill_list', { p_from: start.toISOString(), p_to: end.toISOString() })),
     getSettings(),
     q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'open')
       .not('billed_at', 'is', null).order('billed_at')),
     isOwner(),
-    feat('rooms') ? q(sb.from('stays').select('*, lodging_rooms(number), stay_charges(quantity, unit_price, description)').eq('status', 'paid')
-      .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString())) : [],
   ]);
   if (token !== renderToken) return;
-  const rows = [
-    ...orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp), href: `#/bill/${o.id}`, label: orderLabel(o) })),
-    ...stays.map((st) => ({ o: st, b: stayBill(st), href: `#/stay/${st.id}`, label: `Room ${st.lodging_rooms.number} · ${st.guest_name}` })),
-  ].sort((x, y) => y.o.closed_at.localeCompare(x.o.closed_at));
+  const rows = list.map((x) => ({
+    o: { ...x, payment_method: x.method }, b: { total: Number(x.total) },
+    href: x.kind === 'stay' ? `#/stay/${x.id}` : `#/bill/${x.id}`, label: x.label,
+  }));
   const sum = (f) => rows.filter(f).reduce((s, r) => s + r.b.total, 0);
   const isToday = day === localDay();
   const total = sum(() => true);
@@ -1152,7 +1195,7 @@ function logRow(l) {
 }
 
 async function editBill(order, rate) {
-  const menu = await q(sb.from('menu_items').select('id, name, price, category').order('id')).catch(() => []);
+  const menu = await getMenu().catch(() => []);
   // Work on a copy; nothing is saved until the owner taps Save.
   const items = order.order_items.map((i) => ({ menu_item_id: i.menu_item_id, name: i.name, unit_price: i.unit_price, quantity: i.quantity }));
   const draft = { discount: order.discount, method: order.payment_method };
@@ -1301,26 +1344,18 @@ async function trendingView(token) {
   const now = new Date();
   const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (period.days - 1));
   const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - period.days);
-  const [orders, menu] = await Promise.all([
-    q(sb.from('orders').select('closed_at, order_items(menu_item_id, name, quantity, unit_price)').eq('status', 'paid')
-      .gte('closed_at', prevStart.toISOString())),
-    q(sb.from('menu_items').select('id, name, category, is_veg')),
+  const [sales, menu] = await Promise.all([
+    // Totals per dish are added up in the database: one small row per dish instead of every bill.
+    q(sb.rpc('dish_sales', { p_start: prevStart.toISOString(), p_split: start.toISOString() })),
+    getMenu(),
   ]);
   if (token !== renderToken) return;
 
   const menuById = new Map(menu.map((m) => [m.id, m]));
-  const stats = new Map();
-  for (const o of orders) {
-    const current = new Date(o.closed_at) >= start;
-    for (const i of o.order_items) {
-      const key = i.menu_item_id ?? `n:${i.name}`;
-      const m = menuById.get(i.menu_item_id);
-      const row = stats.get(key) ?? { name: m?.name ?? i.name, category: m?.category ?? 'Other', is_veg: m?.is_veg ?? true, qty: 0, revenue: 0, prevQty: 0 };
-      if (current) { row.qty += i.quantity; row.revenue += i.quantity * i.unit_price; } else row.prevQty += i.quantity;
-      stats.set(key, row);
-    }
-  }
-  const sold = [...stats.values()].filter((r) => r.qty > 0);
+  const sold = sales.map((x) => {
+    const m = menuById.get(x.menu_item_id);
+    return { name: m?.name ?? x.name, category: m?.category ?? 'Other', is_veg: m?.is_veg ?? true, qty: Number(x.qty), revenue: Number(x.revenue), prevQty: Number(x.prev_qty) };
+  }).filter((r) => r.qty > 0);
   const metric = (r) => (trendSort === 'qty' ? r.qty : r.revenue);
   sold.sort((a, b) => metric(b) - metric(a) || b.qty - a.qty || a.name.localeCompare(b.name));
   const max = sold.length ? metric(sold[0]) : 0;
@@ -1397,7 +1432,8 @@ async function trendingView(token) {
 // ---------- Menu ----------
 
 async function menuView(token) {
-  const menu = await q(sb.from('menu_items').select('*').order('id'));
+  getMenu.clear();
+  const menu = await getMenu();
   if (token !== renderToken) return;
   const categories = [...new Set(menu.map((m) => m.category))];
   const suggestions = [...categories, ...['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', 'Others']]
@@ -1641,6 +1677,7 @@ async function settingsView(token) {
       hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
       hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate, quick_close: f.quick_close === 'on',
     }).eq('id', s.id));
+    getSettings.clear();
     document.getElementById('brand').textContent = f.hotel_name.trim();
     toast('Changes saved');
   });
@@ -2122,9 +2159,131 @@ const FEATURES = [
 ];
 let adminSearch = '';
 
+// ---- Backups: one folder per hotel on this computer ----
+
+const BACKUP_DB = 'hb-backup';
+/** Remember the chosen backup folder between visits (IndexedDB can store folder handles). */
+function folderStore(mode, value) {
+  return new Promise((resolve) => {
+    let req;
+    try { req = indexedDB.open(BACKUP_DB, 1); } catch { resolve(null); return; }
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onerror = () => resolve(null);
+    req.onsuccess = () => {
+      try {
+        const tx = req.result.transaction('kv', mode === 'get' ? 'readonly' : 'readwrite');
+        const st = tx.objectStore('kv');
+        const r = mode === 'get' ? st.get('folder') : st.put(value, 'folder');
+        r.onsuccess = () => resolve(mode === 'get' ? r.result ?? null : value);
+        r.onerror = () => resolve(null);
+      } catch { resolve(null); } // can't remember the folder: it will simply be asked for next time
+    };
+  });
+}
+async function backupFolder(choose = false) {
+  let dir = choose ? null : await folderStore('get');
+  if (dir && (await dir.requestPermission?.({ mode: 'readwrite' })) !== 'granted') dir = null;
+  if (!dir) {
+    dir = await window.showDirectoryPicker({ id: 'hotel-backups', mode: 'readwrite' });
+    await folderStore('put', dir);
+  }
+  return dir;
+}
+const safeName = (t) => String(t).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Hotel';
+const rupees = (p) => (Number(p ?? 0) / 100).toFixed(2);
+function csv(rows) {
+  const cell = (v) => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  return '﻿' + rows.map((r) => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+async function writeFile(dir, path, text) {
+  const parts = path.split('/');
+  let d = dir;
+  for (const part of parts.slice(0, -1)) d = await d.getDirectoryHandle(part, { create: true });
+  const fh = await d.getFileHandle(parts.at(-1), { create: true });
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+}
+async function readJson(dir, name) {
+  try { return JSON.parse(await (await (await dir.getFileHandle(name)).getFile()).text()); } catch { return null; }
+}
+const monthOf = (iso) => new Date(iso).toLocaleDateString('en-CA').slice(0, 7);
+function byMonth(list, key) {
+  const m = {};
+  for (const x of list) (m[monthOf(x[key])] ??= []).push(x);
+  return m;
+}
+
+/** Back up one hotel into <folder>/<Hotel name (#id)>/. Only months since the last backup are fetched again. */
+async function backupHotel(root, h) {
+  const dir = await root.getDirectoryHandle(`${safeName(h.name)} (#${h.id})`, { create: true });
+  const info = await readJson(dir, 'backup-info.json');
+  // Re-fetch from the start of the month of the last backup, so that month's files are complete.
+  const since = info?.last_backup_at ? new Date(new Date(info.last_backup_at).setDate(1)) : null;
+  if (since) since.setHours(0, 0, 0, 0);
+  const data = await q(sb.rpc('sa_export_hotel', { p_id: h.id, p_since: since?.toISOString() ?? null }));
+  await writeFile(dir, 'hotel.json', JSON.stringify(data.hotel, null, 2));
+  await writeFile(dir, 'menu.csv', csv([['Dish', 'Category', 'Price', 'Veg', 'Available', 'Favourite'],
+    ...data.menu.map((m) => [m.name, m.category, rupees(m.price), m.veg ? 'Yes' : 'No', m.available ? 'Yes' : 'No', m.favourite ? 'Yes' : 'No'])]));
+  await writeFile(dir, 'staff.csv', csv([['Login', 'Role', 'Added'], ...data.staff.map((x) => [loginName(x.login), ROLE_NAMES[x.role] ?? x.role, x.added])]));
+  await writeFile(dir, 'tables.csv', csv([['Table'], ...data.tables.map((t) => [t.name])]));
+  if (data.rooms.length) await writeFile(dir, 'rooms.csv', csv([['Room', 'Type', 'Rate'], ...data.rooms.map((r) => [r.number, r.type, rupees(r.rate)])]));
+  const bills = byMonth(data.bills, 'closed_at');
+  for (const [month, list] of Object.entries(bills)) {
+    await writeFile(dir, `bills/${month}.csv`, csv([['Bill No', 'Date', 'Time', 'Table', 'Payment', 'Items', 'Discount', 'GST %', 'Total', 'Edited'],
+      ...list.map((b) => [b.bill_no, new Date(b.closed_at).toLocaleDateString('en-IN'), new Date(b.closed_at).toLocaleTimeString('en-IN'), b.label, b.method,
+        (b.items ?? []).map((i) => `${i.qty} x ${i.name} @ ${rupees(i.price)}`).join('; '), rupees(b.discount), (b.tax_rate_bp ?? 0) / 100, rupees(b.total), b.edits || ''])]));
+    await writeFile(dir, `bills/${month}.json`, JSON.stringify(list, null, 1));
+  }
+  const stays = byMonth(data.room_bills, 'closed_at');
+  for (const [month, list] of Object.entries(stays)) {
+    await writeFile(dir, `room-bills/${month}.csv`, csv([['Bill No', 'Room', 'Guest', 'Phone', 'Check-in', 'Check-out', 'Rate', 'Extras', 'Discount', 'Payment', 'Total'],
+      ...list.map((x) => [x.bill_no, x.room, x.guest, x.phone, x.check_in, x.check_out, rupees(x.rate),
+        (x.charges ?? []).map((c) => `${c.qty} x ${c.name} @ ${rupees(c.price)}`).join('; '), rupees(x.discount), x.method, rupees(x.total)])]));
+  }
+  const logs = byMonth(data.change_log, 'created_at');
+  for (const [month, list] of Object.entries(logs)) await writeFile(dir, `change-log/${month}.json`, JSON.stringify(list, null, 1));
+  await writeFile(dir, 'backup-info.json', JSON.stringify({ hotel: h.name, id: h.id, last_backup_at: data.exported_at,
+    note: 'bills/ and room-bills/ have one file per month. Open the .csv files in Excel or Google Sheets.' }, null, 2));
+  return data.bills.length + data.room_bills.length;
+}
+
+/** Phones and other browsers can't write to folders: download one file per hotel instead. */
+async function downloadHotel(h) {
+  const data = await q(sb.rpc('sa_export_hotel', { p_id: h.id, p_since: null }));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
+  a.download = `${safeName(h.name)} backup ${localDay()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+async function runBackup(hotels, chooseFolder) {
+  if (!window.showDirectoryPicker) {
+    for (const h of hotels) await downloadHotel(h);
+    toast(`Downloaded ${hotels.length} backup file${hotels.length === 1 ? '' : 's'}. For folder backups use Chrome on a computer.`);
+    return;
+  }
+  const root = await backupFolder(chooseFolder);
+  let n = 0;
+  for (const h of hotels) { toast(`Backing up ${h.name}…`); n += await backupHotel(root, h); }
+  const when = new Date().toISOString();
+  try { localStorage.setItem('hb-last-backup', when); } catch { /* private mode */ }
+  toast(`Backup done · ${hotels.length} hotel${hotels.length === 1 ? '' : 's'} · ${n} bills saved to “${root.name}”`);
+}
+
 async function adminView(token) {
-  const hotels = await q(sb.rpc('sa_list_hotels'));
+  const [hotels, usage] = await Promise.all([
+    q(sb.rpc('sa_list_hotels')),
+    q(sb.rpc('sa_usage')).catch(() => null),
+  ]);
   if (token !== renderToken) return;
+  let lastBackup = null;
+  try { lastBackup = localStorage.getItem('hb-last-backup'); } catch { /* private mode */ }
+  const usedPct = usage ? Math.min(100, (Number(usage.db_bytes) / Number(usage.limit_bytes)) * 100) : 0;
+  const level = usedPct >= 90 ? 'danger' : usedPct >= 70 ? 'warn' : 'ok';
+  const mb = (b) => `${(Number(b) / 1024 / 1024).toFixed(1)} MB`;
+  const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0];
   const active = hotels.filter((h) => h.active).length;
   const sales = hotels.reduce((s, h) => s + Number(h.sales_today), 0);
   const needle = adminSearch.trim().toLowerCase();
@@ -2133,6 +2292,7 @@ async function adminView(token) {
     <div class="page-head">
       <div><p class="eyebrow">Techyverve · Super Admin</p><h1>Hotels</h1><p class="muted">${session.user.email}</p></div>
       <div class="head-actions">
+        <button type="button" class="secondary" data-install hidden>📲 Install App</button>
         <button type="button" class="secondary" id="sa-signout">Sign Out</button>
         <button type="button" id="new-hotel">＋ New Hotel</button>
       </div>
@@ -2148,6 +2308,23 @@ async function adminView(token) {
     </section>
     ${hotels.length > 3 ? html`<label class="admin-search"><span class="sr-only">Search hotels</span>
       <input type="search" id="hotel-search" placeholder="Search by hotel, phone or owner email" value="${adminSearch}" autocomplete="off"></label>` : ''}
+    ${usage ? html`<section class="card usage-card ${level}" aria-label="Database space">
+      <div class="usage-top"><span><strong>Database space</strong><span class="small"> · Free plan 500 MB</span></span>
+        <strong>${usedPct < 1 ? '<1' : Math.round(usedPct)}% used</strong></div>
+      <div class="usage-bar" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(usedPct)}" aria-label="Database space used"><span style="width:${Math.max(usedPct, 1)}%"></span></div>
+      <p class="small" style="margin:0">${mb(usage.db_bytes)} of ${mb(usage.limit_bytes)} · ${usage.bills} bills stored.
+        ${level === 'danger' ? html`<strong>Almost full: upgrade Supabase to Pro now so bills keep saving.</strong>`
+          : level === 'warn' ? html`<strong>Getting full: plan the upgrade to Supabase Pro ($25/month).</strong>` : 'Plenty of space.'}
+        Data transfer limits are on the <a href="https://supabase.com/dashboard/project/${projectRef}/usage" target="_blank" rel="noopener">Supabase usage page</a>.</p>
+    </section>` : ''}
+    <section class="card backup-card" aria-label="Backups">
+      <div class="usage-top"><span><strong>Backups</strong><span class="small"> · ${lastBackup ? `last on this computer ${dateTime(lastBackup)}` : 'none on this computer yet'}</span></span></div>
+      <p class="small" style="margin:0">Saves every hotel into its own folder: menu, staff, and bills month by month (Excel files). Later backups only fetch what’s new.</p>
+      <div class="hotel-actions">
+        <button type="button" id="backup-all">⬇️ Back Up All Hotels</button>
+        ${window.showDirectoryPicker ? html`<button type="button" class="secondary" id="backup-choose">Change Folder</button>` : ''}
+      </div>
+    </section>
     <div class="hotel-list">
       ${shown.map((h) => html`
         <article class="card hotel-card ${h.active ? '' : 'paused'}" aria-label="${h.name}">
@@ -2175,6 +2352,7 @@ async function adminView(token) {
             <button type="button" class="secondary" data-reset="${h.id}">Reset Password</button>
             ${h.active ? html`<button type="button" class="secondary" data-pause="${h.id}">Pause Service</button>`
                        : html`<button type="button" data-resume="${h.id}">Resume Service</button>`}
+            <button type="button" class="secondary" data-backup="${h.id}">Back Up</button>
             <button type="button" class="secondary danger-outline" data-delete="${h.id}">Delete</button>
           </div>
         </article>`)}
@@ -2193,6 +2371,8 @@ async function adminView(token) {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.id === 'sa-signout') sb.auth.signOut();
+    else if (t.id === 'backup-all' || t.id === 'backup-choose') act(t, () => runBackup(hotels, t.id === 'backup-choose').then(reload));
+    else if (t.dataset.backup) act(t, () => runBackup([byId(t.dataset.backup)], false));
     else if (t.id === 'new-hotel') hotelDialog(null, reload);
     else if (t.dataset.edit) hotelDialog(byId(t.dataset.edit), reload);
     else if (t.dataset.reset) {
@@ -2419,6 +2599,9 @@ async function route() {
   if (account.can_bill && !route.printersTried) { route.printersTried = true; reconnectSaved().catch(() => {}); }
   const hotel = account.staff && account.active;
   let path = location.hash.replace(/^#/, '') || '/';
+  // Coming back from the Menu screen: use the dishes just edited.
+  if (lastPath === '/menu' && path !== '/menu') getMenu.clear();
+  lastPath = path;
   // Pick a sensible home screen: the admin console, or Rooms for a hotel without tables.
   if (path === '/' && (!hotel || (!feat('tables') && feat('rooms') && account.can_bill))) {
     path = hotel ? '/rooms' : '/admin';
@@ -2445,6 +2628,7 @@ async function route() {
     }, 150);
     try {
       await view(token, ...m.slice(1).filter(Boolean));
+      showInstall();
       clearTimeout(placeholder);
       if (token === renderToken) window.scrollTo(0, 0);
     } catch (err) {
@@ -2457,11 +2641,32 @@ async function route() {
 }
 
 document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
+
+// ---------- install as an app (opens full screen, without the browser bar) ----------
+let installPrompt = null;
+const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
+function showInstall() {
+  document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = isInstalled() || (!installPrompt && !isIOS()); });
+}
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; showInstall(); });
+window.addEventListener('appinstalled', () => { installPrompt = null; showInstall(); toast('Installed. Open “Billing” from your home screen.'); });
+document.addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-install]')) return;
+  if (installPrompt) {
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    installPrompt = null; showInstall();
+  } else if (isIOS()) {
+    toast('On iPhone: tap the Share button, then “Add to Home Screen”.');
+  }
+});
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
   session = s;
-  if (changed) { accountCheck = null; account = null; }
+  if (changed) { accountCheck = null; account = null; getSettings.clear(); getMenu.clear(); }
   if (event === 'PASSWORD_RECOVERY') { recoveringPassword = true; setTimeout(route, 0); return; }
   if (event === 'SIGNED_OUT') { recoveringPassword = false; lastEmail = ''; }
   // Defer: calling Supabase from inside this callback can deadlock the auth client.

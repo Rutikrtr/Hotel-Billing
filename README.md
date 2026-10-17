@@ -78,6 +78,17 @@ app open (showing only the saved printer).
 
 Paper width 58 mm (32 characters) or 80 mm (48 characters). Code: `public/printer.js`.
 
+## Data use, storage and backups
+
+Screens fetch summaries computed in the database (`bill_list`, `sales_total`, `dish_sales`) instead of every
+bill's items, and settings/menu are cached briefly, which keeps data transfer low on the free plan. Every bill is
+still stored in full and shown on its own screen.
+
+Super Admin shows **Database space** (warning at 70%, urgent at 90% of the free 500 MB) and **Back Up All Hotels**:
+with Chrome on a computer it writes one folder per hotel (`menu.csv`, `staff.csv`, `tables.csv`, `bills/YYYY-MM.csv`
+and `.json`, `room-bills/`, `change-log/`). Later backups only re-fetch from the month of the previous backup.
+Other browsers download one JSON file per hotel.
+
 ## Rooms
 
 When the Rooms feature is on, the **Rooms** tab shows every room as free or occupied. Tap a free room to check a guest in,
@@ -120,6 +131,23 @@ After adding or changing them, trigger a new deploy (Deploys → Trigger deploy)
 **GitHub Pages (current):** every push to `main` runs `.github/workflows/pages.yml`, which runs the tests, writes
 `public/config.js` and publishes `public/` to https://rutikrtr.github.io/Hotel-Billing/. One-time setup:
 Settings → Pages → Source: **GitHub Actions**, plus the two repository variables above.
+
+**Cloudflare Pages on billing.techyverve.in (recommended for customers):** free, unlimited traffic, commercial use
+allowed. One-time setup:
+
+1. Create a free account at dash.cloudflare.com → **Workers & Pages → Create → Pages → Connect to Git** → pick
+   `Rutikrtr/Hotel-Billing`.
+2. Build command `node scripts/write-config.mjs`, output directory `public`. Under **Environment variables** add
+   `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. Save and deploy (you get `<name>.pages.dev`).
+3. **Custom domains → Set up a domain → `billing.techyverve.in`**. Cloudflare shows one CNAME record:
+   at the company where techyverve.in's DNS is managed, add **CNAME `billing` → `<name>.pages.dev`**. Only the
+   `billing` name is added, so www.techyverve.in is not touched.
+4. In Supabase → Authentication → URL Configuration, set Site URL to `https://billing.techyverve.in/` and add it
+   to Redirect URLs.
+
+**Installing as an app:** open the site in Chrome (Android/computer) and tap **📲 Install App** (or Chrome menu →
+Install app / Add to Home screen). It opens full screen from its own icon, without the browser bar. On iPhone:
+Share → Add to Home Screen.
 
 **Netlify (previous):**
 
