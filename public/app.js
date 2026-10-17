@@ -210,7 +210,7 @@ const emailField = (autofocus = true, loginId = false) => html`
   <div class="field">
     <label for="email">${loginId ? 'Email or Login ID' : 'Email'}</label>
     <input id="email" type="${loginId ? 'text' : 'email'}" name="email" autocomplete="username" ${loginId ? new Raw('autocapitalize="none" spellcheck="false"') : new Raw('inputmode="email"')} required
-      value="${lastEmail}" ${autofocus ? new Raw('autofocus') : ''} placeholder="${loginId ? 'name@example.com or your Login ID' : 'name@example.com'}">
+      value="${lastEmail}" ${autofocus ? new Raw('autofocus') : ''} placeholder="${loginId ? 'ramesh or you@hotel.com' : 'name@example.com'}">
   </div>`;
 // Staff logins made by the owner are a Login ID like "ramesh"; they sign in as ramesh@staff.login.
 const STAFF_DOMAIN = '@staff.login';
@@ -230,58 +230,26 @@ const authViews = {
           <div class="auth-row"><a href="#" data-go="forgot">Forgot password?</a></div>
           <button type="submit" class="wide">Sign In</button>
         </form>
-        <button type="button" class="secondary wide" data-install hidden style="margin-top:12px">📲 Install as App</button>
-        <p class="auth-switch">New staff member? <a href="#" data-go="signUp">Create an account</a></p>`,
-      footer: 'Staff: use the Login ID and password the owner gave you.',
+        <button type="button" class="secondary wide" data-install hidden style="margin-top:12px">📲 Install as App</button>`,
+      // Accounts are only created by Techyverve (hotels) and hotel owners (staff), never from this screen.
+      footer: 'No account? Ask your hotel owner for a Login ID, or contact Techyverve to register your hotel.',
     });
     handle('Signing In…', async ({ email, password }) => {
       if (!email.trim() || !password) throw new Error('Enter your email or Login ID, and your password.');
       const { error } = await sb.auth.signInWithPassword({ email: loginEmail(email), password });
       if (!error) return;
-      const code = authError(error);
-      if (code === 'unconfirmed') {
-        throw html`Confirm your email first. Open the link we sent to ${email.trim()}. <a href="#" data-go="checkEmail">Send it again</a>`;
-      }
+      if (authError(error) === 'unconfirmed') throw new Error('This account isn’t active yet. Ask your hotel owner or Techyverve to check it.');
       throw error;
     });
     if (lastEmail) document.getElementById('password')?.focus();
     showInstall();
   },
 
-  signUp() {
-    const { handle } = authScreen({
-      title: 'Create your account',
-      subtitle: 'Use the email address the owner added for you in Settings.',
-      body: html`
-        <form class="auth-form" novalidate>
-          ${emailField()}
-          ${passwordField('Choose a password', 'new-password', 'At least 6 characters.')}
-          <button type="submit" class="wide">Create Account</button>
-        </form>
-        <p class="auth-switch">Already have an account? <a href="#" data-go="signIn">Sign in</a></p>`,
-      footer: 'We’ll email you a link to confirm the account.',
-    });
-    handle('Creating Account…', async ({ email, password }) => {
-      if (!email.trim()) throw new Error('Enter your email address.');
-      if ((password || '').length < 6) throw new Error('Use a password with at least 6 characters.');
-      const { data, error } = await sb.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: location.origin + location.pathname } });
-      if (error) {
-        if (authError(error) === 'exists') throw html`There’s already an account for this email. <a href="#" data-go="signIn">Sign in instead</a>`;
-        throw error;
-      }
-      // Supabase hides whether an email is taken: an existing address comes back with no identities.
-      if (!data.session && data.user && data.user.identities?.length === 0) {
-        throw html`There’s already an account for this email. <a href="#" data-go="signIn">Sign in instead</a>`;
-      }
-      if (!data.session) authViews.checkEmail('signup');
-    });
-  },
-
   forgot() {
     const { handle } = authScreen({
       iconName: 'lock',
       title: 'Reset your password',
-      subtitle: 'Enter your email and we’ll send you a link to set a new password.',
+      subtitle: 'Owners: enter your email and we’ll send a reset link. Staff with a Login ID: ask your hotel owner to set a new password.',
       body: html`
         <form class="auth-form" novalidate>
           ${emailField()}
@@ -293,19 +261,18 @@ const authViews = {
       if (!email.trim()) throw new Error('Enter your email address.');
       const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin + location.pathname });
       if (error) throw error;
-      authViews.checkEmail('reset');
+      authViews.checkEmail();
     });
   },
 
-  checkEmail(kind = 'signup') {
-    const reset = kind === 'reset';
+  checkEmail() {
     const { root, showAlert } = authScreen({
       iconName: 'mail',
       title: 'Check your email',
       subtitle: '',
       body: html`
-        <p class="auth-text">We sent a ${reset ? 'password reset' : 'confirmation'} link to <strong>${lastEmail || 'your email'}</strong>.
-          ${reset ? 'Open it to choose a new password.' : 'Open it to confirm your account, then come back here and sign in.'}</p>
+        <p class="auth-text">We sent a password reset link to <strong>${lastEmail || 'your email'}</strong>.
+          Open it to choose a new password.</p>
         <p class="hint">Can’t find it? Check your spam folder.</p>
         <button type="button" class="wide" data-go="signIn">Back to Sign In</button>
         <button type="button" class="wide secondary" id="resend">Send Again</button>`,
@@ -313,9 +280,7 @@ const authViews = {
     root.querySelector('#resend').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
       btn.disabled = true;
-      const { error } = reset
-        ? await sb.auth.resetPasswordForEmail(lastEmail, { redirectTo: location.origin + location.pathname })
-        : await sb.auth.resend({ type: 'signup', email: lastEmail, options: { emailRedirectTo: location.origin + location.pathname } });
+      const { error } = await sb.auth.resetPasswordForEmail(lastEmail, { redirectTo: location.origin + location.pathname });
       showAlert(error ? authError(error) : 'Sent. It can take a minute to arrive.', error ? 'error' : 'success');
       setTimeout(() => { if (btn.isConnected) btn.disabled = false; }, 30000);
     });
@@ -2678,8 +2643,8 @@ async function route() {
     accountCheck = null;
     return blockedScreen({
       title: 'Waiting for access',
-      body: html`<p class="auth-text"><strong>${session.user.email}</strong> isn’t on the staff list yet. Ask the owner to add this email in
-        Settings → Staff, then tap Try Again.</p>`,
+      body: html`<p class="auth-text"><strong>${session.user.email}</strong> has no access to any hotel. Ask your hotel owner to add you in
+        Settings → Staff Logins, or contact Techyverve, then tap Try Again.</p>`,
     });
   }
   if (!account.super_admin && !account.active) {
