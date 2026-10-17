@@ -1,5 +1,7 @@
 [build]
   publish = "public"
+  # Builds public/config.js from the SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY environment variables.
+  command = "node scripts/write-config.mjs"
 
 [[headers]]
   for = "/*"

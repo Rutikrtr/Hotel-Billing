@@ -1,14 +1,18 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
-import { fmt, orderBill, plain, toPaise } from './billing.js';
+import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 const METHODS = ['Cash', 'UPI', 'Card'];
 const $view = document.getElementById('view');
 let session = null;
-let staffCheck = null; // cached is_staff() result for the current session
-let ownerCheck = null; // cached is_owner() result for the current session
-const isOwner = () => (ownerCheck ??= sb.rpc('is_owner').then((r) => r.data === true, () => false));
+// Cached account_status() for the current session: super admin?, staff?, role, hotel paused?, feature switches.
+let accountCheck = null;
+const getAccount = () => (accountCheck ??= q(sb.rpc('account_status')).catch((err) => { accountCheck = null; throw err; }));
+let account = null;    // the resolved value, once route() has loaded it
+const isOwner = () => getAccount().then((a) => a.role === 'owner', () => false);
+/** Feature switches are set per hotel by the super admin. */
+const feat = (name) => account?.features?.[name] === true;
 let renderToken = 0;   // guards against a slow view finishing after the person navigated away
 
 // ---------- helpers ----------
@@ -57,6 +61,11 @@ function friendly(error) {
   if (/orders_table_id_fkey/.test(msg)) return 'This table has bills, so it can’t be removed. Rename it instead.';
   if (/row-level security|Not authorised/.test(msg)) return 'You don’t have permission to do that.';
   if (/edit_paid_bill|delete_paid_bill/.test(msg) && /function|schema cache/i.test(msg)) return 'Editing bills needs one last database step. Ask your admin to finish the setup.';
+  if (/sa_delete_hotel/.test(msg) && /function|schema cache/i.test(msg)) return 'Deleting hotels needs one last database step. Run the setup SQL in Supabase, then try again.';
+  if (/stays_one_open_per_room/.test(msg)) return 'Someone is already checked in to this room. Refresh to see it.';
+  if (/lodging_rooms_restaurant_number_key/.test(msg)) return 'A room with that number already exists.';
+  if (/stays_room_id_fkey/.test(msg)) return 'This room has bills, so it can’t be removed. Change its number instead.';
+  if (/stays_check/.test(msg)) return 'Check-out can’t be before check-in.';
   if (/Failed to fetch|NetworkError/.test(msg)) return 'No connection. Check the internet and try again.';
   return msg;
 }
@@ -89,6 +98,7 @@ const getSettings = () => q(sb.from('restaurants').select('*').single());
 const ICONS = {
   receipt: '<path d="M5 2.5h14v19l-2.33-1.6L14.33 21.5 12 19.9l-2.33 1.6-2.34-1.6L5 21.5zM8 7v1.6h8V7zm0 4v1.6h8V11zm0 4v1.6h5V15z" fill-rule="evenodd"/>',
   mail: '<path d="M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm1.4 2L12 12.2 19.6 7zM4 9.1V17h16V9.1l-8 5.4z" fill-rule="evenodd"/>',
+  pause: '<path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM9 8v8h2V8zm4 0v8h2V8z" fill-rule="evenodd"/>',
   lock: '<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z" fill-rule="evenodd"/>',
 };
 const icon = (name) => new Raw(`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[name]}</svg>`);
@@ -745,7 +755,7 @@ async function billView(token, orderId, autoPrint) {
         ${paid
           ? html`<a class="button secondary" href="#/bills">All Bills</a>
                  <button type="button" class="secondary" id="print">Print</button>
-                 ${owner ? html`<button type="button" class="secondary" id="edit-bill">Edit Bill</button>
+                 ${owner && feat('bill_edit') ? html`<button type="button" class="secondary" id="edit-bill">Edit Bill</button>
                    <button type="button" class="secondary danger-outline" id="delete-bill">Delete</button>` : html`<a class="button secondary" href="#/">Tables</a>`}`
           : html`<a class="button secondary" href="#/table/${order.table_id}/${order.section}">Add Items</a>
                  <button type="button" class="secondary" id="print">Print Again</button>
@@ -803,16 +813,21 @@ async function billView(token, orderId, autoPrint) {
 async function billsView(token, day = localDay()) {
   const start = new Date(`${day}T00:00:00`);
   const end = new Date(start); end.setDate(end.getDate() + 1);
-  const [orders, settings, unpaid, owner] = await Promise.all([
+  const [orders, settings, unpaid, owner, stays] = await Promise.all([
     q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'paid')
       .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString()).order('closed_at', { ascending: false })),
     getSettings(),
     q(sb.from('orders').select('*, dining_tables(name), order_items(quantity, unit_price)').eq('status', 'open')
       .not('billed_at', 'is', null).order('billed_at')),
     isOwner(),
+    feat('rooms') ? q(sb.from('stays').select('*, lodging_rooms(number), stay_charges(quantity, unit_price, description)').eq('status', 'paid')
+      .gte('closed_at', start.toISOString()).lt('closed_at', end.toISOString())) : [],
   ]);
   if (token !== renderToken) return;
-  const rows = orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp) }));
+  const rows = [
+    ...orders.map((o) => ({ o, b: orderBill(o, o.order_items, o.tax_rate_bp ?? settings.tax_rate_bp), href: `#/bill/${o.id}`, label: tableLabel(o.dining_tables.name, o.section, o.is_split) })),
+    ...stays.map((st) => ({ o: st, b: stayBill(st), href: `#/stay/${st.id}`, label: `Room ${st.lodging_rooms.number} · ${st.guest_name}` })),
+  ].sort((x, y) => y.o.closed_at.localeCompare(x.o.closed_at));
   const sum = (f) => rows.filter(f).reduce((s, r) => s + r.b.total, 0);
   const isToday = day === localDay();
   const total = sum(() => true);
@@ -823,7 +838,7 @@ async function billsView(token, day = localDay()) {
       <div><p class="eyebrow">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long' })}</p>
         <h1>Bills</h1></div>
       <div class="head-actions">
-        ${owner ? html`<a class="button secondary" href="#/bills/log">Change Log</a>` : ''}
+        ${owner && feat('bill_edit') ? html`<a class="button secondary" href="#/bills/log">Change Log</a>` : ''}
         <label class="date-pick"><span class="sr-only">Date</span><input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
       </div>
     </div>
@@ -842,10 +857,10 @@ async function billsView(token, day = localDay()) {
           <span class="money">${rs(orderBill(o, o.order_items, settings.tax_rate_bp).total)}</span><span class="chevron" aria-hidden="true">›</span>
         </a>`)}</div>` : ''}
     <h3 style="margin-top:0">Paid bills</h3>
-    ${rows.length ? html`<div class="list">${rows.map(({ o, b }) => html`
-      <a class="list-row" href="#/bill/${o.id}">
+    ${rows.length ? html`<div class="list">${rows.map(({ o, b, href, label }) => html`
+      <a class="list-row" href="${href}">
         ${badge(o.payment_method)}
-        <span class="grow"><strong>${tableLabel(o.dining_tables.name, o.section, o.is_split)}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}${o.edit_count ? html` · <span class="edited-tag">Edited</span>` : ''}</div></span>
+        <span class="grow"><strong>${label}</strong> · ${o.bill_no}<div class="sub">${time(o.closed_at)} · ${o.payment_method}${o.edit_count ? html` · <span class="edited-tag">Edited</span>` : ''}</div></span>
         <span class="money">${rs(b.total)}</span><span class="chevron" aria-hidden="true">›</span>
       </a>`)}</div>`
     : html`<div class="card empty"><span class="emoji" aria-hidden="true">🧾</span>No bills ${isToday ? 'yet today' : 'on this day'}. Paid bills appear here.</div>`}`);
@@ -1284,10 +1299,11 @@ async function menuView(token) {
 // ---------- Settings ----------
 
 async function settingsView(token) {
-  const [s, staff, tables] = await Promise.all([
+  const [s, staff, tables, rooms] = await Promise.all([
     getSettings(),
     q(sb.from('staff').select('*').order('created_at')),
-    q(sb.from('dining_tables').select('*').order('sort').order('name')),
+    feat('tables') ? q(sb.from('dining_tables').select('*').order('sort').order('name')) : [],
+    feat('rooms') ? q(sb.from('lodging_rooms').select('*').order('sort').order('number')) : [],
   ]);
   if (token !== renderToken) return;
   const isOwner = staff.find((m) => m.user_id === session.user.id)?.role === 'owner';
@@ -1311,14 +1327,14 @@ async function settingsView(token) {
             <p class="small" style="margin:0">Shown on the bill as CGST + SGST (half each). Bills already settled don’t change.</p>
           </div>
         </div>
-        <div class="gst-box">
+        <div class="gst-box" ${feat('tables') ? '' : new Raw('hidden')}>
           <label class="toggle"><input type="checkbox" name="quick_close" ${s.quick_close !== false ? new Raw('checked') : ''}> Print Bill clears the table</label>
           <p class="small" style="margin:0">On: tapping Print Bill finishes the bill and frees the table straight away (recorded as Cash). Turn off when you have a printer and want to choose Cash / UPI / Card with Receive Payment.</p>
         </div>
         <button type="submit">Save Changes</button>
       </form>
       <div>
-        <div class="card">
+        <div class="card" ${feat('tables') ? '' : new Raw('hidden')}>
           <h2>Tables</h2>
           <p class="small" style="margin-top:-6px">Tap a table to give it your own name, like “Garden 1” or “Family Hall”.</p>
           <div class="table-chips">${tables.map((t) => html`
@@ -1329,6 +1345,22 @@ async function settingsView(token) {
             <button type="submit" class="secondary">Add Table</button>
           </form>
         </div>
+        ${feat('rooms') ? html`<div class="card" style="margin-top:${feat('tables') ? 20 : 0}px">
+          <h2>Rooms</h2>
+          <p class="small" style="margin-top:-6px">Tap a room to change its number, type or nightly rate.</p>
+          ${rooms.length ? html`<div class="list" style="box-shadow:none">${rooms.map((r) => html`
+            <div class="list-row">
+              <button type="button" class="plain grow room-edit" data-edit-room="${r.id}" aria-label="Edit room ${r.number}">
+                <strong>${r.number}</strong> <span class="sub">${r.room_type} · ${rs(r.rate).replace('.00', '')}/night</span></button>
+              <button type="button" class="destructive" data-del-room="${r.id}" aria-label="Remove room ${r.number}">✕</button>
+            </div>`)}</div>` : ''}
+          <form id="add-room" class="charge-form" style="margin-top:12px">
+            <input name="number" placeholder="Room no." required maxlength="20" aria-label="Room number">
+            <input name="room_type" placeholder="Type, e.g. Deluxe AC" maxlength="40" aria-label="Room type">
+            <input name="rate" placeholder="₹/night" inputmode="decimal" required aria-label="Rate per night">
+            <button type="submit" class="secondary">Add Room</button>
+          </form>
+        </div>` : ''}
         <div class="card" style="margin-top:20px">
           <h2>Staff</h2>
           <p class="small" style="margin-top:-6px">Only these emails can sign in. New staff create an account with the email added here.</p>
@@ -1359,6 +1391,11 @@ async function settingsView(token) {
   onSubmit(root, '#add-table', async (f) => {
     await q(sb.from('dining_tables').insert({ name: f.name.trim(), sort: tables.length + 1 }));
     toast(`Table ${f.name.trim()} added`);
+    settingsView(renderToken);
+  });
+  onSubmit(root, '#add-room', async (f) => {
+    await q(sb.from('lodging_rooms').insert({ number: f.number.trim(), room_type: f.room_type.trim() || 'Standard', rate: toPaise(f.rate), sort: rooms.length + 1 }));
+    toast(`Room ${f.number.trim()} added`);
     settingsView(renderToken);
   });
   onSubmit(root, '#add-staff', async (f) => {
@@ -1405,7 +1442,29 @@ async function settingsView(token) {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.id === 'signout') sb.auth.signOut();
-    else if (t.dataset.renameTable) renameTable(tables.find((x) => x.id === Number(t.dataset.renameTable)));
+    else if (t.dataset.editRoom) {
+      const r = rooms.find((x) => x.id === Number(t.dataset.editRoom));
+      formDialog({
+        title: `Room ${r.number}`,
+        submit: 'Save Room',
+        fields: [
+          { name: 'number', label: 'Room number', value: r.number, attrs: { required: '', maxlength: 20 } },
+          { name: 'room_type', label: 'Type', value: r.room_type, attrs: { maxlength: 40 } },
+          { name: 'rate', label: 'Rate per night (₹)', value: plain(r.rate), attrs: { inputmode: 'decimal' } },
+        ],
+        hint: 'Guests already checked in keep the rate they checked in with.',
+        async onSave(f) {
+          if (!f.number.trim()) throw new Error('Enter a room number.');
+          await q(sb.from('lodging_rooms').update({ number: f.number.trim(), room_type: f.room_type.trim() || 'Standard', rate: toPaise(f.rate) }).eq('id', r.id));
+          toast(`Room ${f.number.trim()} saved`);
+          settingsView(renderToken);
+        },
+      });
+    } else if (t.dataset.delRoom) {
+      const r = rooms.find((x) => x.id === Number(t.dataset.delRoom));
+      if (!confirm(`Remove room ${r.number}?`)) return;
+      act(t, async () => { await q(sb.from('lodging_rooms').delete().eq('id', r.id)); toast(`Room ${r.number} removed`); settingsView(renderToken); });
+    } else if (t.dataset.renameTable) renameTable(tables.find((x) => x.id === Number(t.dataset.renameTable)));
     else if (t.dataset.delTable) {
       const name = tables.find((x) => x.id === Number(t.dataset.delTable)).name;
       if (!confirm(`Remove table ${name}?`)) return;
@@ -1417,49 +1476,619 @@ async function settingsView(token) {
   });
 }
 
+// ---------- Rooms (lodging) ----------
+
+/** Bill for a stay: room nights plus any extra charges. */
+function stayBill(stay, rate = stay.tax_rate_bp ?? 0) {
+  const nights = nightsBetween(stay.check_in, stay.check_out);
+  return {
+    nights,
+    ...computeBill({
+      lines: [
+        { name: `Room ${stay.lodging_rooms?.number ?? ''} · ${nights} night${nights === 1 ? '' : 's'}`, quantity: nights, unitPrice: stay.rate },
+        ...(stay.stay_charges ?? []).map((c) => ({ name: c.description, quantity: c.quantity, unitPrice: c.unit_price })),
+      ],
+      discount: stay.discount,
+      taxRateBp: rate,
+    }),
+  };
+}
+const addDays = (day, n) => { const d = new Date(`${day}T00:00:00`); d.setDate(d.getDate() + n); return localDay(d); };
+const shortDate = (day) => new Date(`${day}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+/** A small form dialog. fields: [{ name, label, type, value, ...attrs }]. onSave(values) may throw to show an error. */
+function formDialog({ title, fields, submit, hint = '', onSave }) {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'tall';
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  setHTML(dialog, html`
+    <form class="dialog-body" novalidate>
+      <h2 style="margin:0">${title}</h2>
+      <div class="auth-alert error" role="alert" hidden></div>
+      ${fields.map((f) => (f.type === 'row' ? html`<div class="row">${f.fields.map(field)}</div>` : field(f)))}
+      ${hint ? html`<p class="hint">${hint}</p>` : ''}
+      <button type="submit" class="wide">${submit}</button>
+      <button type="button" class="secondary wide" data-cancel>Cancel</button>
+    </form>`);
+  function field(f) {
+    return html`<label>${f.label} <input name="${f.name}" type="${f.type ?? 'text'}" value="${f.value ?? ''}"
+      ${new Raw(Object.entries(f.attrs ?? {}).map(([k, v]) => `${k}="${esc(v)}"`).join(' '))}></label>`;
+  }
+  dialog.querySelector('[data-cancel]').addEventListener('click', close);
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  dialog.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    const alertBox = dialog.querySelector('[role=alert]');
+    btn.disabled = true;
+    try {
+      await onSave(Object.fromEntries(new FormData(e.target)));
+      close();
+    } catch (err) {
+      alertBox.textContent = friendly(err); alertBox.hidden = false;
+      btn.disabled = false;
+    }
+  });
+  dialog.showModal();
+  dialog.querySelector('input')?.focus();
+}
+
+async function roomsView(token) {
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const [rooms, open, paidToday] = await Promise.all([
+    q(sb.from('lodging_rooms').select('*').order('sort').order('number')),
+    q(sb.from('stays').select('*, stay_charges(quantity, unit_price)').eq('status', 'open')),
+    q(sb.from('stays').select('*, stay_charges(quantity, unit_price)').eq('status', 'paid').gte('closed_at', dayStart.toISOString())),
+  ]);
+  if (token !== renderToken) return;
+  const byRoom = Object.fromEntries(open.map((st) => [st.room_id, st]));
+  const today = localDay();
+  const sales = paidToday.reduce((sum, st) => sum + stayBill(st).total, 0);
+  const leaving = open.filter((st) => st.check_out <= today).length;
+  const root = mount(html`
+    <div class="page-head"><div><p class="eyebrow">${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}</p><h1>Rooms</h1></div></div>
+    <section class="hero" aria-label="Rooms today">
+      <span class="label">Room sales today</span>
+      <span class="big">${rs(sales)}</span>
+      <div class="facts">
+        <div class="fact"><strong>${open.length}</strong><span>Occupied</span></div>
+        <div class="fact"><strong>${rooms.length - open.length}</strong><span>Free</span></div>
+        <div class="fact"><strong>${leaving}</strong><span>Checking out</span></div>
+      </div>
+    </section>
+    ${rooms.length ? '' : html`<div class="card empty"><span class="emoji" aria-hidden="true">🛏️</span>No rooms yet. <a href="#/settings">Add rooms in Settings</a>.</div>`}
+    <div class="tables">
+      ${rooms.map((r) => {
+        const st = byRoom[r.id];
+        if (!st) return html`<button type="button" class="table-tile free" data-checkin="${r.id}" aria-label="Room ${r.number}, free, check in a guest">
+          <span class="tile-top"><span class="name">${r.number}</span><span class="pill">Free</span></span>
+          <span class="state">${r.room_type} · ${rs(r.rate).replace('.00', '')}/night</span>
+          <span class="tap">Tap to check in</span></button>`;
+        const due = st.check_out <= today;
+        return html`<a class="table-tile ${due ? 'billed' : 'busy'}" href="#/stay/${st.id}" aria-label="Room ${r.number}, ${st.guest_name}${due ? ', checking out today' : ''}">
+          <span class="tile-top"><span class="name">${r.number}</span><span class="pill">${due ? 'Check-out' : 'Occupied'}</span></span>
+          <span><span class="amount">${rs(stayBill(st, 0).total)}</span>
+          <span class="state">${st.guest_name} · till ${shortDate(st.check_out)}</span></span></a>`;
+      })}
+    </div>`);
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-checkin]');
+    if (t) checkIn(rooms.find((r) => r.id === Number(t.dataset.checkin)));
+  });
+}
+
+function checkIn(room) {
+  const today = localDay();
+  formDialog({
+    title: `Check In · Room ${room.number}`,
+    submit: 'Check In',
+    fields: [
+      { name: 'guest_name', label: 'Guest name', attrs: { required: '', maxlength: 80, autocomplete: 'off' } },
+      { type: 'row', fields: [
+        { name: 'guest_phone', label: 'Phone', type: 'tel', attrs: { maxlength: 20 } },
+        { name: 'guests', label: 'Guests', value: 1, attrs: { inputmode: 'numeric' } },
+      ] },
+      { type: 'row', fields: [
+        { name: 'check_in', label: 'Check-in', type: 'date', value: today },
+        { name: 'check_out', label: 'Check-out', type: 'date', value: addDays(today, 1) },
+      ] },
+      { name: 'rate', label: 'Rate per night (₹)', value: plain(room.rate), attrs: { inputmode: 'decimal' } },
+    ],
+    async onSave(f) {
+      if (!f.guest_name.trim()) throw new Error('Enter the guest’s name.');
+      if (!f.check_in || !f.check_out || f.check_out < f.check_in) throw new Error('Check-out can’t be before check-in.');
+      const guests = Number(f.guests || 1);
+      if (!Number.isInteger(guests) || guests < 1) throw new Error('Guests must be 1 or more.');
+      const stay = await q(sb.from('stays').insert({
+        room_id: room.id, guest_name: f.guest_name.trim(), guest_phone: f.guest_phone.trim(), guests,
+        check_in: f.check_in, check_out: f.check_out, rate: toPaise(f.rate),
+      }).select('id').single());
+      toast(`${f.guest_name.trim()} checked in to Room ${room.number}`);
+      location.hash = `#/stay/${stay.id}`;
+    },
+  });
+}
+
+async function stayView(token, stayId, autoPrint) {
+  const [stay, settings] = await Promise.all([
+    q(sb.from('stays').select('*, lodging_rooms(number, room_type), stay_charges(*)').eq('id', stayId).order('id', { referencedTable: 'stay_charges' }).single()),
+    getSettings(),
+  ]);
+  if (token !== renderToken) return;
+  const paid = stay.status === 'paid';
+  const rate = paid ? stay.tax_rate_bp ?? 0 : settings.tax_rate_bp;
+  const b = stayBill(stay, rate);
+  const kv = (k, v, cls = '') => html`<div class="kv ${cls}"><span>${k}</span><span>${v}</span></div>`;
+  const receipt = html`
+    <article class="receipt" aria-label="Room bill">
+      <div class="center">
+        <div class="shop">${settings.hotel_name}</div>
+        ${settings.hotel_address ? html`<div>${settings.hotel_address}</div>` : ''}
+        ${settings.hotel_phone ? html`<div>Ph: ${settings.hotel_phone}</div>` : ''}
+        ${settings.hotel_gstin && rate > 0 ? html`<div>GSTIN: ${settings.hotel_gstin}</div>` : ''}
+      </div>
+      <div class="rule"></div>
+      ${kv(stay.bill_no ? `Bill: ${stay.bill_no}` : 'Room bill', `Room: ${stay.lodging_rooms.number}`)}
+      ${kv(`Guest: ${stay.guest_name}`, stay.guest_phone)}
+      ${kv(`${shortDate(stay.check_in)} → ${shortDate(stay.check_out)}`, `${b.nights} night${b.nights === 1 ? '' : 's'}`)}
+      <div class="rule"></div>
+      <table>
+        <thead><tr><th>Item</th><th class="r">Qty</th><th class="r">Amt</th></tr></thead>
+        <tbody>${b.lines.map((l) => html`
+          <tr><td>${l.name}<br><small>@ ${fmt(l.unitPrice)}</small></td><td class="r">${l.quantity}</td><td class="r">${fmt(l.unitPrice * l.quantity)}</td></tr>`)}
+        </tbody>
+      </table>
+      <div class="rule"></div>
+      ${kv('Subtotal', fmt(b.subtotal))}
+      ${b.discount ? kv('Discount', `-${fmt(b.discount)}`) : ''}
+      ${b.tax ? [kv(`CGST @ ${pct(rate / 2)}`, fmt(b.cgst)), kv(`SGST @ ${pct(rate / 2)}`, fmt(b.sgst))] : ''}
+      ${b.roundOff ? kv('Round off', fmt(b.roundOff)) : ''}
+      <div class="rule"></div>
+      ${kv('TOTAL', rs(b.total), 'grand')}
+      ${paid ? kv(dateTime(stay.closed_at), stay.payment_method) : ''}
+      <div class="rule"></div>
+      <div class="center">Thank you for staying with us!</div>
+    </article>`;
+
+  if (paid) {
+    setHTML($view, html`
+      <div class="receipt-wrap">
+        <div class="receipt-actions no-print">
+          <a class="button secondary" href="#/rooms">Rooms</a>
+          <a class="button secondary" href="#/bills">All Bills</a>
+          <button type="button" class="secondary" id="print">Print</button>
+        </div>
+        <p class="paid-note no-print">Paid by ${stay.payment_method} · ${dateTime(stay.closed_at)}</p>
+        ${receipt}
+      </div>`);
+    document.getElementById('print').addEventListener('click', () => window.print());
+    if (autoPrint) {
+      history.replaceState(null, '', `#/stay/${stay.id}`);
+      setTimeout(() => window.print(), 300);
+    }
+    return;
+  }
+
+  const root = mount(html`
+    <div class="page-head no-print">
+      <div><p class="eyebrow"><a href="#/rooms">‹ Rooms</a></p><h1>Room ${stay.lodging_rooms.number}</h1>
+        <p class="muted">${stay.guest_name}${stay.guest_phone ? ` · ${stay.guest_phone}` : ''} · ${stay.guests} guest${stay.guests === 1 ? '' : 's'}</p></div>
+    </div>
+    <div class="two-col">
+      <div class="no-print">
+        <form class="card form" id="stay-dates">
+          <h2 style="margin:0">Stay</h2>
+          <div class="row">
+            <label>Check-in <input type="date" name="check_in" value="${stay.check_in}"></label>
+            <label>Check-out <input type="date" name="check_out" value="${stay.check_out}" min="${stay.check_in}"></label>
+          </div>
+          <div class="row">
+            <label>Rate per night (₹) <input name="rate" inputmode="decimal" value="${plain(stay.rate)}"></label>
+            <label>Discount (₹) <input name="discount" inputmode="decimal" value="${stay.discount ? plain(stay.discount) : ''}" placeholder="0"></label>
+          </div>
+          <button type="submit" class="secondary">Save Stay</button>
+        </form>
+        <div class="card" style="margin-top:20px">
+          <h2>Extra Charges</h2>
+          <p class="small" style="margin-top:-6px">Food, laundry, extra bed — anything to add to this room’s bill.</p>
+          ${stay.stay_charges.length ? html`<div class="list" style="box-shadow:none">${stay.stay_charges.map((c) => html`
+            <div class="list-row"><span class="grow">${c.description}<div class="sub">${c.quantity} × ${rs(c.unit_price)}</div></span>
+              <span class="money">${rs(c.quantity * c.unit_price)}</span>
+              <button type="button" class="destructive" data-del-charge="${c.id}" aria-label="Remove ${c.description}">✕</button></div>`)}</div>` : ''}
+          <form id="add-charge" class="charge-form">
+            <input name="description" placeholder="e.g. Breakfast" required maxlength="80" aria-label="Charge description" autocomplete="off">
+            <input name="quantity" value="1" inputmode="numeric" aria-label="Quantity">
+            <input name="price" placeholder="₹" inputmode="decimal" required aria-label="Price each">
+            <button type="submit" class="secondary">Add</button>
+          </form>
+        </div>
+      </div>
+      <div>
+        ${receipt}
+        <div class="receipt-actions no-print" style="margin-top:16px">
+          <button type="button" class="secondary danger-outline" id="cancel-stay">Cancel Check-in</button>
+          <button type="button" class="secondary" id="print">Print</button>
+          <button type="button" id="checkout">Check Out · ${rs(b.total)}</button>
+        </div>
+      </div>
+    </div>`);
+  onSubmit(root, '#stay-dates', async (f) => {
+    if (!f.check_out || f.check_out < f.check_in) throw new Error('Check-out can’t be before check-in.');
+    await q(sb.from('stays').update({ check_in: f.check_in, check_out: f.check_out, rate: toPaise(f.rate), discount: toPaise(f.discount) }).eq('id', stay.id));
+    toast('Stay saved');
+    stayView(renderToken, stayId);
+  });
+  onSubmit(root, '#add-charge', async (f, form) => {
+    const quantity = Number(f.quantity || 1);
+    if (!Number.isInteger(quantity) || quantity < 1) throw new Error('Quantity must be 1 or more.');
+    await q(sb.from('stay_charges').insert({ stay_id: stay.id, description: f.description.trim(), quantity, unit_price: toPaise(f.price) }));
+    form.reset();
+    stayView(renderToken, stayId);
+  });
+  document.getElementById('print').addEventListener('click', () => window.print());
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.delCharge) {
+      act(t, async () => { await q(sb.from('stay_charges').delete().eq('id', t.dataset.delCharge)); stayView(renderToken, stayId); });
+    } else if (t.id === 'cancel-stay') {
+      if (!confirm(`Cancel ${stay.guest_name}’s check-in? Room ${stay.lodging_rooms.number} becomes free and nothing is billed.`)) return;
+      act(t, async () => { await q(sb.from('stays').delete().eq('id', stay.id)); toast('Check-in cancelled'); location.hash = '#/rooms'; });
+    } else if (t.id === 'checkout') {
+      checkOut(stay, b.total);
+    }
+  });
+}
+
+function checkOut(stay, total) {
+  const dialog = document.createElement('dialog');
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  setHTML(dialog, html`
+    <form class="dialog-body">
+      <h2 style="margin:0">Check Out · Room ${stay.lodging_rooms.number}</h2>
+      <div class="auth-alert error" role="alert" hidden></div>
+      <div class="due"><span class="muted">Amount to collect</span><span class="money">${rs(total)}</span></div>
+      <fieldset class="segmented" style="border:0;margin:0" aria-label="Payment method">
+        ${METHODS.map((m, i) => html`<label><input type="radio" name="method" value="${m}" ${i === 0 ? new Raw('checked') : ''}><span>${m}</span></label>`)}
+      </fieldset>
+      <button type="submit" class="wide">Mark as Paid</button>
+      <button type="button" class="secondary wide" data-cancel>Cancel</button>
+    </form>`);
+  dialog.querySelector('[data-cancel]').addEventListener('click', close);
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  dialog.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    const method = new FormData(e.target).get('method');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const { error } = await sb.rpc('checkout_stay', { p_stay_id: stay.id, p_method: method });
+    if (error) {
+      btn.disabled = false; btn.textContent = 'Mark as Paid';
+      const box = dialog.querySelector('[role=alert]');
+      box.textContent = friendly(error); box.hidden = false;
+      return;
+    }
+    close();
+    toast(`Room ${stay.lodging_rooms.number} checked out · ${method} · ${rs(total)}`);
+    route();
+  });
+  dialog.showModal();
+}
+
+// ---------- Super admin: every hotel, its features, pause and delete ----------
+
+const FEATURES = [
+  ['tables', 'Tables & Orders', 'Table-wise orders, menu and food bills'],
+  ['rooms', 'Rooms', 'Room check-in, extra charges and room bills'],
+  ['trending', 'Trending', 'Best-selling dishes report'],
+  ['bill_edit', 'Edit Bills', 'Owner can edit or delete paid bills, with a change log'],
+];
+let adminSearch = '';
+
+async function adminView(token) {
+  const hotels = await q(sb.rpc('sa_list_hotels'));
+  if (token !== renderToken) return;
+  const active = hotels.filter((h) => h.active).length;
+  const sales = hotels.reduce((s, h) => s + Number(h.sales_today), 0);
+  const needle = adminSearch.trim().toLowerCase();
+  const shown = hotels.filter((h) => !needle || [h.name, h.address, h.phone, ...h.owners].join(' ').toLowerCase().includes(needle));
+  const root = mount(html`
+    <div class="page-head">
+      <div><p class="eyebrow">Techyverve · Super Admin</p><h1>Hotels</h1></div>
+      <button type="button" id="new-hotel">＋ New Hotel</button>
+    </div>
+    <section class="hero" aria-label="All hotels today">
+      <span class="label">Sales today · all hotels</span>
+      <span class="big">${rs(sales)}</span>
+      <div class="facts">
+        <div class="fact"><strong>${hotels.length}</strong><span>Hotels</span></div>
+        <div class="fact"><strong>${active}</strong><span>Active</span></div>
+        <div class="fact"><strong>${hotels.length - active}</strong><span>Paused</span></div>
+      </div>
+    </section>
+    ${hotels.length > 3 ? html`<label class="admin-search"><span class="sr-only">Search hotels</span>
+      <input type="search" id="hotel-search" placeholder="Search by hotel, phone or owner email" value="${adminSearch}" autocomplete="off"></label>` : ''}
+    <div class="hotel-list">
+      ${shown.map((h) => html`
+        <article class="card hotel-card ${h.active ? '' : 'paused'}" aria-label="${h.name}">
+          <div class="hotel-top">
+            <div class="grow"><h2>${h.name}</h2>
+              <p class="small">${[h.address, h.phone].filter(Boolean).join(' · ') || 'No address yet'}</p></div>
+            <span class="status-pill ${h.active ? 'on' : 'off'}">${h.active ? 'Active' : 'Paused'}</span>
+          </div>
+          ${!h.active && h.paused_reason ? html`<p class="pause-reason">Paused: “${h.paused_reason}”</p>` : ''}
+          <div class="hotel-stats">
+            <div><strong>${rs(Number(h.sales_today)).replace('.00', '')}</strong><span>Today</span></div>
+            <div><strong>${h.bills}</strong><span>Bills</span></div>
+            <div><strong>${h.tables}</strong><span>Tables</span></div>
+            <div><strong>${h.rooms}</strong><span>Rooms</span></div>
+            <div><strong>${h.menu_items}</strong><span>Dishes</span></div>
+            <div><strong>${h.staff_count}</strong><span>Logins</span></div>
+          </div>
+          <div class="feature-chips" aria-label="Features">
+            ${FEATURES.map(([k, label]) => html`<span class="feature-chip ${h.features[k] ? 'on' : ''}">${h.features[k] ? '✓' : '✕'} ${label}</span>`)}
+          </div>
+          <p class="small hotel-meta">Owner: ${h.owners.join(', ') || '—'}<br>
+            Last bill: ${h.last_bill_at ? dateTime(h.last_bill_at) : 'none yet'} · Since ${new Date(h.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+          <div class="hotel-actions">
+            <button type="button" class="secondary" data-edit="${h.id}">Edit & Features</button>
+            <button type="button" class="secondary" data-reset="${h.id}">Reset Password</button>
+            ${h.active ? html`<button type="button" class="secondary" data-pause="${h.id}">Pause Service</button>`
+                       : html`<button type="button" data-resume="${h.id}">Resume Service</button>`}
+            <button type="button" class="secondary danger-outline" data-delete="${h.id}">Delete</button>
+          </div>
+        </article>`)}
+    </div>
+    ${hotels.length && !shown.length ? html`<div class="card empty">No hotel matches “${adminSearch}”.</div>` : ''}
+    ${hotels.length ? '' : html`<div class="card empty"><span class="emoji" aria-hidden="true">🏨</span>No hotels yet. Tap New Hotel to add the first one.</div>`}`);
+
+  const byId = (id) => hotels.find((h) => h.id === Number(id));
+  const reload = () => adminView(renderToken);
+  root.querySelector('#hotel-search')?.addEventListener('input', (e) => {
+    adminSearch = e.target.value;
+    const pos = e.target.selectionStart;
+    adminView(renderToken).then(() => { const i = document.getElementById('hotel-search'); if (i) { i.focus(); i.setSelectionRange(pos, pos); } });
+  });
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.id === 'new-hotel') hotelDialog(null, reload);
+    else if (t.dataset.edit) hotelDialog(byId(t.dataset.edit), reload);
+    else if (t.dataset.reset) {
+      const h = byId(t.dataset.reset);
+      formDialog({
+        title: `Reset Password · ${h.name}`,
+        submit: 'Set New Password',
+        hint: 'Tell the owner their new password. They can sign in with it straight away.',
+        fields: [
+          { name: 'email', label: 'Login email', type: 'email', value: h.owners[0] ?? '', attrs: { required: '' } },
+          { name: 'password', label: 'New password', value: '', attrs: { minlength: 6, required: '', autocomplete: 'new-password' } },
+        ],
+        async onSave(f) {
+          await q(sb.rpc('sa_reset_password', { p_id: h.id, p_email: f.email, p_password: f.password }));
+          toast(`Password changed for ${f.email.trim()}`);
+        },
+      });
+    } else if (t.dataset.pause) {
+      const h = byId(t.dataset.pause);
+      formDialog({
+        title: `Pause ${h.name}?`,
+        submit: 'Pause Service',
+        hint: 'Everyone at this hotel is locked out until you resume. Their data stays safe. They will see the reason below.',
+        fields: [{ name: 'reason', label: 'Reason (shown to the hotel)', value: '', attrs: { placeholder: 'e.g. Subscription payment pending', maxlength: 200 } }],
+        async onSave(f) {
+          await q(sb.rpc('sa_set_active', { p_id: h.id, p_active: false, p_reason: f.reason }));
+          toast(`${h.name} paused`);
+          reload();
+        },
+      });
+    } else if (t.dataset.resume) {
+      const h = byId(t.dataset.resume);
+      act(t, async () => {
+        await q(sb.rpc('sa_set_active', { p_id: h.id, p_active: true, p_reason: '' }));
+        toast(`${h.name} is active again`);
+        reload();
+      });
+    } else if (t.dataset.delete) {
+      const h = byId(t.dataset.delete);
+      formDialog({
+        title: `Delete ${h.name}?`,
+        submit: 'Delete Hotel Forever',
+        hint: `This permanently removes the hotel, its ${h.bills} bills, menu, tables, rooms and every login. It can’t be undone. To only stop it for a while, use Pause Service instead.`,
+        fields: [{ name: 'confirm', label: `Type ${h.name} to confirm`, value: '', attrs: { autocomplete: 'off', required: '' } }],
+        async onSave(f) {
+          if (f.confirm.trim() !== h.name.trim()) throw new Error(`Type the name exactly: ${h.name}`);
+          await q(sb.rpc('sa_delete_hotel', { p_id: h.id, p_confirm_name: f.confirm }));
+          toast(`${h.name} deleted`);
+          reload();
+        },
+      });
+      document.querySelector('dialog [type=submit]')?.classList.add('danger-fill');
+    }
+  });
+}
+
+/** Create a hotel (with its owner login) or edit one. */
+function hotelDialog(hotel, done) {
+  const creating = !hotel;
+  const f = hotel?.features ?? { tables: true, rooms: false, trending: true, bill_edit: true };
+  const dialog = document.createElement('dialog');
+  dialog.className = 'tall';
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  setHTML(dialog, html`
+    <form class="dialog-body" novalidate>
+      <h2 style="margin:0">${creating ? 'New Hotel' : `Edit ${hotel.name}`}</h2>
+      <div class="auth-alert error" role="alert" hidden></div>
+      <label>Hotel name <input name="name" value="${hotel?.name ?? ''}" required maxlength="80" autocomplete="off"></label>
+      <div class="row">
+        <label>Phone <input name="phone" type="tel" value="${hotel?.phone ?? ''}" maxlength="20"></label>
+        <label>Address <input name="address" value="${hotel?.address ?? ''}" maxlength="160"></label>
+      </div>
+      <fieldset class="feature-picks">
+        <legend>What this hotel can use</legend>
+        ${FEATURES.map(([k, label, desc]) => html`
+          <label class="feature-pick"><input type="checkbox" name="feat_${k}" ${f[k] ? new Raw('checked') : ''}>
+            <span><strong>${label}</strong><span class="small">${desc}</span></span></label>`)}
+      </fieldset>
+      ${creating ? html`
+        <div class="row">
+          <label>Tables to start with <input name="tables" inputmode="numeric" value="10"></label>
+          <label>Rooms to start with <input name="rooms" inputmode="numeric" value="0"></label>
+        </div>
+        <h3 style="margin:4px 0 0">Owner login</h3>
+        <label>Owner email <input name="email" type="email" required autocomplete="off" placeholder="owner@hotel.com"></label>
+        <label>Owner password <input name="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters"></label>
+        <p class="hint">The owner signs in with this email and password. They can add their own staff in Settings.</p>` : ''}
+      <button type="submit" class="wide">${creating ? 'Create Hotel' : 'Save Changes'}</button>
+      <button type="button" class="secondary wide" data-cancel>Cancel</button>
+    </form>`);
+  dialog.querySelector('[data-cancel]').addEventListener('click', close);
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  // Rooms to start with only matters when Rooms is ticked.
+  const roomsField = dialog.querySelector('[name=rooms]');
+  const syncRooms = () => {
+    if (!roomsField) return;
+    const on = dialog.querySelector('[name=feat_rooms]').checked;
+    roomsField.closest('label').hidden = !on;
+    if (on && roomsField.value === '0') roomsField.value = '10';
+  };
+  dialog.querySelector('[name=feat_rooms]').addEventListener('change', syncRooms);
+  syncRooms();
+  dialog.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const v = Object.fromEntries(new FormData(e.target));
+    const alertBox = dialog.querySelector('[role=alert]');
+    const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; alertBox.scrollIntoView({ block: 'nearest' }); };
+    const flags = Object.fromEntries(FEATURES.map(([k]) => [`p_feat_${k}`, v[`feat_${k}`] === 'on']));
+    if (!v.name.trim()) return fail('Enter the hotel name.');
+    if (!flags.p_feat_tables && !flags.p_feat_rooms) return fail('Tick Tables & Orders, Rooms, or both.');
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      if (creating) {
+        const count = (x) => { const n = Number(x || 0); if (!Number.isInteger(n) || n < 0) throw new Error('Tables and rooms must be whole numbers.'); return n; };
+        if (!/^[^@\s]+@[^@\s]+$/.test(v.email.trim())) throw new Error('Enter the owner’s email.');
+        if (v.password.length < 6) throw new Error('The owner’s password needs at least 6 characters.');
+        await q(sb.rpc('sa_create_hotel', {
+          p_name: v.name, p_address: v.address, p_phone: v.phone, p_owner_email: v.email, p_owner_password: v.password,
+          p_tables: flags.p_feat_tables ? count(v.tables) : 0, p_rooms: flags.p_feat_rooms ? count(v.rooms) : 0, ...flags,
+        }));
+        toast(`${v.name.trim()} created · owner can sign in now`);
+      } else {
+        await q(sb.rpc('sa_update_hotel', { p_id: hotel.id, p_name: v.name, p_address: v.address, p_phone: v.phone, ...flags }));
+        toast(`${v.name.trim()} saved`);
+      }
+      close();
+      done();
+    } catch (err) {
+      btn.disabled = false;
+      fail(friendly(err));
+    }
+  });
+  dialog.showModal();
+}
+
 // ---------- routing ----------
 
+// [pattern, view, tab, feature needed (or null)]
 const routes = [
-  [/^\/?$/, tablesView, 'tables'],
-  [/^\/table\/(\d+)(?:\/([A-Z]))?$/, tableView, 'tables'],
-  [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables'],
-  [/^\/bills\/log$/, logView, 'bills'],
-  [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills'],
-  [/^\/trending$/, trendingView, 'trending'],
-  [/^\/menu$/, menuView, 'menu'],
-  [/^\/settings$/, settingsView, 'settings'],
+  [/^\/?$/, tablesView, 'tables', 'tables'],
+  [/^\/table\/(\d+)(?:\/([A-Z]))?$/, tableView, 'tables', 'tables'],
+  [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables', null],
+  [/^\/rooms$/, roomsView, 'rooms', 'rooms'],
+  [/^\/stay\/(\d+)(\/print)?$/, stayView, 'rooms', 'rooms'],
+  [/^\/bills\/log$/, logView, 'bills', 'bill_edit'],
+  [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills', null],
+  [/^\/trending$/, trendingView, 'trending', 'trending'],
+  [/^\/menu$/, menuView, 'menu', 'tables'],
+  [/^\/settings$/, settingsView, 'settings', null],
 ];
+const adminRoutes = [
+  [/^\/admin$/, adminView, 'admin', null],
+];
+
+/** Full-screen notice shown instead of the app (no access yet, hotel paused, …). */
+function blockedScreen({ iconName = 'lock', title, body, retry = true }) {
+  const { root } = authScreen({
+    iconName, title, subtitle: '',
+    body: html`${body}
+      ${retry ? html`<button type="button" class="wide" id="retry">Try Again</button>` : ''}
+      <button type="button" class="wide secondary" id="signout2">Use a Different Account</button>`,
+  });
+  root.querySelector('#retry')?.addEventListener('click', () => { accountCheck = null; route(); });
+  root.querySelector('#signout2').addEventListener('click', () => sb.auth.signOut());
+}
+
+/** Show only the tabs this account can use. */
+function setTabs(a) {
+  const hotel = a.staff && a.active;
+  const show = {
+    admin: a.super_admin,
+    tables: hotel && feat('tables'),
+    rooms: hotel && feat('rooms'),
+    bills: hotel,
+    trending: hotel && feat('tables') && feat('trending'),
+    menu: hotel && feat('tables'),
+    settings: hotel,
+  };
+  document.querySelectorAll('[data-tab]').forEach((t) => { t.hidden = !show[t.dataset.tab]; });
+}
 
 async function route() {
   const token = ++renderToken;
   document.body.classList.remove('sheet-open');
   if (!session) return signInView();
   if (recoveringPassword) return authViews.newPassword();
-  staffCheck ??= sb.rpc('is_staff').then((r) => r.data === true);
-  if (!(await staffCheck)) {
-    staffCheck = null;
-    document.body.classList.add('signed-out');
-    const { root } = authScreen({
-      iconName: 'lock',
+  try {
+    account = await getAccount();
+  } catch (err) {
+    if (token !== renderToken) return;
+    return blockedScreen({ iconName: 'lock', title: 'Can’t connect', body: html`<p class="auth-text">${friendly(err)}</p>` });
+  }
+  if (token !== renderToken) return;
+  if (!account.super_admin && !account.staff) {
+    accountCheck = null;
+    return blockedScreen({
       title: 'Waiting for access',
-      subtitle: '',
-      body: html`
-        <p class="auth-text"><strong>${session.user.email}</strong> isn’t on the staff list yet. Ask the owner to add this email in
-          Settings → Staff, then tap Try Again.</p>
-        <button type="button" class="wide" id="retry">Try Again</button>
-        <button type="button" class="wide secondary" id="signout2">Use a Different Account</button>`,
+      body: html`<p class="auth-text"><strong>${session.user.email}</strong> isn’t on the staff list yet. Ask the owner to add this email in
+        Settings → Staff, then tap Try Again.</p>`,
     });
-    root.querySelector('#retry').onclick = () => route();
-    document.getElementById('signout2').onclick = () => sb.auth.signOut();
-    return;
+  }
+  if (!account.super_admin && !account.active) {
+    accountCheck = null;
+    return blockedScreen({
+      iconName: 'pause',
+      title: 'Service paused',
+      body: html`<p class="auth-text">Billing for <strong>${account.hotel}</strong> is paused right now.
+        ${account.paused_reason ? html`<br>Reason: “${account.paused_reason}”` : ''}</p>
+        <p class="auth-text">Please contact Techyverve to turn it back on. Your bills and menu are safe.</p>`,
+    });
   }
   document.body.classList.remove('signed-out');
+  document.body.classList.toggle('super-admin', account.super_admin);
   document.getElementById('who').textContent = session.user.email;
-  const path = location.hash.replace(/^#/, '') || '/';
-  for (const [re, view, tab] of routes) {
+  document.getElementById('brand').textContent = account.staff ? account.hotel : 'Super Admin';
+  setTabs(account);
+  const hotel = account.staff && account.active;
+  let path = location.hash.replace(/^#/, '') || '/';
+  // Pick a sensible home screen: the admin console, or Rooms for a hotel without tables.
+  if (path === '/' && (!hotel || (!feat('tables') && feat('rooms')))) {
+    path = hotel ? '/rooms' : '/admin';
+    history.replaceState(null, '', `#${path}`);
+  }
+  const list = [...(account.super_admin ? adminRoutes : []), ...(hotel ? routes : [])];
+  for (const [re, view, tab, feature] of list) {
     const m = path.match(re);
     if (!m) continue;
     document.querySelectorAll('[data-tab]').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+    if (feature && !feat(feature)) {
+      setHTML($view, html`<div class="card empty"><span class="emoji" aria-hidden="true">🔒</span>This part of the app isn’t turned on for your hotel.
+        Contact Techyverve to add it.<br><br><a href="#/bills">Go to Bills</a></div>`);
+      return;
+    }
     // Show placeholders only if loading takes a moment, so fast screens don't flash.
     const placeholder = setTimeout(() => {
       if (token === renderToken) setHTML($view, html`<div class="skeleton" aria-label="Loading"><div class="bar"></div><div class="block"></div>
@@ -1471,11 +2100,11 @@ async function route() {
       if (token === renderToken) window.scrollTo(0, 0);
     } catch (err) {
       clearTimeout(placeholder);
-      if (token === renderToken) setHTML($view, html`<div class="card empty">${friendly(err)}<br><br><a href="#/">Back to Tables</a></div>`);
+      if (token === renderToken) setHTML($view, html`<div class="card empty">${friendly(err)}<br><br><a href="#/">Back to start</a></div>`);
     }
     return;
   }
-  setHTML($view, html`<div class="card empty">Page not found. <a href="#/">Back to Tables</a></div>`);
+  setHTML($view, html`<div class="card empty">Page not found. <a href="#/">Back to start</a></div>`);
 }
 
 document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
@@ -1483,11 +2112,10 @@ window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
   session = s;
-  if (changed) { staffCheck = null; ownerCheck = null; }
+  if (changed) { accountCheck = null; account = null; }
   if (event === 'PASSWORD_RECOVERY') { recoveringPassword = true; setTimeout(route, 0); return; }
   if (event === 'SIGNED_OUT') { recoveringPassword = false; lastEmail = ''; }
   // Defer: calling Supabase from inside this callback can deadlock the auth client.
   if (changed || event === 'INITIAL_SESSION') setTimeout(route, 0);
 });
-// Show the restaurant name in the top bar once signed in.
-sb.auth.getSession().then(({ data }) => data.session && getSettings().then((s) => { document.getElementById('brand').textContent = s.hotel_name; }).catch(() => {}));
+

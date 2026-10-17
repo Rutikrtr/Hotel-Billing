@@ -49,3 +49,9 @@ export function orderBill(order, items, taxRateBp) {
     taxRateBp,
   });
 }
+
+/** Nights between two YYYY-MM-DD dates; a same-day stay counts as one night. */
+export function nightsBetween(checkIn, checkOut) {
+  const days = Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000);
+  return Math.max(days, 1);
+}

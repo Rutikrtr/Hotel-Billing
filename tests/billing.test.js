@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toPaise, fmt, plain, percentOf, computeBill, orderBill } from '../public/billing.js';
+import { toPaise, fmt, plain, percentOf, computeBill, orderBill, nightsBetween } from '../public/billing.js';
 
 test('toPaise parses amounts', () => {
   assert.equal(toPaise('1500'), 150000);
@@ -54,4 +54,10 @@ test('orderBill maps rows', () => {
   const bill = orderBill({ discount: 1000 }, [{ name: 'Tea', quantity: 2, unit_price: 2000 }], 0);
   assert.equal(bill.total, 3000);
   assert.equal(bill.lines[0].name, 'Tea');
+});
+
+test('nights between dates', () => {
+  assert.equal(nightsBetween('2026-10-17', '2026-10-19'), 2);
+  assert.equal(nightsBetween('2026-10-17', '2026-10-17'), 1);
+  assert.equal(nightsBetween('2026-10-31', '2026-11-01'), 1);
 });

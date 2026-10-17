@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "start": "npx --yes serve@14.2.4 public"
+    "config": "node scripts/write-config.mjs",
+    "start": "node scripts/write-config.mjs && npx --yes serve@14.2.4 public"
   }
 }

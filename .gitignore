@@ -4,3 +4,5 @@ __pycache__/
 node_modules/
 .netlify
 hotel-billing-site.zip
+.env
+public/config.js

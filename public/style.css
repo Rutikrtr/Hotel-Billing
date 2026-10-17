@@ -531,3 +531,45 @@ dialog.tall { max-height: 92vh; max-height: 92dvh; overflow-y: auto; }
 .cat-name { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }
 .cat-value { font-weight: 800; font-variant-numeric: tabular-nums; font-size: 14.5px; }
 @media (max-width: 359px) { .tab { font-size: 10.5px; } .tab svg { padding: 3px 10px; } }
+
+/* Rooms */
+button.table-tile { font: inherit; font-weight: 400; text-align: left; align-items: stretch; white-space: normal; width: 100%; }
+.charge-form { display: grid; grid-template-columns: minmax(0, 2fr) minmax(56px, 0.6fr) minmax(70px, 1fr) auto; gap: 8px; margin-top: 12px; }
+@media (max-width: 420px) { .charge-form { grid-template-columns: 1fr 1fr; } .charge-form > :first-child, .charge-form > button { grid-column: 1 / -1; } }
+input[type=date] { min-width: 0; -webkit-appearance: none; appearance: none; }
+.row > label { min-width: 0; }
+button.room-edit { justify-content: flex-start; gap: 8px; color: var(--text); padding: 0; min-height: 44px; font-weight: 400; white-space: normal; text-align: left; }
+button.room-edit strong { font-weight: 800; }
+
+/* Super admin */
+.admin-search { display: block; margin: 0 0 16px; }
+.hotel-list { display: grid; gap: 16px; }
+@media (min-width: 900px) { .hotel-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.hotel-card { display: grid; gap: 14px; align-content: start; }
+.hotel-card.paused { border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.hotel-top { display: flex; gap: 12px; align-items: flex-start; }
+.hotel-top .grow { flex: 1; min-width: 0; }
+.hotel-top h2 { margin: 0; overflow-wrap: anywhere; }
+.hotel-top .small { margin: 2px 0 0; }
+.status-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+.status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status-pill.on { color: var(--free); background: var(--free-soft); }
+.status-pill.off { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--surface)); }
+.pause-reason { margin: -6px 0 0; font-size: 14px; color: var(--danger); font-weight: 600; }
+.hotel-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hotel-stats div { background: var(--surface-2); border-radius: 12px; padding: 8px 10px; }
+.hotel-stats strong { display: block; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.hotel-stats span { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.feature-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.feature-chip { font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 999px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); }
+.feature-chip.on { color: var(--free); background: var(--free-soft); border-color: transparent; }
+.hotel-meta { margin: 0; overflow-wrap: anywhere; }
+.hotel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.hotel-actions button { min-height: 44px; padding: 0 14px; font-size: 14.5px; flex: 1 1 auto; }
+.feature-picks { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; }
+.feature-picks legend { font-size: 14px; font-weight: 700; color: var(--muted); margin-bottom: 8px; padding: 0; }
+.feature-pick { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; background: var(--surface); }
+.feature-pick:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.feature-pick input { width: 22px; height: 22px; min-height: 0; padding: 0; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.feature-pick > span { display: grid; gap: 2px; }
+.feature-pick strong { font-size: 15.5px; color: var(--text); }

@@ -39,6 +39,24 @@ The design follows Apple's Human Interface Guidelines using the `apple-design` s
 
 Each owner account runs its own restaurant, with its own menu, tables, bills, bill numbers, settings and staff. Accounts never see another restaurant's data. Staff the owner adds in Settings join that owner's restaurant.
 
+## Super admin
+
+A super admin (Techyverve) signs in like anyone else and lands on **Hotels** (`#/admin`), where they can:
+
+- create a hotel together with its owner login (email + password), starting tables and rooms;
+- tick which parts each hotel gets: **Tables & Orders**, **Rooms**, **Trending**, **Edit Bills**;
+- pause a hotel's service with a reason (its staff see a "Service paused" screen; data is kept) and resume it;
+- reset an owner's password, or permanently delete a hotel after typing its name.
+
+Super admins are rows in `public.super_admins`; to add one, insert the user's id there. Feature switches and the
+paused state are enforced in the database (`has_feature()`, `my_restaurant()`), not just hidden in the app.
+
+## Rooms
+
+When the Rooms feature is on, the **Rooms** tab shows every room as free or occupied. Tap a free room to check a guest in,
+add extra charges (food, laundry…), adjust dates, rate or discount, then **Check Out** to take payment. Room bills are
+numbered `R00001…` and appear in Bills with the food bills. Rooms are managed in Settings.
+
 ## Security
 
 Every table has row-level security, so only signed-in staff can read or write data. A settled bill can't be edited, and only the `settle_order()` database function can close an order. The schema is in `supabase/migrations/`.
@@ -46,14 +64,27 @@ Every table has row-level security, so only signed-in staff can read or write da
 ## Files
 
 ```
-public/            static site served by Netlify (no build step)
+public/            static site served by Netlify
   app.js           screens and routing; talks to Supabase with supabase-js
   billing.js       bill maths (GST, discount, round off)
-  config.js        Supabase URL + publishable key (safe to be public)
+  config.js        generated from environment variables (not committed)
   style.css        design tokens, layout, receipt print styles
+scripts/write-config.mjs  writes public/config.js from SUPABASE_URL + SUPABASE_PUBLISHABLE_KEY
 supabase/migrations/
 tests/             unit tests for billing.js
 ```
+
+## Configuration
+
+The Supabase project is set only through environment variables; nothing is hardcoded:
+
+| Variable | Where to find it |
+|---|---|
+| `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → publishable key (never the secret key) |
+
+On Netlify they live in **Site configuration → Environment variables**; the build (`node scripts/write-config.mjs`)
+turns them into `public/config.js` and fails loudly if one is missing. Locally, copy `.env.example` to `.env`.
 
 ## Deploying
 
@@ -64,6 +95,7 @@ On Netlify's free plan, a private repo only builds commits from the one Git acco
 ## Local development
 
 ```bash
-npm start   # serves public/ at http://localhost:3000
+cp .env.example .env   # then fill in the two values
+npm start   # writes public/config.js and serves public/ at http://localhost:3000
 npm test
 ```
