@@ -1,6 +1,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
+import { Slip, bluetoothSupported, connectBluetooth, directPrinting, forgetBluetooth, getPrinter, paperWidth, printSlips, setPrinter } from './printer.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 const METHODS = ['Cash', 'UPI', 'Card'];
@@ -396,7 +397,8 @@ async function tablesView(token) {
       ${account.role === 'owner' ? '' : html`<p class="muted">${loginName(session.user.email)} · ${account.role === 'manager' ? 'Manager' : 'Waiter'}</p>`}</div>
       <div class="head-actions">
         ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
-        ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
+        ${canBill ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>
+          <a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
       </div>
     </div>
     ${parcels.length ? html`
@@ -444,6 +446,7 @@ async function tablesView(token) {
     </div>
     ${tables.length && !visible.length ? html`<div class="card empty">${tableFilter === 'free' ? 'Every table is busy right now.' : 'No tables are running right now.'}</div>` : ''}`);
   root.querySelector('#signout-head')?.addEventListener('click', () => sb.auth.signOut());
+  root.querySelector('#printer-head')?.addEventListener('click', printerDialog);
   root.addEventListener('click', (e) => {
     const f = e.target.closest('[data-filter]');
     if (!f) return;
@@ -711,9 +714,24 @@ async function tableView(token, tableId, sectionArg, parcelId) {
         location.hash = '#/';
       });
     } else if (t.id === 'print-bill') {
+      warmPrinter();
       act(t, async () => {
         await queue;
         document.body.classList.remove('sheet-open');
+        if (directPrinting()) {
+          // Straight to the Bluetooth / RawBT printer: no popup, no bill screen.
+          const done = settings.quick_close !== false;
+          const billNo = await q(sb.rpc(done ? 'settle_order' : 'generate_bill', done ? { p_order_id: state.order.id, p_method: 'Cash' } : { p_order_id: state.order.id }));
+          try {
+            await printOrderDirect(state.order.id);
+          } catch (err) {
+            toast(`Bill ${billNo} saved, but printing failed: ${friendly(err)}`, 'error');
+            location.hash = `#/bill/${state.order.id}`;
+            return;
+          }
+          location.hash = done ? '#/' : `#/bill/${state.order.id}`;
+          return;
+        }
         if (settings.quick_close !== false) {
           // No separate payment step: the bill is created and the table is freed at once.
           const billNo = await q(sb.rpc('settle_order', { p_order_id: state.order.id, p_method: 'Cash' }));
@@ -778,6 +796,139 @@ async function tableView(token, tableId, sectionArg, parcelId) {
   render();
 }
 
+// ---------- Direct printing (Bluetooth / RawBT) ----------
+
+/** Shop name, address and phone at the top of a slip. */
+function slipHeader(slip, settings, rate) {
+  slip.align('center').bold(true).size(2, 2).wrap(settings.hotel_name, Math.floor(slip.width / 2)).size(1, 1).bold(false);
+  if (settings.hotel_address) slip.wrap(settings.hotel_address);
+  if (settings.hotel_phone) slip.line(`Ph: ${settings.hotel_phone}`);
+  if (settings.hotel_gstin && rate > 0) slip.line(`GSTIN: ${settings.hotel_gstin}`);
+  return slip.align('left').rule();
+}
+/** Item lines and totals, shared by food and room bills. */
+function slipBody(slip, lines, b, rate) {
+  for (const l of lines) {
+    slip.bold(true).wrap(l.name).bold(false);
+    slip.cols(`  ${l.quantity} x ${fmt(l.unitPrice)}`, fmt(l.quantity * l.unitPrice));
+  }
+  slip.rule().cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
+  if (b.discount) slip.cols('Discount', `-${fmt(b.discount)}`);
+  if (b.tax) slip.cols(`CGST @ ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST @ ${pct(rate / 2)}`, fmt(b.sgst));
+  if (b.roundOff) slip.cols('Round off', fmt(b.roundOff));
+  slip.rule().bold(true).size(1, 2).cols('TOTAL', `Rs.${fmt(b.total)}`).size(1, 1).bold(false).rule();
+  return slip;
+}
+
+/** Customer bill, plus a kitchen copy for parcels. */
+function orderSlips(order, settings) {
+  const rate = order.status === 'paid' ? order.tax_rate_bp ?? 0 : settings.tax_rate_bp;
+  const b = orderBill(order, order.order_items, rate);
+  const when = dateTime(order.closed_at ?? order.billed_at ?? new Date().toISOString());
+  const bill = slipHeader(new Slip(paperWidth()), settings, rate);
+  if (order.is_parcel && order.bill_no) {
+    bill.align('center').bold(true).line('PARCEL - BILL NO.').size(3, 3).line(tokenNo(order.bill_no)).size(1, 1).bold(false).align('left').rule();
+  }
+  bill.cols(order.bill_no ? `Bill: ${order.bill_no}` : 'Bill', order.is_parcel ? 'Parcel' : `Table: ${orderLabel(order)}`);
+  bill.cols(when, order.status === 'paid' ? order.payment_method ?? '' : '').rule();
+  slipBody(bill, b.lines, b, rate).align('center').line('Thank you! Visit again.').cut();
+  if (!order.is_parcel || !order.bill_no) return [bill];
+  const kot = new Slip(paperWidth());
+  kot.align('center').bold(true).line('KITCHEN - PARCEL').rule().line('BILL NO.').size(3, 3).line(tokenNo(order.bill_no)).size(1, 1)
+    .bold(false).line(`${order.bill_no}  ${time(order.billed_at ?? order.closed_at ?? new Date().toISOString())}`).align('left').rule();
+  for (const i of order.order_items) kot.bold(true).size(1, 2).wrap(`${i.quantity} x ${i.name}`).size(1, 1).bold(false);
+  kot.rule().align('center').line(`${b.itemCount} items - pack for takeaway`).cut();
+  return [bill, kot];
+}
+
+function staySlips(stay, settings) {
+  const rate = stay.status === 'paid' ? stay.tax_rate_bp ?? 0 : settings.tax_rate_bp;
+  const b = stayBill(stay, rate);
+  const slip = slipHeader(new Slip(paperWidth()), settings, rate);
+  slip.cols(stay.bill_no ? `Bill: ${stay.bill_no}` : 'Room bill', `Room: ${stay.lodging_rooms.number}`)
+    .cols(`Guest: ${stay.guest_name}`, stay.guest_phone || '')
+    .cols(`${shortDate(stay.check_in)} - ${shortDate(stay.check_out)}`, `${b.nights} night${b.nights === 1 ? '' : 's'}`);
+  if (stay.status === 'paid') slip.cols(dateTime(stay.closed_at), stay.payment_method);
+  slip.rule();
+  return [slipBody(slip, b.lines, b, rate).align('center').line('Thank you for staying with us!').cut()];
+}
+
+/** Print an order straight to the printer. Call from a tap so a first-time Bluetooth connection can ask. */
+async function printOrderDirect(orderId) {
+  const [order, settings] = await Promise.all([
+    q(sb.from('orders').select('*, dining_tables(name), order_items(*)').eq('id', orderId).order('id', { referencedTable: 'order_items' }).single()),
+    getSettings(),
+  ]);
+  const slips = orderSlips(order, settings);
+  await printSlips(slips, { pick: true });
+  toast(slips.length > 1 ? `Printed bill and kitchen copy · #${tokenNo(order.bill_no)}` : `Printed bill ${order.bill_no ?? ''}`);
+}
+
+/** Start the Bluetooth connection inside the tap, before any network call uses up the tap. */
+function warmPrinter() {
+  if (getPrinter().method === 'bluetooth') connectBluetooth(true).catch(() => {});
+}
+
+/** Printer setup for this phone: phone print dialog, Bluetooth printer or the RawBT app. */
+function printerDialog() {
+  const dialog = document.createElement('dialog');
+  dialog.className = 'tall';
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  const draw = (status = '') => {
+    const p = getPrinter();
+    setHTML(dialog, html`
+      <form class="dialog-body" novalidate>
+        <h2 style="margin:0">🖨️ Printer</h2>
+        <p class="hint">Saved on this phone only. Each phone that prints sets this once.</p>
+        <div class="auth-alert" role="status" ${status ? '' : new Raw('hidden')}>${status}</div>
+        <fieldset class="feature-picks">
+          <legend>How should bills print?</legend>
+          <label class="feature-pick"><input type="radio" name="method" value="bluetooth" ${p.method === 'bluetooth' ? new Raw('checked') : ''}>
+            <span><strong>Bluetooth printer (direct)</strong><span class="small">Prints at once, no popup. Chrome on Android. Works with most Bluetooth receipt printers.${bluetoothSupported() ? '' : ' Not available in this browser.'}</span></span></label>
+          <label class="feature-pick"><input type="radio" name="method" value="rawbt" ${p.method === 'rawbt' ? new Raw('checked') : ''}>
+            <span><strong>RawBT app</strong><span class="small">For printers the browser can’t find. Install the free “RawBT” app from Play Store and pick your printer there once.</span></span></label>
+          <label class="feature-pick"><input type="radio" name="method" value="dialog" ${p.method === 'dialog' ? new Raw('checked') : ''}>
+            <span><strong>Phone print dialog</strong><span class="small">The normal popup. For Wi-Fi printers, PDF or computers.</span></span></label>
+        </fieldset>
+        <fieldset class="segmented" style="border:0;margin:0" aria-label="Paper width">
+          <label><input type="radio" name="paper" value="58" ${p.paper !== 80 ? new Raw('checked') : ''}><span>58 mm (2 inch)</span></label>
+          <label><input type="radio" name="paper" value="80" ${p.paper === 80 ? new Raw('checked') : ''}><span>80 mm (3 inch)</span></label>
+        </fieldset>
+        ${p.method === 'bluetooth' ? html`<div class="printer-status">
+          <span>${p.btName ? html`Printer: <strong>${p.btName}</strong>` : 'No printer chosen yet'}</span>
+          <span><button type="button" class="secondary" data-connect>${p.btName ? 'Change' : 'Choose Printer'}</button>
+          ${p.btName ? html`<button type="button" class="destructive" data-forget>Forget</button>` : ''}</span></div>` : ''}
+        ${p.method !== 'dialog' ? html`<button type="button" class="secondary wide" data-test>Print Test Slip</button>` : ''}
+        <button type="button" class="wide" data-done>Done</button>
+      </form>`);
+  };
+  dialog.addEventListener('change', (e) => {
+    if (e.target.name === 'method') setPrinter({ method: e.target.value });
+    if (e.target.name === 'paper') setPrinter({ paper: Number(e.target.value) });
+    draw();
+  });
+  dialog.addEventListener('click', async (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.done !== undefined) return close();
+    if (t.dataset.forget !== undefined) { forgetBluetooth(); return draw('Printer forgotten.'); }
+    if (t.dataset.connect !== undefined) {
+      forgetBluetooth();
+      try { const name = await connectBluetooth(true); draw(`Connected to ${name}. Tap Print Test Slip to check.`); } catch (err) { draw(friendly(err)); }
+    }
+    if (t.dataset.test !== undefined) {
+      const slip = new Slip(paperWidth());
+      slip.align('center').bold(true).size(2, 2).line('Hotel Billing').size(1, 1).bold(false)
+        .line('Printer is working').line(dateTime(new Date().toISOString())).rule().line('1234567890'.repeat(5).slice(0, slip.width)).cut();
+      try { await printSlips([slip], { pick: true }); draw('Test slip sent. If nothing printed, try the other paper width or RawBT.'); } catch (err) { draw(friendly(err)); }
+    }
+  });
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  draw();
+  dialog.showModal();
+}
+
 // ---------- Bill / receipt ----------
 
 async function billView(token, orderId, autoPrint) {
@@ -800,10 +951,12 @@ async function billView(token, orderId, autoPrint) {
         ${paid
           ? html`<a class="button secondary" href="#/bills">All Bills</a>
                  <button type="button" class="secondary" id="print">Print</button>
+                 <button type="button" class="secondary" id="printer-setup" aria-label="Printer setup">🖨️</button>
                  ${owner && feat('bill_edit') ? html`<button type="button" class="secondary" id="edit-bill">Edit Bill</button>
                    <button type="button" class="secondary danger-outline" id="delete-bill">Delete</button>` : html`<a class="button secondary" href="#/">Tables</a>`}`
           : html`<a class="button secondary" href="${order.is_parcel ? `#/parcel/${order.id}` : `#/table/${order.table_id}/${order.section}`}">Add Items</a>
                  <button type="button" class="secondary" id="print">Print Again</button>
+                 <button type="button" class="secondary" id="printer-setup" aria-label="Printer setup">🖨️</button>
                  <button type="button" id="pay">Receive Payment</button>`}
       </div>
       ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}${order.edit_count ? html` · <span class="edited-tag">Edited ${order.edit_count}×</span>` : ''}</p>`
@@ -857,7 +1010,11 @@ async function billView(token, orderId, autoPrint) {
         <div class="list">${history.map(logRow)}</div>
       </section>` : ''}
     </div>`);
-  document.getElementById('print').addEventListener('click', () => window.print());
+  document.getElementById('print').addEventListener('click', (e) => {
+    if (!directPrinting()) return window.print();
+    act(e.currentTarget, () => printOrderDirect(order.id));
+  });
+  document.getElementById('printer-setup')?.addEventListener('click', printerDialog);
   document.getElementById('edit-bill')?.addEventListener('click', () => editBill(order, rate));
   document.getElementById('delete-bill')?.addEventListener('click', () => deleteBill(order, b.total));
   document.getElementById('pay')?.addEventListener('click', async () => {
@@ -866,7 +1023,8 @@ async function billView(token, orderId, autoPrint) {
   });
   if (autoPrint) {
     window.history.replaceState(null, '', `#/bill/${order.id}`);
-    setTimeout(() => window.print(), 300);
+    if (directPrinting()) printOrderDirect(order.id).catch((err) => toast(`${friendly(err)} Tap Print to try again.`, 'error'));
+    else setTimeout(() => window.print(), 300);
   }
 }
 
@@ -1799,9 +1957,12 @@ async function stayView(token, stayId, autoPrint) {
         <p class="paid-note no-print">Paid by ${stay.payment_method} · ${dateTime(stay.closed_at)}</p>
         ${receipt}
       </div>`);
-    document.getElementById('print').addEventListener('click', () => window.print());
+    document.getElementById('print').addEventListener('click', (e) => {
+      if (!directPrinting()) return window.print();
+      act(e.currentTarget, async () => { await printSlips(staySlips(stay, settings), { pick: true }); toast(`Printed ${stay.bill_no}`); });
+    });
     if (autoPrint) {
-      history.replaceState(null, '', `#/stay/${stay.id}`);
+      window.history.replaceState(null, '', `#/stay/${stay.id}`);
       setTimeout(() => window.print(), 300);
     }
     return;
@@ -1863,7 +2024,10 @@ async function stayView(token, stayId, autoPrint) {
     form.reset();
     stayView(renderToken, stayId);
   });
-  document.getElementById('print').addEventListener('click', () => window.print());
+  document.getElementById('print').addEventListener('click', (e) => {
+    if (!directPrinting()) return window.print();
+    act(e.currentTarget, async () => { await printSlips(staySlips(stay, settings), { pick: true }); toast('Printed'); });
+  });
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;

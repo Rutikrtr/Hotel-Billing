@@ -61,6 +61,18 @@ settings stay with the owner, and the database enforces all of this (`can_bill()
 **New Parcel** (Tables screen) takes a takeaway order without a table. Print Bill prints two slips: the
 customer's bill and a kitchen copy, both with the bill number in large type (B00046 → **46**) to call out.
 
+## Printing
+
+Tap 🖨️ (Tables screen or any bill) to choose how this phone prints. The choice is saved on the phone:
+
+- **Bluetooth printer (direct)**: Chrome on Android sends the bill straight to a Bluetooth receipt printer
+  (ESC/POS, Bluetooth Low Energy), with no popup. Choose the printer once; Print Bill then prints immediately.
+- **RawBT app**: for printers the browser can't reach (classic Bluetooth only). The app hands the bill to the
+  free RawBT app, which prints it.
+- **Phone print dialog**: the normal popup, for Wi-Fi printers, PDF or computers.
+
+Paper width 58 mm (32 characters) or 80 mm (48 characters). Code: `public/printer.js`.
+
 ## Rooms
 
 When the Rooms feature is on, the **Rooms** tab shows every room as free or occupied. Tap a free room to check a guest in,

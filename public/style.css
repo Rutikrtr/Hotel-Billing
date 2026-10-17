@@ -593,3 +593,7 @@ button.room-edit strong { font-weight: 800; }
 .cred-box span { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .cred-box strong { font-family: var(--mono); font-size: 16px; overflow-wrap: anywhere; }
 .order-actions .wide-action { grid-column: 1 / -1; }
+
+/* Printer setup */
+.printer-status { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.printer-status button { min-height: 40px; }
