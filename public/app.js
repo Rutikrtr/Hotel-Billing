@@ -392,6 +392,7 @@ async function tablesView(token) {
       ${account.role === 'owner' ? '' : html`<p class="muted">${loginName(session.user.email)} · ${account.role === 'manager' ? 'Manager' : 'Waiter'}</p>`}</div>
       <div class="head-actions">
         <button type="button" class="secondary" data-install hidden>📲 Install App</button>
+        ${feat('qr_menu') ? html`<button type="button" class="secondary" id="qr-head">▦ QR Menu</button>` : ''}
         ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
         ${canBill ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>
           <a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
@@ -443,6 +444,7 @@ async function tablesView(token) {
     ${tables.length && !visible.length ? html`<div class="card empty">${tableFilter === 'free' ? 'Every table is busy right now.' : 'No tables are running right now.'}</div>` : ''}`);
   root.querySelector('#signout-head')?.addEventListener('click', () => sb.auth.signOut());
   root.querySelector('#printer-head')?.addEventListener('click', printerDialog);
+  root.querySelector('#qr-head')?.addEventListener('click', qrDialog);
   root.addEventListener('click', (e) => {
     const f = e.target.closest('[data-filter]');
     if (!f) return;
@@ -1867,6 +1869,41 @@ function qrSvg(qrcode, text) {
   qr.addData(text);
   qr.make();
   return qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+}
+
+/** Big QR for showing a customer at the table, with share and open. Any staff member can use it. */
+async function qrDialog() {
+  const dialog = document.createElement('dialog');
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  setHTML(dialog, html`<div class="dialog-body">
+    <h2 style="margin:0">▦ Scan for Menu</h2>
+    <div class="qr-box big" id="qr-dlg-box"><div class="skeleton"><div class="block"></div></div></div>
+    <p class="hint" style="text-align:center">Customer opens the phone camera and points it at this code.</p>
+    <div class="hotel-actions">
+      <button type="button" id="qr-dlg-share">Share Link</button>
+      <a class="button secondary" id="qr-dlg-open" target="_blank" rel="noopener">Open Menu</a>
+    </div>
+    <button type="button" class="secondary wide" data-cancel>Close</button>
+  </div>`);
+  dialog.querySelector('[data-cancel]').addEventListener('click', close);
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });
+  dialog.showModal();
+  const box = dialog.querySelector('#qr-dlg-box');
+  try {
+    const token = await q(sb.rpc('my_menu_token'));
+    if (!token) { box.textContent = 'The QR menu is switched off for this hotel.'; return; }
+    const url = menuUrl(token);
+    box.innerHTML = qrSvg(await loadQr(), url);
+    dialog.querySelector('#qr-dlg-open').href = url;
+    dialog.querySelector('#qr-dlg-share').addEventListener('click', async () => {
+      try {
+        if (navigator.share) await navigator.share({ title: `${account.hotel} menu`, url });
+        else { await navigator.clipboard.writeText(url); toast('Menu link copied'); }
+      } catch { /* cancelled */ }
+    });
+  } catch (err) { box.textContent = friendly(err); }
 }
 
 async function setupQrCard(root, settings) {
