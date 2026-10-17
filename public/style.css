@@ -626,3 +626,4 @@ button.room-edit strong { font-weight: 800; }
 .qr-box .skeleton { width: 100%; height: 100%; }
 .qr-link { text-align: center; overflow-wrap: anywhere; margin: 10px 0 12px; }
 .hotel-actions a.button { min-height: 44px; padding: 0 14px; font-size: 14.5px; flex: 1 1 auto; }
+.login-id { font-family: var(--mono); font-weight: 700; color: var(--text); }

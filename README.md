@@ -53,9 +53,10 @@ paused state are enforced in the database (`has_feature()`, `my_restaurant()`), 
 
 ## Staff and parcels
 
-The owner creates staff logins in **Settings → Staff Logins**: a Login ID (like `ramesh`) and a password, as
+The owner creates staff logins in **Settings → Staff Logins** by typing the person's name: the system makes a Login
+ID that is unique across all hotels (first name + hotel code + number, e.g. `ramesh.nt42`) and suggests a password, as
 **Waiter** (only adds dishes to tables) or **Manager** (also prints bills, takes parcels and payments, sees Bills,
-Trending and Rooms). Staff sign in with their Login ID; it is stored as `ramesh@staff.login`. Menu, tables and
+Trending and Rooms). Staff sign in with their Login ID; it is stored as `ramesh.nt42@staff.login` (`owner_add_staff()`). Menu, tables and
 settings stay with the owner, and the database enforces all of this (`can_bill()`, `is_owner()`).
 
 **New Parcel** (Tables screen) takes a takeaway order without a table. Print Bill prints two slips: the

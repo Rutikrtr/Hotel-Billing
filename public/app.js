@@ -216,6 +216,11 @@ const emailField = (autofocus = true, loginId = false) => html`
 const STAFF_DOMAIN = '@staff.login';
 const loginEmail = (v) => { const t = v.trim().toLowerCase(); return t.includes('@') ? t : t + STAFF_DOMAIN; };
 const ROLE_NAMES = { owner: 'Owner', manager: 'Manager', staff: 'Waiter' };
+/** Easy-to-read password: no 0/O, 1/l/I. */
+function newPassword(length = 8) {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from(crypto.getRandomValues(new Uint32Array(length)), (n) => chars[n % chars.length]).join('');
+}
 const loginName = (email) => (email?.endsWith(STAFF_DOMAIN) ? email.slice(0, -STAFF_DOMAIN.length) : email);
 
 const authViews = {
@@ -1634,8 +1639,8 @@ async function settingsView(token) {
           <p class="small" style="margin-top:-6px"><strong>Waiter</strong>: only adds dishes to tables. <strong>Manager</strong>: also prints bills, takes parcels and payments, sees Bills.</p>
           <div class="list" style="box-shadow:none">${staff.map((m) => html`
             <div class="list-row staff-row">
-              <span class="grow"><strong>${loginName(m.email)}</strong>
-                <div class="sub">${ROLE_NAMES[m.role] ?? m.role} · ${m.user_id ? (m.email.endsWith(STAFF_DOMAIN) ? 'Login ID' : 'Email login') : 'Hasn’t signed up yet'}</div></span>
+              <span class="grow"><strong>${m.display_name || loginName(m.email)}</strong>
+                <div class="sub">${ROLE_NAMES[m.role] ?? m.role} · ${m.email.endsWith(STAFF_DOMAIN) ? html`Login ID <span class="login-id">${loginName(m.email)}</span>` : m.email}</div></span>
               ${isOwner && m.role !== 'owner' ? html`<span class="staff-actions">
                 <button type="button" class="plain" data-role-staff="${m.email}">${m.role === 'manager' ? 'Make Waiter' : 'Make Manager'}</button>
                 <button type="button" class="plain" data-reset-staff="${m.email}">Password</button>
@@ -1678,32 +1683,42 @@ async function settingsView(token) {
       <form class="dialog-body" novalidate>
         <h2 style="margin:0">Add Staff Login</h2>
         <div class="auth-alert error" role="alert" hidden></div>
-        <label>Login ID <input name="login" required maxlength="60" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="e.g. ramesh"></label>
-        <label>Password <input name="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters"></label>
+        <label>Staff name <input name="name" required maxlength="40" autocomplete="off" placeholder="e.g. Ramesh Patil"></label>
+        <div class="field">
+          <label for="staff-pass">Password</label>
+          <div class="password-wrap">
+            <input id="staff-pass" name="password" required minlength="6" autocomplete="new-password" value="${newPassword()}" spellcheck="false">
+            <button type="button" class="reveal" data-new-pass aria-label="Make a new password">New</button>
+          </div>
+          <p class="hint">Made for you; you can type your own (6+ characters).</p>
+        </div>
         <fieldset class="segmented" style="border:0;margin:0" aria-label="Role">
           <label><input type="radio" name="role" value="staff" checked><span>Waiter</span></label>
           <label><input type="radio" name="role" value="manager"><span>Manager</span></label>
         </fieldset>
-        <p class="hint">Waiter only adds dishes to tables. Manager can also print bills, take parcels and payments. You can also type an email instead of a Login ID.</p>
+        <p class="hint">The Login ID is made automatically and is unique, like <strong>ramesh.nt42</strong>. Waiter only adds dishes to tables; Manager can also print bills, take parcels and payments.</p>
         <button type="submit" class="wide">Create Login</button>
         <button type="button" class="secondary wide" data-cancel>Cancel</button>
       </form>`);
     dialog.querySelector('[data-cancel]').addEventListener('click', close);
+    dialog.querySelector('[data-new-pass]').addEventListener('click', () => { dialog.querySelector('[name=password]').value = newPassword(); });
     dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
     dialog.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       const alertBox = dialog.querySelector('[role=alert]');
+      if (!f.name.trim()) { alertBox.textContent = 'Enter the staff member’s name.'; alertBox.hidden = false; return; }
+      if (f.password.length < 6) { alertBox.textContent = 'The password needs at least 6 characters.'; alertBox.hidden = false; return; }
       const btn = e.target.querySelector('button[type=submit]');
       btn.disabled = true;
-      const { data, error } = await sb.rpc('owner_create_staff', { p_login: f.login, p_password: f.password, p_role: f.role });
+      const { data, error } = await sb.rpc('owner_add_staff', { p_name: f.name, p_password: f.password, p_role: f.role });
       if (error) { btn.disabled = false; alertBox.textContent = friendly(error); alertBox.hidden = false; return; }
       // Show the details once so the owner can pass them on.
       const link = location.origin + location.pathname;
       setHTML(dialog, html`
         <div class="dialog-body">
           <h2 style="margin:0">Login created ✓</h2>
-          <p class="hint">Give these to your ${f.role === 'manager' ? 'manager' : 'waiter'}. They sign in at the same app link.</p>
+          <p class="hint">Give these to ${esc(f.name.trim())} (${f.role === 'manager' ? 'Manager' : 'Waiter'}). They sign in at the same app link.</p>
           <div class="cred-box">
             <div><span>App</span><strong>${link}</strong></div>
             <div><span>Login ID</span><strong>${loginName(data)}</strong></div>
@@ -1722,7 +1737,7 @@ async function settingsView(token) {
       dialog.querySelector('[data-done]').addEventListener('click', () => { close(); settingsView(renderToken); });
     });
     dialog.showModal();
-    dialog.querySelector('[name=login]').focus();
+    dialog.querySelector('[name=name]').focus();
   }
   root.querySelector('#add-staff')?.addEventListener('click', addStaff);
   if (feat('qr_menu') && isOwner) setupQrCard(root, s);
