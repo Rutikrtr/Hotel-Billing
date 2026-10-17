@@ -3,7 +3,7 @@ import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
 import {
   Slip, bluetoothRemembers, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
-  feedLines, getPrinter, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
+  feedLines, getPrinter, isApple, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
 } from './printer.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -916,13 +916,23 @@ function printerDialog() {
       <form class="dialog-body" novalidate>
         <h2 style="margin:0">🖨️ Printer</h2>
         <p class="hint">Saved on this phone only. Each phone that prints sets this once.</p>
+        ${isApple() && !bluetoothSupported() ? html`<div class="ios-tip">
+          <strong>On iPhone / iPad</strong>
+          <p>Apple doesn’t let Safari or Chrome use Bluetooth, so they can’t reach the printer. To print straight to the Bluetooth printer:</p>
+          <ol>
+            <li>Install the free app <strong>“Bluefy – Web BLE Browser”</strong> from the App Store.</li>
+            <li>Open this billing link in Bluefy and sign in.</li>
+            <li>Tap 🖨️ → <strong>Bluetooth printer (direct)</strong> → Choose Printer.</li>
+          </ol>
+          <button type="button" class="secondary wide" data-copy-link>Copy App Link</button>
+        </div>` : ''}
         <div class="auth-alert" role="status" ${status ? '' : new Raw('hidden')}>${status}</div>
         <fieldset class="feature-picks">
           <legend>How should bills print?</legend>
           <label class="feature-pick"><input type="radio" name="method" value="bluetooth" ${p.method === 'bluetooth' ? new Raw('checked') : ''}>
-            <span><strong>Bluetooth printer (direct)</strong><span class="small">Prints at once, no popup. Chrome on Android. Works with most Bluetooth receipt printers.${bluetoothSupported() ? '' : ' Not available in this browser.'}</span></span></label>
+            <span><strong>Bluetooth printer (direct)</strong><span class="small">Prints at once, no popup. Chrome on Android, or the Bluefy app on iPhone. Works with most Bluetooth receipt printers.${bluetoothSupported() ? '' : ' Not available in this browser.'}</span></span></label>
           <label class="feature-pick"><input type="radio" name="method" value="rawbt" ${p.method === 'rawbt' ? new Raw('checked') : ''}>
-            <span><strong>RawBT app</strong><span class="small">For printers the browser can’t find. Install the free “RawBT” app from Play Store and pick your printer there once.</span></span></label>
+            <span><strong>RawBT app</strong><span class="small">Android only. For printers the browser can’t find. Install the free “RawBT” app from Play Store and pick your printer there once.</span></span></label>
           <label class="feature-pick"><input type="radio" name="method" value="dialog" ${p.method === 'dialog' ? new Raw('checked') : ''}>
             <span><strong>Phone print dialog</strong><span class="small">The normal popup. For Wi-Fi printers, PDF or computers.</span></span></label>
         </fieldset>
@@ -959,6 +969,11 @@ function printerDialog() {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.done !== undefined) return close();
+    if (t.dataset.copyLink !== undefined) {
+      const link = location.href.split('#')[0];
+      try { await navigator.clipboard.writeText(link); draw('App link copied. Paste it in Bluefy’s address bar.'); } catch { draw(`App link: ${link}`); }
+      return;
+    }
     if (t.dataset.forget) { forgetBluetooth(t.dataset.forget); return draw('Printer forgotten.'); }
     if (t.dataset.choose || t.dataset.reconnect) {
       const slot = t.dataset.choose || t.dataset.reconnect;

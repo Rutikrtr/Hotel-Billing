@@ -89,6 +89,8 @@ export const paperWidth = () => (getPrinter().paper === 80 ? 48 : 32);
 export const feedLines = () => Math.min(4, Math.max(1, Number(getPrinter().feed) || 2));
 export const directPrinting = () => getPrinter().method !== 'dialog';
 export const bluetoothSupported = () => Boolean(navigator.bluetooth);
+/** iPhone / iPad (iPadOS also reports itself as a Mac with touch). */
+export const isApple = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 /** Chrome can only reconnect to a printer after the app is reopened when it can list remembered devices. */
 export const bluetoothRemembers = () => Boolean(navigator.bluetooth?.getDevices);
 /** Which printer a slip goes to: the kitchen copy uses the kitchen printer when one is set up. */
@@ -139,7 +141,11 @@ async function gattConnect(device) {
 }
 
 async function connect(slot, pick) {
-  if (!navigator.bluetooth) throw new Error('This browser can’t use Bluetooth. Open the app in Chrome on Android, or choose “RawBT app”.');
+  if (!navigator.bluetooth) {
+    throw new Error(isApple()
+      ? 'iPhone browsers (Safari, Chrome) can’t use Bluetooth. Open this app in the free “Bluefy” browser to print.'
+      : 'This browser can’t use Bluetooth. Open the app in Chrome on Android, or choose “RawBT app”.');
+  }
   const c = conn[slot];
   if (c.device && c.char && c.device.gatt.connected) return c.device.name || 'Printer';
   const saved = getPrinter()[slot];

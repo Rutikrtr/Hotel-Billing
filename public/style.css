@@ -739,3 +739,6 @@ button.room-edit strong { font-weight: 800; }
   .hotel-stats div { padding: 6px 8px; }
   .feature-chip { font-size: 12px; padding: 3px 8px; }
 }
+.ios-tip { border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; font-size: 14px; }
+.ios-tip p { margin: 0; }
+.ios-tip ol { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
