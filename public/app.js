@@ -1020,6 +1020,111 @@ async function logView(token) {
       : html`<div class="card empty"><span class="emoji" aria-hidden="true">📝</span>No changes yet. Edited and deleted bills will appear here.</div>`}`);
 }
 
+// ---------- Trending: best-selling dishes ----------
+
+const TREND_PERIODS = { today: { label: 'Today', days: 1, prev: 'yesterday' }, week: { label: '7 days', days: 7, prev: 'the 7 days before' }, month: { label: '30 days', days: 30, prev: 'the 30 days before' } };
+let trendPeriod = 'week';
+let trendSort = 'qty';
+
+async function trendingView(token) {
+  const period = TREND_PERIODS[trendPeriod];
+  // Current period and the one before it, so each dish can show whether it is rising or falling.
+  const now = new Date();
+  const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (period.days - 1));
+  const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - period.days);
+  const [orders, menu] = await Promise.all([
+    q(sb.from('orders').select('closed_at, order_items(menu_item_id, name, quantity, unit_price)').eq('status', 'paid')
+      .gte('closed_at', prevStart.toISOString())),
+    q(sb.from('menu_items').select('id, name, category, is_veg')),
+  ]);
+  if (token !== renderToken) return;
+
+  const menuById = new Map(menu.map((m) => [m.id, m]));
+  const stats = new Map();
+  for (const o of orders) {
+    const current = new Date(o.closed_at) >= start;
+    for (const i of o.order_items) {
+      const key = i.menu_item_id ?? `n:${i.name}`;
+      const m = menuById.get(i.menu_item_id);
+      const row = stats.get(key) ?? { name: m?.name ?? i.name, category: m?.category ?? 'Other', is_veg: m?.is_veg ?? true, qty: 0, revenue: 0, prevQty: 0 };
+      if (current) { row.qty += i.quantity; row.revenue += i.quantity * i.unit_price; } else row.prevQty += i.quantity;
+      stats.set(key, row);
+    }
+  }
+  const sold = [...stats.values()].filter((r) => r.qty > 0);
+  const metric = (r) => (trendSort === 'qty' ? r.qty : r.revenue);
+  sold.sort((a, b) => metric(b) - metric(a) || b.qty - a.qty || a.name.localeCompare(b.name));
+  const max = sold.length ? metric(sold[0]) : 0;
+  const totalQty = sold.reduce((n, r) => n + r.qty, 0);
+  const totalRevenue = sold.reduce((n, r) => n + r.revenue, 0);
+  const cats = new Map();
+  sold.forEach((r) => { const c = cats.get(r.category) ?? { name: r.category, qty: 0, revenue: 0 }; c.qty += r.qty; c.revenue += r.revenue; cats.set(r.category, c); });
+  const catList = [...cats.values()].sort((a, b) => metric(b) - metric(a));
+  const catMax = catList.length ? metric(catList[0]) : 0;
+  const money = (p) => rs(p).replace('.00', '');
+  const trend = (r) => {
+    if (!r.prevQty) return html`<span class="trend new">New</span>`;
+    const d = r.qty - r.prevQty;
+    if (!d) return html`<span class="trend flat">Same as ${period.prev}</span>`;
+    return html`<span class="trend ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)} vs ${period.prev}</span>`;
+  };
+  const top = sold[0];
+
+  const root = mount(html`
+    <div class="page-head"><div><p class="eyebrow">Best sellers</p><h1>Trending</h1></div></div>
+    <div class="trend-filters">
+      <div class="filter-tabs" role="toolbar" aria-label="Period">
+        ${Object.entries(TREND_PERIODS).map(([k, p]) => html`<button type="button" class="chip" data-period="${k}" aria-pressed="${k === trendPeriod}">${p.label}</button>`)}
+      </div>
+      <div class="filter-tabs" role="toolbar" aria-label="Rank by">
+        <button type="button" class="chip" data-sort="qty" aria-pressed="${trendSort === 'qty'}">By quantity</button>
+        <button type="button" class="chip" data-sort="revenue" aria-pressed="${trendSort === 'revenue'}">By sales ₹</button>
+      </div>
+    </div>
+    ${!sold.length ? html`<div class="card empty"><span class="emoji" aria-hidden="true">📈</span>No dishes sold ${trendPeriod === 'today' ? 'yet today' : `in the last ${period.label}`}.<br>Paid bills appear here as they come in.</div>` : html`
+      <section class="hero trend-hero" aria-label="Top dish">
+        <span class="label">#1 ${trendPeriod === 'today' ? 'today' : `in the last ${period.label}`}</span>
+        <span class="big trend-top">${top.name}</span>
+        <div class="facts">
+          <div class="fact"><strong>${top.qty}</strong><span>Sold</span></div>
+          <div class="fact"><strong>${money(top.revenue)}</strong><span>Sales</span></div>
+          <div class="fact"><strong>${Math.round((top.qty / totalQty) * 100)}%</strong><span>Of all dishes</span></div>
+        </div>
+      </section>
+      <div class="kpis">
+        <div class="kpi"><span>Dishes sold</span><strong>${totalQty}</strong></div>
+        <div class="kpi"><span>Sales (before discount)</span><strong>${money(totalRevenue)}</strong></div>
+        <div class="kpi"><span>Different dishes</span><strong>${sold.length}</strong></div>
+      </div>
+      <h3>Top dishes · ${trendSort === 'qty' ? 'by quantity sold' : 'by sales'}</h3>
+      <ol class="rank-list">${sold.slice(0, 20).map((r, i) => html`
+        <li class="rank-row" title="${r.name}: ${r.qty} sold · ${money(r.revenue)}">
+          <span class="rank ${i < 3 ? 'podium' : ''}">${i + 1}</span>
+          <div class="rank-body">
+            <div class="rank-line"><span class="diet ${r.is_veg ? 'veg' : 'nonveg'}" aria-hidden="true"></span><strong class="rank-name">${r.name}</strong>
+              <span class="rank-value">${trendSort === 'qty' ? `${r.qty} sold` : money(r.revenue)}</span></div>
+            <div class="bar-track" aria-hidden="true"><span class="bar" style="width:${Math.max(3, (metric(r) / max) * 100)}%"></span></div>
+            <div class="rank-meta">${r.category} · ${trendSort === 'qty' ? money(r.revenue) : `${r.qty} sold`} · ${trend(r)}</div>
+          </div>
+        </li>`)}
+      </ol>
+      ${sold.length > 20 ? html`<p class="small">Showing the top 20 of ${sold.length} dishes.</p>` : ''}
+      ${catList.length > 1 ? html`
+        <h3>By category</h3>
+        <div class="card cat-bars">${catList.map((c) => html`
+          <div class="cat-row" title="${c.name}: ${c.qty} sold · ${money(c.revenue)}">
+            <span class="cat-name">${c.name}</span>
+            <span class="bar-track" aria-hidden="true"><span class="bar" style="width:${Math.max(3, (metric(c) / catMax) * 100)}%"></span></span>
+            <span class="cat-value">${trendSort === 'qty' ? c.qty : money(c.revenue)}</span>
+          </div>`)}
+        </div>` : ''}`}`);
+  root.addEventListener('click', (e) => {
+    const p = e.target.closest('[data-period]'); const so = e.target.closest('[data-sort]');
+    if (p) trendPeriod = p.dataset.period; else if (so) trendSort = so.dataset.sort; else return;
+    trendingView(renderToken);
+  });
+}
+
 // ---------- Menu ----------
 
 async function menuView(token) {
@@ -1320,6 +1425,7 @@ const routes = [
   [/^\/bill\/(\d+)(\/print)?$/, billView, 'tables'],
   [/^\/bills\/log$/, logView, 'bills'],
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills'],
+  [/^\/trending$/, trendingView, 'trending'],
   [/^\/menu$/, menuView, 'menu'],
   [/^\/settings$/, settingsView, 'settings'],
 ];
