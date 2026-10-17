@@ -1,6 +1,7 @@
 # Publishes the app to GitHub Pages on every push to main.
-# Supabase settings come from repository variables (Settings → Secrets and variables → Actions → Variables):
-#   SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY
+# Supabase settings: repository variables SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY
+# (Settings → Secrets and variables → Actions → Variables) override the defaults below.
+# The publishable key is public by design; data access is enforced by row-level security.
 name: Deploy to GitHub Pages
 
 on:
@@ -32,8 +33,8 @@ jobs:
       - name: Write config.js from repository variables
         run: node scripts/write-config.mjs
         env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://ftzhystkinhxxgddnqgp.supabase.co' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_bRTN9xO8cQ_CxnGOC-duGA_9SwWYB94' }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
