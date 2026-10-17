@@ -21,8 +21,10 @@ function ascii(text) {
 
 /** Builds one receipt as ESC/POS bytes. width is characters per line: 32 for 58 mm paper, 48 for 80 mm. */
 export class Slip {
-  constructor(width = 32) {
+  /** target: 'bill' or 'kitchen' — which printer the slip goes to when there are two. */
+  constructor(width = 32, target = 'bill') {
     this.width = width;
+    this.target = target;
     this.out = [ESC, 0x40]; // initialise
   }
   raw(...bytes) { this.out.push(...bytes); return this; }
@@ -69,16 +71,26 @@ const join = (slips) => {
 
 // ---------- settings (kept on this phone only) ----------
 
+// { method: 'dialog' | 'bluetooth' | 'rawbt', paper: 58 | 80, bill: { id, name }, kitchen: { separate, id, name } }
 const KEY = 'hb-printer';
 export function getPrinter() {
-  try { return { method: 'dialog', paper: 58, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch { return { method: 'dialog', paper: 58 }; }
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch { /* private mode */ }
+  // Older setups kept the one printer as btId / btName.
+  const bill = p.bill ?? (p.btId ? { id: p.btId, name: p.btName } : {});
+  return { method: 'dialog', paper: 58, ...p, bill, kitchen: p.kitchen ?? { separate: false } };
 }
 export function setPrinter(p) {
-  try { localStorage.setItem(KEY, JSON.stringify({ ...getPrinter(), ...p })); } catch { /* private mode */ }
+  const { btId, btName, ...rest } = { ...getPrinter(), ...p };
+  try { localStorage.setItem(KEY, JSON.stringify(rest)); } catch { /* private mode */ }
 }
 export const paperWidth = () => (getPrinter().paper === 80 ? 48 : 32);
 export const directPrinting = () => getPrinter().method !== 'dialog';
 export const bluetoothSupported = () => Boolean(navigator.bluetooth);
+/** Chrome can only reconnect to a printer after the app is reopened when it can list remembered devices. */
+export const bluetoothRemembers = () => Boolean(navigator.bluetooth?.getDevices);
+/** Which printer a slip goes to: the kitchen copy uses the kitchen printer when one is set up. */
+const slotFor = (target) => (target === 'kitchen' && getPrinter().kitchen.separate ? 'kitchen' : 'bill');
 
 // ---------- Bluetooth (BLE) ----------
 
@@ -94,7 +106,9 @@ const SERVICES = [
   '49535343-fe7d-4a0e-a96b-c6ef1a0e4d7f',
   'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
 ];
-const bt = { device: null, char: null };
+const conn = { bill: { device: null, char: null }, kitchen: { device: null, char: null } };
+const connecting = {};
+const LABEL = { bill: 'Bill printer', kitchen: 'Kitchen printer' };
 
 async function findWritable(server) {
   for (const service of await server.getPrimaryServices()) {
@@ -106,44 +120,77 @@ async function findWritable(server) {
   throw new Error('Connected, but this printer has no print channel the browser can use. Choose “RawBT app” instead.');
 }
 
-let connecting = null; // one connection attempt at a time
-
-/** Connect to the saved printer, or (pick = true, during a tap) let the person choose one. */
-export function connectBluetooth(pick = false) {
-  connecting ??= connect(pick).finally(() => { connecting = null; });
-  return connecting;
-}
-
-async function connect(pick) {
-  if (!navigator.bluetooth) throw new Error('This browser can’t use Bluetooth. Open the app in Chrome on Android, or choose “RawBT app”.');
-  if (bt.device && bt.char && bt.device.gatt.connected) return bt.device.name;
-  if (!bt.device && navigator.bluetooth.getDevices) {
-    const saved = getPrinter().btId;
-    const known = await navigator.bluetooth.getDevices().catch(() => []);
-    bt.device = known.find((d) => d.id === saved) ?? null;
-  }
-  if (!bt.device) {
-    if (!pick) throw new Error('Printer not connected. Tap Print to connect it.');
-    bt.device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: SERVICES });
-    setPrinter({ btId: bt.device.id, btName: bt.device.name || 'Printer' });
-  }
-  bt.device.addEventListener('gattserverdisconnected', () => { bt.char = null; }, { once: true });
-  const server = await bt.device.gatt.connect();
-  bt.char = await findWritable(server);
-  return bt.device.name || 'Printer';
-}
-
-export function forgetBluetooth() {
-  try { bt.device?.gatt?.disconnect(); } catch { /* already gone */ }
-  bt.device = null; bt.char = null;
-  setPrinter({ btId: null, btName: null });
-}
-
 const pause = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
-async function sendBluetooth(data, pick) {
-  await connectBluetooth(pick);
-  const c = bt.char;
+/** A remembered printer may need to be seen advertising before Chrome can connect to it again. */
+async function gattConnect(device) {
+  try {
+    return await device.gatt.connect();
+  } catch (err) {
+    if (!device.watchAdvertisements) throw err;
+    await Promise.race([
+      new Promise((resolve) => { device.addEventListener('advertisementreceived', resolve, { once: true }); device.watchAdvertisements().catch(resolve); }),
+      pause(6000),
+    ]);
+    return device.gatt.connect();
+  }
+}
+
+async function connect(slot, pick) {
+  if (!navigator.bluetooth) throw new Error('This browser can’t use Bluetooth. Open the app in Chrome on Android, or choose “RawBT app”.');
+  const c = conn[slot];
+  if (c.device && c.char && c.device.gatt.connected) return c.device.name || 'Printer';
+  const saved = getPrinter()[slot];
+  if (!c.device && saved.id && navigator.bluetooth.getDevices) {
+    const known = await navigator.bluetooth.getDevices().catch(() => []);
+    c.device = known.find((d) => d.id === saved.id) ?? null;
+  }
+  if (!c.device) {
+    if (!pick) throw new Error(`${LABEL[slot]} not connected. Tap 🖨️ and Connect it.`);
+    // Reconnecting after the app was reopened: list only this slot's saved printer, so the right one is one tap.
+    c.device = await navigator.bluetooth.requestDevice(saved.name
+      ? { filters: [{ name: saved.name }], optionalServices: SERVICES }
+      : { acceptAllDevices: true, optionalServices: SERVICES });
+    setPrinter({ [slot]: { ...saved, id: c.device.id, name: c.device.name || 'Printer' } });
+  }
+  c.device.addEventListener('gattserverdisconnected', () => { c.char = null; }, { once: true });
+  c.char = await findWritable(await gattConnect(c.device));
+  return c.device.name || 'Printer';
+}
+
+/** Connect a printer slot ('bill' or 'kitchen'). pick: allow the chooser (only during a tap). One attempt at a time. */
+export function connectBluetooth(slot = 'bill', pick = false) {
+  connecting[slot] ??= connect(slot, pick).finally(() => { connecting[slot] = null; });
+  return connecting[slot];
+}
+
+/** Choose a different printer for a slot (during a tap). */
+export function chooseBluetooth(slot) {
+  forgetBluetooth(slot);
+  return connectBluetooth(slot, true);
+}
+
+export function forgetBluetooth(slot = 'bill') {
+  const c = conn[slot];
+  try { c.device?.gatt?.disconnect(); } catch { /* already gone */ }
+  c.device = null; c.char = null;
+  const { id, name, ...rest } = getPrinter()[slot];
+  setPrinter({ [slot]: rest });
+}
+
+export const isConnected = (slot) => Boolean(conn[slot].char && conn[slot].device?.gatt.connected);
+
+/** When the app opens: quietly reconnect to remembered printers so the first print is instant. */
+export async function reconnectSaved() {
+  const p = getPrinter();
+  if (p.method !== 'bluetooth' || !bluetoothRemembers()) return;
+  const slots = ['bill', ...(p.kitchen.separate ? ['kitchen'] : [])].filter((s) => p[s].id);
+  await Promise.allSettled(slots.map((s) => connectBluetooth(s, false)));
+}
+
+async function sendBluetooth(slot, data, pick) {
+  await connectBluetooth(slot, pick);
+  const c = conn[slot].char;
   // Small pieces with short pauses: cheap printers have tiny buffers.
   for (let i = 0; i < data.length; i += 100) {
     const piece = data.slice(i, i + 100);
@@ -164,11 +211,25 @@ function sendRawBT(data) {
     : `rawbt:base64,${b64}`;
 }
 
-/** Send one or more slips to the printer chosen on this phone. pick: allow the Bluetooth chooser (call during a tap). */
+/**
+ * Send slips to this phone's printers. Each slip has a target: 'bill' (default) or 'kitchen'.
+ * Kitchen slips go to the kitchen printer when one is set up. pick: allow the Bluetooth chooser (during a tap).
+ * Resolves with the list of printers that failed (empty when everything printed).
+ */
 export async function printSlips(slips, { pick = false } = {}) {
-  const data = join(slips);
   const { method } = getPrinter();
-  if (method === 'bluetooth') return sendBluetooth(data, pick);
-  if (method === 'rawbt') return sendRawBT(data);
-  throw new Error('No direct printer is set up on this phone.');
+  if (method === 'rawbt') { sendRawBT(join(slips)); return []; }
+  if (method !== 'bluetooth') throw new Error('No direct printer is set up on this phone.');
+  const groups = {};
+  for (const s of slips) (groups[slotFor(s.target)] ??= []).push(s);
+  const failed = [];
+  // Chrome shows at most one printer chooser per tap, so only the first printer that needs one may ask.
+  let mayPick = pick;
+  for (const slot of ['bill', 'kitchen'].filter((x) => groups[x])) {
+    const wasConnected = isConnected(slot);
+    try { await sendBluetooth(slot, join(groups[slot]), mayPick); } catch (err) { failed.push({ slot, error: err }); }
+    if (!wasConnected) mayPick = false;
+  }
+  if (failed.length === Object.keys(groups).length) throw failed[0].error;
+  return failed;
 }

@@ -1,7 +1,10 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
-import { Slip, bluetoothSupported, connectBluetooth, directPrinting, forgetBluetooth, getPrinter, paperWidth, printSlips, setPrinter } from './printer.js';
+import {
+  Slip, bluetoothRemembers, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
+  getPrinter, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
+} from './printer.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 const METHODS = ['Cash', 'UPI', 'Card'];
@@ -833,7 +836,7 @@ function orderSlips(order, settings) {
   bill.cols(when, order.status === 'paid' ? order.payment_method ?? '' : '').rule();
   slipBody(bill, b.lines, b, rate).align('center').line('Thank you! Visit again.').cut();
   if (!order.is_parcel || !order.bill_no) return [bill];
-  const kot = new Slip(paperWidth());
+  const kot = new Slip(paperWidth(), 'kitchen');
   kot.align('center').bold(true).line('KITCHEN - PARCEL').rule().line('BILL NO.').size(3, 3).line(tokenNo(order.bill_no)).size(1, 1)
     .bold(false).line(`${order.bill_no}  ${time(order.billed_at ?? order.closed_at ?? new Date().toISOString())}`).align('left').rule();
   for (const i of order.order_items) kot.bold(true).size(1, 2).wrap(`${i.quantity} x ${i.name}`).size(1, 1).bold(false);
@@ -860,13 +863,18 @@ async function printOrderDirect(orderId) {
     getSettings(),
   ]);
   const slips = orderSlips(order, settings);
-  await printSlips(slips, { pick: true });
-  toast(slips.length > 1 ? `Printed bill and kitchen copy · #${tokenNo(order.bill_no)}` : `Printed bill ${order.bill_no ?? ''}`);
+  const failed = await printSlips(slips, { pick: true });
+  if (failed.length) {
+    const which = failed.map((f) => (f.slot === 'kitchen' ? 'kitchen copy' : 'bill')).join(' and ');
+    toast(`Couldn’t print the ${which}: ${friendly(failed[0].error)} Tap Print on the bill to try again.`, 'error');
+  } else {
+    toast(slips.length > 1 ? `Printed bill and kitchen copy · #${tokenNo(order.bill_no)}` : `Printed bill ${order.bill_no ?? ''}`);
+  }
 }
 
 /** Start the Bluetooth connection inside the tap, before any network call uses up the tap. */
 function warmPrinter() {
-  if (getPrinter().method === 'bluetooth') connectBluetooth(true).catch(() => {});
+  if (getPrinter().method === 'bluetooth') connectBluetooth('bill', true).catch(() => {});
 }
 
 /** Printer setup for this phone: phone print dialog, Bluetooth printer or the RawBT app. */
@@ -875,6 +883,15 @@ function printerDialog() {
   dialog.className = 'tall';
   document.body.append(dialog);
   const close = () => { dialog.close(); dialog.remove(); };
+  const printerRow = (slot, title, sub) => {
+    const saved = getPrinter()[slot];
+    return html`<div class="printer-status">
+      <span><strong>${title}</strong><span class="small"> · ${sub}</span><br>
+        ${saved.name ? html`${saved.name} <span class="small">${isConnected(slot) ? '· connected' : '· not connected'}</span>` : html`<span class="small">None chosen</span>`}</span>
+      <span>${saved.name && !isConnected(slot) ? html`<button type="button" class="secondary" data-reconnect="${slot}">Connect</button>` : ''}
+        <button type="button" class="secondary" data-choose="${slot}">${saved.name ? 'Change' : 'Choose'}</button>
+        ${saved.name ? html`<button type="button" class="destructive" data-forget="${slot}">Forget</button>` : ''}</span></div>`;
+  };
   const draw = (status = '') => {
     const p = getPrinter();
     setHTML(dialog, html`
@@ -895,33 +912,50 @@ function printerDialog() {
           <label><input type="radio" name="paper" value="58" ${p.paper !== 80 ? new Raw('checked') : ''}><span>58 mm (2 inch)</span></label>
           <label><input type="radio" name="paper" value="80" ${p.paper === 80 ? new Raw('checked') : ''}><span>80 mm (3 inch)</span></label>
         </fieldset>
-        ${p.method === 'bluetooth' ? html`<div class="printer-status">
-          <span>${p.btName ? html`Printer: <strong>${p.btName}</strong>` : 'No printer chosen yet'}</span>
-          <span><button type="button" class="secondary" data-connect>${p.btName ? 'Change' : 'Choose Printer'}</button>
-          ${p.btName ? html`<button type="button" class="destructive" data-forget>Forget</button>` : ''}</span></div>` : ''}
-        ${p.method !== 'dialog' ? html`<button type="button" class="secondary wide" data-test>Print Test Slip</button>` : ''}
+        ${p.method === 'bluetooth' ? html`
+          ${printerRow('bill', 'Bill printer', 'Customer bills')}
+          <label class="toggle"><input type="checkbox" name="kitchen_separate" ${p.kitchen.separate ? new Raw('checked') : ''}> Separate kitchen printer</label>
+          <p class="small" style="margin:-6px 0 0">${p.kitchen.separate ? 'Kitchen copies (parcels) print on the kitchen printer.' : 'Off: kitchen copies print on the bill printer.'}</p>
+          ${p.kitchen.separate ? printerRow('kitchen', 'Kitchen printer', 'Kitchen copies') : ''}
+          ${bluetoothRemembers() ? '' : html`<details class="remember-tip"><summary>Stop Chrome asking for the printer every time</summary>
+            <ol>
+              <li>In Chrome, open <strong>chrome://flags</strong> (type it in the address bar).</li>
+              <li>Search <strong>Web Bluetooth new permissions backend</strong> and set it to <strong>Enabled</strong>.</li>
+              <li>Tap <strong>Relaunch</strong>, open this app, and connect the printer once more.</li>
+            </ol>
+            <p class="small">After that the app reconnects by itself whenever it opens. Or use the RawBT app, which never asks.</p></details>`}` : ''}
+        ${p.method !== 'dialog' ? html`<button type="button" class="secondary wide" data-test>Print Test Slip${p.method === 'bluetooth' && p.kitchen.separate ? 's' : ''}</button>` : ''}
         <button type="button" class="wide" data-done>Done</button>
       </form>`);
   };
   dialog.addEventListener('change', (e) => {
     if (e.target.name === 'method') setPrinter({ method: e.target.value });
     if (e.target.name === 'paper') setPrinter({ paper: Number(e.target.value) });
+    if (e.target.name === 'kitchen_separate') setPrinter({ kitchen: { ...getPrinter().kitchen, separate: e.target.checked } });
     draw();
   });
   dialog.addEventListener('click', async (e) => {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.done !== undefined) return close();
-    if (t.dataset.forget !== undefined) { forgetBluetooth(); return draw('Printer forgotten.'); }
-    if (t.dataset.connect !== undefined) {
-      forgetBluetooth();
-      try { const name = await connectBluetooth(true); draw(`Connected to ${name}. Tap Print Test Slip to check.`); } catch (err) { draw(friendly(err)); }
+    if (t.dataset.forget) { forgetBluetooth(t.dataset.forget); return draw('Printer forgotten.'); }
+    if (t.dataset.choose || t.dataset.reconnect) {
+      const slot = t.dataset.choose || t.dataset.reconnect;
+      t.disabled = true;
+      try {
+        const name = t.dataset.choose ? await chooseBluetooth(slot) : await connectBluetooth(slot, true);
+        draw(`${slot === 'kitchen' ? 'Kitchen' : 'Bill'} printer: ${name} connected. Tap Print Test to check.`);
+      } catch (err) { draw(friendly(err)); }
     }
     if (t.dataset.test !== undefined) {
-      const slip = new Slip(paperWidth());
-      slip.align('center').bold(true).size(2, 2).line('Hotel Billing').size(1, 1).bold(false)
-        .line('Printer is working').line(dateTime(new Date().toISOString())).rule().line('1234567890'.repeat(5).slice(0, slip.width)).cut();
-      try { await printSlips([slip], { pick: true }); draw('Test slip sent. If nothing printed, try the other paper width or RawBT.'); } catch (err) { draw(friendly(err)); }
+      const test = (target, title) => new Slip(paperWidth(), target).align('center').bold(true).size(2, 2).line(title).size(1, 1).bold(false)
+        .line('Printer is working').line(dateTime(new Date().toISOString())).rule().line('1234567890'.repeat(5).slice(0, paperWidth())).cut();
+      const p = getPrinter();
+      const slips = [test('bill', 'BILL PRINTER'), ...(p.method === 'bluetooth' && p.kitchen.separate ? [test('kitchen', 'KITCHEN')] : [])];
+      try {
+        const failed = await printSlips(slips, { pick: true });
+        draw(failed.length ? `The ${failed[0].slot} printer didn’t print: ${friendly(failed[0].error)}` : 'Test sent. If nothing printed, try the other paper width or RawBT.');
+      } catch (err) { draw(friendly(err)); }
     }
   });
   dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
@@ -2381,6 +2415,8 @@ async function route() {
   document.getElementById('who').textContent = session.user.email;
   document.getElementById('brand').textContent = account.staff ? account.hotel : 'Super Admin';
   setTabs(account);
+  // Reconnect remembered Bluetooth printers in the background, once per app open.
+  if (account.can_bill && !route.printersTried) { route.printersTried = true; reconnectSaved().catch(() => {}); }
   const hotel = account.staff && account.active;
   let path = location.hash.replace(/^#/, '') || '/';
   // Pick a sensible home screen: the admin console, or Rooms for a hotel without tables.

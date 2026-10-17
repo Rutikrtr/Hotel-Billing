@@ -71,6 +71,11 @@ Tap 🖨️ (Tables screen or any bill) to choose how this phone prints. The cho
   free RawBT app, which prints it.
 - **Phone print dialog**: the normal popup, for Wi-Fi printers, PDF or computers.
 
+With Bluetooth you can add a **separate kitchen printer**: customer bills go to the bill printer and kitchen
+copies to the kitchen printer. The app reconnects to remembered printers when it opens. On Android Chrome this
+needs `chrome://flags` → **Web Bluetooth new permissions backend** → Enabled; without it Chrome asks once per
+app open (showing only the saved printer).
+
 Paper width 58 mm (32 characters) or 80 mm (48 characters). Code: `public/printer.js`.
 
 ## Rooms
