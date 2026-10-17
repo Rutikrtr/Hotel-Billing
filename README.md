@@ -89,6 +89,16 @@ with Chrome on a computer it writes one folder per hotel (`menu.csv`, `staff.csv
 and `.json`, `room-bills/`, `change-log/`). Later backups only re-fetch from the month of the previous backup.
 Other browsers download one JSON file per hotel.
 
+## QR menu
+
+An extra feature the super admin switches on per hotel (**QR Menu** tick). The owner then finds it in
+**Settings → QR Menu**: a QR code with Print Poster, Download, Share Link, Open Menu and Change Link. Customers who
+scan it see `menu.html?m=<code>`: hotel name, address, call button, search, veg/non-veg filter and available dishes,
+without signing in. The code is 16 random characters, unrelated to the hotel's name or id; **Change Link** makes a new
+one and old QR codes stop working. Switching the feature off also stops the link. Data comes from `public_menu()`,
+which returns only the hotel's public details and available dishes. QR codes are drawn by `public/vendor/qrcode.js`
+(qrcode-generator, MIT).
+
 ## Rooms
 
 When the Rooms feature is on, the **Rooms** tab shows every room as free or occupied. Tap a free room to check a guest in,

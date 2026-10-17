@@ -1651,6 +1651,19 @@ async function settingsView(token) {
             <button type="submit" class="secondary">Add Room</button>
           </form>
         </div>` : ''}
+        ${feat('qr_menu') ? html`<div class="card qr-card" style="margin-top:20px" id="qr-card">
+          <h2>QR Menu</h2>
+          <p class="small" style="margin-top:-6px">Customers scan this code to see your menu on their phone. Sold-out dishes are hidden automatically.</p>
+          <div class="qr-box" id="qr-box"><div class="skeleton"><div class="block"></div></div></div>
+          <p class="qr-link small" id="qr-link"></p>
+          <div class="hotel-actions">
+            <button type="button" id="qr-print">🖨️ Print Poster</button>
+            <button type="button" class="secondary" id="qr-download">⬇️ Download</button>
+            <button type="button" class="secondary" id="qr-share">Share Link</button>
+            <a class="button secondary" id="qr-open" target="_blank" rel="noopener">Open Menu</a>
+            <button type="button" class="secondary danger-outline" id="qr-new">Change Link</button>
+          </div>
+        </div>` : ''}
         <div class="card" style="margin-top:20px">
           <h2>Staff Logins</h2>
           <p class="small" style="margin-top:-6px"><strong>Waiter</strong>: only adds dishes to tables. <strong>Manager</strong>: also prints bills, takes parcels and payments, sees Bills.</p>
@@ -1747,6 +1760,7 @@ async function settingsView(token) {
     dialog.querySelector('[name=login]').focus();
   }
   root.querySelector('#add-staff')?.addEventListener('click', addStaff);
+  if (feat('qr_menu') && isOwner) setupQrCard(root, s);
   function renameTable(table) {
     const dialog = document.createElement('dialog');
     document.body.append(dialog);
@@ -1837,6 +1851,89 @@ async function settingsView(token) {
       if (!confirm(`Remove ${loginName(t.dataset.delStaff)}? They won’t be able to sign in.`)) return;
       act(t, async () => { await q(sb.from('staff').delete().eq('email', t.dataset.delStaff)); settingsView(renderToken); });
     }
+  });
+}
+
+// ---------- QR menu (owner) ----------
+
+let qrLib = null;
+/** The QR generator is only needed on this card, so it is loaded on first use. */
+function loadQr() {
+  qrLib ??= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'vendor/qrcode.js';
+    s.onload = () => resolve(window.qrcode);
+    s.onerror = () => { qrLib = null; reject(new Error('Couldn’t load the QR maker. Check the internet and try again.')); };
+    document.head.append(s);
+  });
+  return qrLib;
+}
+const menuUrl = (token) => new URL(`menu.html?m=${encodeURIComponent(token)}`, location.href.split('#')[0]).href;
+function qrSvg(qrcode, text) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+}
+
+async function setupQrCard(root, settings) {
+  const box = root.querySelector('#qr-box');
+  let url = '';
+  const show = async (token) => {
+    url = menuUrl(token);
+    const qrcode = await loadQr();
+    box.innerHTML = qrSvg(qrcode, url);
+    root.querySelector('#qr-link').textContent = url;
+    root.querySelector('#qr-open').href = url;
+  };
+  try {
+    const token = await q(sb.rpc('my_menu_token'));
+    if (!token) { box.textContent = 'The QR menu is switched off for this hotel.'; return; }
+    await show(token);
+  } catch (err) { box.textContent = friendly(err); return; }
+
+  root.querySelector('#qr-print').addEventListener('click', async () => {
+    const qrcode = await loadQr();
+    const w = window.open('', '_blank');
+    if (!w) return toast('Allow pop-ups to print the poster.', 'error');
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR Menu · ${esc(settings.hotel_name)}</title>
+      <style>@page{size:A5;margin:12mm}body{font:16px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;text-align:center;color:#14161A;margin:0}
+      .p{border:3px solid #C2410C;border-radius:24px;padding:28px 20px;max-width:420px;margin:20px auto}
+      h1{margin:0 0 4px;font-size:28px}h2{margin:18px 0 6px;color:#C2410C;font-size:22px;letter-spacing:.02em}
+      svg{width:260px;height:260px}.s{color:#5B606B;font-size:13px;margin-top:10px}</style></head>
+      <body><div class="p"><h1>${esc(settings.hotel_name)}</h1>${settings.hotel_address ? `<div class="s">${esc(settings.hotel_address)}</div>` : ''}
+      <h2>📱 Scan to see our menu</h2>${qrSvg(qrcode, url)}<div class="s">Open your phone camera and point it at the code</div></div>
+      <script>setTimeout(function(){window.print()},300)<\/script></body></html>`);
+    w.document.close();
+  });
+  root.querySelector('#qr-download').addEventListener('click', async () => {
+    // Draw the QR on a white canvas with the hotel name, and save it as a picture.
+    const svg = box.querySelector('svg');
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = 1000; c.height = 1140;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(img, 100, 60, 800, 800);
+    g.fillStyle = '#14161A'; g.textAlign = 'center';
+    g.font = 'bold 54px sans-serif'; g.fillText(settings.hotel_name, 500, 950, 900);
+    g.fillStyle = '#C2410C'; g.font = 'bold 40px sans-serif'; g.fillText('Scan to see our menu', 500, 1030, 900);
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png');
+    a.download = `${settings.hotel_name} QR menu.png`;
+    a.click();
+  });
+  root.querySelector('#qr-share').addEventListener('click', async () => {
+    try {
+      if (navigator.share) await navigator.share({ title: `${settings.hotel_name} menu`, url });
+      else { await navigator.clipboard.writeText(url); toast('Menu link copied'); }
+    } catch { /* cancelled */ }
+  });
+  root.querySelector('#qr-new').addEventListener('click', (e) => {
+    if (!confirm('Make a new menu link? Printed QR codes with the old link will stop working, so print the new one.')) return;
+    act(e.currentTarget, async () => { await show(await q(sb.rpc('owner_new_menu_link'))); toast('New menu link ready. Print the new QR code.'); });
   });
 }
 
@@ -2156,6 +2253,7 @@ const FEATURES = [
   ['rooms', 'Rooms', 'Room check-in, extra charges and room bills'],
   ['trending', 'Trending', 'Best-selling dishes report'],
   ['bill_edit', 'Edit Bills', 'Owner can edit or delete paid bills, with a change log'],
+  ['qr_menu', 'QR Menu', 'Customers scan a QR code to see the menu on their phone'],
 ];
 let adminSearch = '';
 
@@ -2432,7 +2530,7 @@ async function adminView(token) {
 /** Create a hotel (with its owner login) or edit one. */
 function hotelDialog(hotel, done) {
   const creating = !hotel;
-  const f = hotel?.features ?? { tables: true, rooms: false, trending: true, bill_edit: true };
+  const f = hotel?.features ?? { tables: true, rooms: false, trending: true, bill_edit: true, qr_menu: false };
   const dialog = document.createElement('dialog');
   dialog.className = 'tall';
   document.body.append(dialog);
@@ -2481,7 +2579,9 @@ function hotelDialog(hotel, done) {
     const v = Object.fromEntries(new FormData(e.target));
     const alertBox = dialog.querySelector('[role=alert]');
     const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; alertBox.scrollIntoView({ block: 'nearest' }); };
-    const flags = Object.fromEntries(FEATURES.map(([k]) => [`p_feat_${k}`, v[`feat_${k}`] === 'on']));
+    // The QR menu has its own switch; the other features go with the hotel's details.
+    const flags = Object.fromEntries(FEATURES.filter(([k]) => k !== 'qr_menu').map(([k]) => [`p_feat_${k}`, v[`feat_${k}`] === 'on']));
+    const qrOn = v.feat_qr_menu === 'on';
     if (!v.name.trim()) return fail('Enter the hotel name.');
     if (!flags.p_feat_tables && !flags.p_feat_rooms) return fail('Tick Tables & Orders, Rooms, or both.');
     const btn = e.target.querySelector('button[type=submit]');
@@ -2491,13 +2591,15 @@ function hotelDialog(hotel, done) {
         const count = (x) => { const n = Number(x || 0); if (!Number.isInteger(n) || n < 0) throw new Error('Tables and rooms must be whole numbers.'); return n; };
         if (!/^[^@\s]+@[^@\s]+$/.test(v.email.trim())) throw new Error('Enter the owner’s email.');
         if (v.password.length < 6) throw new Error('The owner’s password needs at least 6 characters.');
-        await q(sb.rpc('sa_create_hotel', {
+        const id = await q(sb.rpc('sa_create_hotel', {
           p_name: v.name, p_address: v.address, p_phone: v.phone, p_owner_email: v.email, p_owner_password: v.password,
           p_tables: flags.p_feat_tables ? count(v.tables) : 0, p_rooms: flags.p_feat_rooms ? count(v.rooms) : 0, ...flags,
         }));
+        if (qrOn) await q(sb.rpc('sa_set_qr_menu', { p_id: id, p_on: true }));
         toast(`${v.name.trim()} created · owner can sign in now`);
       } else {
         await q(sb.rpc('sa_update_hotel', { p_id: hotel.id, p_name: v.name, p_address: v.address, p_phone: v.phone, ...flags }));
+        if (qrOn !== Boolean(hotel.features.qr_menu)) await q(sb.rpc('sa_set_qr_menu', { p_id: hotel.id, p_on: qrOn }));
         toast(`${v.name.trim()} saved`);
       }
       close();

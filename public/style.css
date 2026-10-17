@@ -619,3 +619,10 @@ button.room-edit strong { font-weight: 800; }
 .usage-card.danger .usage-bar span { background: var(--danger); }
 .usage-card.warn { border-color: color-mix(in srgb, var(--star) 50%, var(--line)); }
 .usage-card.danger { border-color: color-mix(in srgb, var(--danger) 50%, var(--line)); }
+
+/* QR menu card */
+.qr-box { width: min(240px, 100%); aspect-ratio: 1; margin: 6px auto 0; background: #fff; border-radius: 16px; padding: 8px; border: 1px solid var(--line); display: grid; place-items: center; color: #14161A; text-align: center; font-size: 14px; }
+.qr-box svg { width: 100%; height: 100%; display: block; }
+.qr-box .skeleton { width: 100%; height: 100%; }
+.qr-link { text-align: center; overflow-wrap: anywhere; margin: 10px 0 12px; }
+.hotel-actions a.button { min-height: 44px; padding: 0 14px; font-size: 14.5px; flex: 1 1 auto; }
