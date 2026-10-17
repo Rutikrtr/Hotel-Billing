@@ -12,7 +12,13 @@ const $view = document.getElementById('view');
 let session = null;
 // Cached account_status() for the current session: super admin?, staff?, role, hotel paused?, feature switches.
 let accountCheck = null;
-const getAccount = () => (accountCheck ??= q(sb.rpc('account_status')).catch((err) => { accountCheck = null; throw err; }));
+let accountAt = 0;
+// Re-read at most once a minute, so feature switches or a paused hotel take effect without reopening the app.
+const getAccount = () => {
+  if (accountCheck && Date.now() - accountAt > 60 * 1000) accountCheck = null;
+  if (!accountCheck) { accountAt = Date.now(); accountCheck = q(sb.rpc('account_status')).catch((err) => { accountCheck = null; throw err; }); }
+  return accountCheck;
+};
 let account = null;    // the resolved value, once route() has loaded it
 const isOwner = () => getAccount().then((a) => a.role === 'owner', () => false);
 /** Feature switches are set per hotel by the super admin. */
@@ -1420,7 +1426,8 @@ async function menuView(token) {
     </label>`;
   const readCategory = (f) => (f.category_pick === NEW_CATEGORY ? (f.category_new || '').trim() : (f.category_pick || '').trim());
   const root = mount(html`
-    <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'} · tap ☆ to show a dish first when taking orders</p></div></div>
+    <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'} · tap ☆ to show a dish first when taking orders</p></div>
+      ${account.role === 'owner' ? html`<a class="button secondary" href="#/settings?qr" id="menu-qr">▦ QR Menu</a>` : ''}</div>
     <div class="two-col">
       <div>
         ${menu.length ? categories.map((c) => html`
@@ -1621,7 +1628,11 @@ async function settingsView(token) {
             <button type="submit" class="secondary">Add Room</button>
           </form>
         </div>` : ''}
-        ${feat('qr_menu') ? html`<div class="card qr-card" style="margin-top:20px" id="qr-card">
+        ${!feat('qr_menu') ? html`<div class="card qr-card qr-off" style="margin-top:20px" id="qr-card">
+          <h2>QR Menu</h2>
+          <p class="small" style="margin:-6px 0 0">Let customers scan a QR code to see your menu on their phone. This feature isn’t active for your hotel yet.
+            Contact Techyverve to switch it on.</p>
+        </div>` : html`<div class="card qr-card" style="margin-top:20px" id="qr-card">
           <h2>QR Menu</h2>
           <p class="small" style="margin-top:-6px">Customers scan this code to see your menu on their phone. Sold-out dishes are hidden automatically.</p>
           <div class="qr-box" id="qr-box"><div class="skeleton"><div class="block"></div></div></div>
@@ -1633,7 +1644,7 @@ async function settingsView(token) {
             <a class="button secondary" id="qr-open" target="_blank" rel="noopener">Open Menu</a>
             <button type="button" class="secondary danger-outline" id="qr-new">Change Link</button>
           </div>
-        </div>` : ''}
+        </div>`}
         <div class="card" style="margin-top:20px">
           <h2>Staff Logins</h2>
           <p class="small" style="margin-top:-6px"><strong>Waiter</strong>: only adds dishes to tables. <strong>Manager</strong>: also prints bills, takes parcels and payments, sees Bills.</p>
@@ -1741,6 +1752,8 @@ async function settingsView(token) {
   }
   root.querySelector('#add-staff')?.addEventListener('click', addStaff);
   if (feat('qr_menu') && isOwner) setupQrCard(root, s);
+  // Opened from Menu → QR Menu: jump straight to the card.
+  if (location.hash.endsWith('?qr')) setTimeout(() => root.querySelector('#qr-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
   function renameTable(table) {
     const dialog = document.createElement('dialog');
     document.body.append(dialog);
@@ -2606,7 +2619,7 @@ const routes = [
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills', null, 'bill'],
   [/^\/trending$/, trendingView, 'trending', 'trending', 'bill'],
   [/^\/menu$/, menuView, 'menu', 'tables', 'owner'],
-  [/^\/settings$/, settingsView, 'settings', null, 'owner'],
+  [/^\/settings(\?qr)?$/, settingsView, 'settings', null, 'owner'],
 ];
 const allowed = (who) => who === 'any' || (who === 'bill' ? account.can_bill === true : account.role === 'owner');
 const adminRoutes = [
@@ -2723,6 +2736,13 @@ async function route() {
 }
 
 document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
+// Coming back to the app (from another app or a locked screen): check for changes made by the super admin.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !session || !account) return;
+  const before = JSON.stringify(account);
+  accountCheck = null;
+  getAccount().then((a) => { if (JSON.stringify(a) !== before) route(); }).catch(() => {});
+});
 
 // ---------- install as an app (opens full screen, without the browser bar) ----------
 let installPrompt = null;
