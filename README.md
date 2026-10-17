@@ -83,11 +83,18 @@ The Supabase project is set only through environment variables; nothing is hardc
 | `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → publishable key (never the secret key) |
 
-On Netlify they live in **Site configuration → Environment variables**; the build (`node scripts/write-config.mjs`)
+On GitHub Pages they are repository variables (**Settings → Secrets and variables → Actions → Variables**) used by
+`.github/workflows/pages.yml`. On Netlify they live in **Site configuration → Environment variables**; the build (`node scripts/write-config.mjs`)
 turns them into `public/config.js` and fails loudly if one is missing.
 After adding or changing them, trigger a new deploy (Deploys → Trigger deploy) so the build picks them up. Locally, copy `.env.example` to `.env`.
 
 ## Deploying
+
+**GitHub Pages (current):** every push to `main` runs `.github/workflows/pages.yml`, which runs the tests, writes
+`public/config.js` and publishes `public/` to https://rutikrtr.github.io/Hotel-Billing/. One-time setup:
+Settings → Pages → Source: **GitHub Actions**, plus the two repository variables above.
+
+**Netlify (previous):**
 
 Netlify deploys `main` automatically: every push to GitHub goes live in about a minute (see `netlify.toml`).
 On Netlify's free plan, a private repo only builds commits from the one Git account linked in Netlify

@@ -236,7 +236,7 @@ const authViews = {
     handle('Creating Account…', async ({ email, password }) => {
       if (!email.trim()) throw new Error('Enter your email address.');
       if ((password || '').length < 6) throw new Error('Use a password with at least 6 characters.');
-      const { data, error } = await sb.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: location.origin } });
+      const { data, error } = await sb.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: location.origin + location.pathname } });
       if (error) {
         if (authError(error) === 'exists') throw html`There’s already an account for this email. <a href="#" data-go="signIn">Sign in instead</a>`;
         throw error;
@@ -263,7 +263,7 @@ const authViews = {
     });
     handle('Sending…', async ({ email }) => {
       if (!email.trim()) throw new Error('Enter your email address.');
-      const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin });
+      const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.origin + location.pathname });
       if (error) throw error;
       authViews.checkEmail('reset');
     });
@@ -286,8 +286,8 @@ const authViews = {
       const btn = e.currentTarget;
       btn.disabled = true;
       const { error } = reset
-        ? await sb.auth.resetPasswordForEmail(lastEmail, { redirectTo: location.origin })
-        : await sb.auth.resend({ type: 'signup', email: lastEmail, options: { emailRedirectTo: location.origin } });
+        ? await sb.auth.resetPasswordForEmail(lastEmail, { redirectTo: location.origin + location.pathname })
+        : await sb.auth.resend({ type: 'signup', email: lastEmail, options: { emailRedirectTo: location.origin + location.pathname } });
       showAlert(error ? authError(error) : 'Sent. It can take a minute to arrive.', error ? 'error' : 'success');
       setTimeout(() => { if (btn.isConnected) btn.disabled = false; }, 30000);
     });
