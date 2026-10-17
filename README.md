@@ -84,7 +84,8 @@ The Supabase project is set only through environment variables; nothing is hardc
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → publishable key (never the secret key) |
 
 On Netlify they live in **Site configuration → Environment variables**; the build (`node scripts/write-config.mjs`)
-turns them into `public/config.js` and fails loudly if one is missing. Locally, copy `.env.example` to `.env`.
+turns them into `public/config.js` and fails loudly if one is missing.
+After adding or changing them, trigger a new deploy (Deploys → Trigger deploy) so the build picks them up. Locally, copy `.env.example` to `.env`.
 
 ## Deploying
 
