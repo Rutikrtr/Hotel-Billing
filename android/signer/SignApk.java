@@ -1,4 +1,4 @@
-// Signs the Android app with the private release key (APK Signature Scheme v1, v2 and v3).
+// Signs the Android app with the private release key (APK Signature Scheme v2; the app needs Android 7+).
 // Usage: java -cp apksig.jar:. SignApk <keystore.p12> <alias> <password> <in.apk> <out.apk>
 import com.android.apksig.ApkSigner;
 import java.io.File;
@@ -23,10 +23,9 @@ public class SignApk {
         new ApkSigner.Builder(List.of(signer))
                 .setInputApk(new File(args[3]))
                 .setOutputApk(new File(args[4]))
-                .setMinSdkVersion(21)
-                .setV1SigningEnabled(true)
+                .setMinSdkVersion(24)
+                .setV1SigningEnabled(false)
                 .setV2SigningEnabled(true)
-                .setV3SigningEnabled(true)
                 .build()
                 .sign();
         System.out.println("Signed " + args[4]);
