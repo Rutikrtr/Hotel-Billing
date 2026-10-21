@@ -6,3 +6,4 @@ node_modules/
 hotel-billing-site.zip
 .env
 public/config.js
+.android-signing/

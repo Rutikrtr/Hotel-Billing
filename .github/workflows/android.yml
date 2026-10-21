@@ -1,0 +1,38 @@
+# Builds the Android app (unsigned) on GitHub's servers, which have the Android SDK.
+# The APK is pushed to the "apk-unsigned" branch and signed afterwards with the private
+# release key, which never comes to GitHub (see android/README.md).
+name: Build Android app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build unsigned release APK
+        run: gradle -p android assembleRelease --no-daemon
+      - name: Publish to the apk-unsigned branch
+        run: |
+          mkdir out
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk out/hotel-billing-unsigned.apk
+          echo "${{ github.sha }}" > out/SOURCE_COMMIT
+          cd out
+          git init -q -b apk-unsigned
+          git add .
+          git -c user.name="github-actions" -c user.email="actions@github.com" commit -q -m "Unsigned APK from ${{ github.sha }}"
+          git push -f -q "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" apk-unsigned

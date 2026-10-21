@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.techyverve.hotelbilling",
+      "sha256_cert_fingerprints": ["8E:82:50:00:0A:6E:34:97:E3:04:54:CA:9C:42:A7:68:5A:E2:E9:E8:01:7B:FF:94:1A:80:FA:65:DC:EB:C4:41"]
+    }
+  }
+]

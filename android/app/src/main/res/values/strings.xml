@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Hotel Billing</string>
+    <!-- The web app this Android app opens. -->
+    <string name="launch_url">https://hotel-billing-v1.pages.dev/</string>
+    <string name="provider_authority">in.techyverve.hotelbilling.fileprovider</string>
+    <!-- Websites that vouch for this app (each serves /.well-known/assetlinks.json with the release key). -->
+    <string name="asset_statements" translatable="false">
+        [{ \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+           \"target\": {\"namespace\": \"web\", \"site\": \"https://hotel-billing-v1.pages.dev\"}},
+         { \"relation\": [\"delegate_permission/common.handle_all_urls\"],
+           \"target\": {\"namespace\": \"web\", \"site\": \"https://hotel-billing.techyverve.in\"}}]
+    </string>
+    <string-array name="additional_trusted_origins">
+        <item>https://hotel-billing.techyverve.in</item>
+    </string-array>
+</resources>
