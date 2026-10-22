@@ -625,7 +625,7 @@ button.room-edit strong { font-weight: 800; }
 .role-pill { flex: none; display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; }
 .role-pill.r-owner { background: var(--accent-soft); color: var(--accent-strong); }
 .role-pill.r-manager { background: var(--billed-soft); color: var(--billed); }
-.role-pill.r-staff { background: color-mix(in srgb, #0F766E 14%, var(--surface)); color: #0F766E; }
+.role-pill.r-staff { background: color-mix(in srgb, #0F766E 14%, var(--surface)); color: #0B5F59; }
 @media (prefers-color-scheme: dark) { .role-pill.r-staff { color: #5EEAD4; background: #10302D; } .avatar.r-manager { background: #7C3AED; } }
 .staff-actions { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 6px; }
 .staff-actions .mini { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
@@ -1028,3 +1028,62 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
 .hotel-info strong { font-weight: 700; white-space: pre-line; }
 .hotel-info a { color: var(--accent); text-decoration: none; }
 .app-actions { display: grid; gap: 8px; }
+
+/* ---------- Production polish: readable minimums, comfortable tap areas, one icon style ---------- */
+.ic { width: 1.15em; height: 1.15em; flex: none; vertical-align: -0.2em; }
+.with-ic { display: flex; align-items: center; gap: 8px; }
+.locked-field span .ic { width: 12px; height: 12px; vertical-align: -1px; }
+.date-pick .ic { width: 18px; height: 18px; color: var(--muted); }
+
+/* Invisible padding so small-looking controls still get a ~44px touch area (HIG: 44x44pt default). */
+.chip, .add-btn, .qty button, .star-btn, .back, .head-actions > *, button.mini, .edit-btn, .an-export,
+.bills-tools .button, .table-chip button, .order-top .add-section, .receipt-actions > *, .hotel-actions > *, .reveal { position: relative; }
+.chip::before, .add-btn::before, .star-btn::before, .back::before, .head-actions > *::before, button.mini::before, .edit-btn::before,
+.an-export::before, .bills-tools .button::before, .table-chip button::before, .order-top .add-section::before,
+.receipt-actions > *::before, .hotel-actions > *::before { content: ""; position: absolute; inset: -5px -2px; }
+.qty button::before { content: ""; position: absolute; inset: -6px 0; }
+.an-export::before { inset: -6px; }
+.menu-row .toggle { padding: 10px 2px; }
+
+/* Higher-contrast colours when the phone asks for them. */
+@media (prefers-contrast: more) {
+  :root { --muted: #4A3F38; --line: #CBBBAE; }
+  @media (prefers-color-scheme: dark) { :root { --muted: #D9CCC3; --line: #5A4A42; } }
+}
+
+@media (max-width: 599px) {
+  /* Nothing below 11px (HIG minimum); metadata at 12px. */
+  .tab { font-size: 11px; }
+  .eyebrow { font-size: 11.5px; }
+  h3, .list-head { font-size: 11.5px; }
+  .chip { min-height: 34px; }
+  .chip .count-badge { font-size: 11.5px; }
+  .table-tile .pill { font-size: 11px; }
+  .table-tile .state, .table-tile.free .tap { font-size: 12px; }
+  .method-badge { font-size: 11px; }
+  .role-pill { font-size: 11.5px; }
+  .kpi strong small { font-size: 12px; }
+  .kpi strong .trend { font-size: 11.5px; }
+  .col-label { font-size: 11px; }
+  .order-top .note, .list-head .note { font-size: 11.5px; }
+  .qty { min-width: 88px; }
+  .qty button { width: 32px; }
+  .add-btn { min-height: 36px; }
+  .bills-tools .date-pick input { min-height: 38px; }
+  .discount-row input { min-height: 38px; }
+  button.mini { min-height: 34px; }
+  .menu-row .edit-btn { min-height: 34px; }
+}
+.offline-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 90; padding: calc(6px + env(safe-area-inset-top)) 16px 6px; text-align: center;
+  background: var(--ink); color: var(--on-ink); font-size: 12.5px; font-weight: 700; }
+.state-error { display: grid; justify-items: center; gap: 6px; }
+.state-error strong { color: var(--text); font-size: 16px; }
+.state-error button { margin-top: 8px; }
+@media (max-width: 599px) {
+  .table-tile .state, .table-tile.free .tap { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .table-tile .tile-top { flex-wrap: nowrap; }
+  .table-tile .name { flex: none; max-width: 100%; }
+  .table-tile .pill { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .table-tile .pill::before { flex: none; }
+  .order-line .qty button { width: 32px; }
+}

@@ -128,6 +128,23 @@ const ICONS = {
   pause: '<path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM9 8v8h2V8zm4 0v8h2V8z" fill-rule="evenodd"/>',
   lock: '<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z" fill-rule="evenodd"/>',
 };
+/** Line icons for buttons: one drawing style everywhere (emoji look different on every phone). */
+const LINE_ICONS = {
+  bag: '<path d="M5.5 8h13l-1 12.5h-11z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>',
+  printer: '<path d="M7 9V3.5h10V9"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4"/><path d="m10.5 12.5 9-9M16.5 6.5l2.5 2.5M13.5 9.5l2 2"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  swap: '<path d="M7 4 3.5 7.5 7 11M3.5 7.5H17M17 13l3.5 3.5L17 20M20.5 16.5H7"/>',
+  download: '<path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14"/>',
+  qr: '<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.2"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.2"/><path d="M14 14h2.5v2.5H14zM18 18h2.5v2.5H18zM14 20.5h.01M20.5 14h.01"/>',
+  kitchen: '<path d="M7 17.5h10V21H7z"/><path d="M7 17.5V14a4 4 0 0 1-.8-7.6A4.5 4.5 0 0 1 12 3.5a4.5 4.5 0 0 1 5.8 2.9A4 4 0 0 1 17 14v3.5"/>',
+  install: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 7v7m0 0-3-3m3 3 3-3M10.5 18.5h3"/>',
+  expand: '<path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/>',
+  lock: '<rect x="5" y="11" width="14" height="9.5" rx="2"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/>',
+  share: '<path d="M12 3.5v11M7.5 8 12 3.5 16.5 8M5 12.5v6.5a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-6.5"/>',
+};
+const ic = (name) => new Raw(`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE_ICONS[name]}</svg>`);
 /** Techyverve logo (same drawing as icons/techyverve.svg), coloured by the text colour. */
 const LOGO = new Raw(`<svg class="tv-logo" viewBox="120 370 784 800" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M512 470V1022"/><path d="M236 486 512 664 788 486"/><path d="M288 640 410 722Q424 732 424 750V922"/><path d="M736 640 614 722Q600 732 600 750V988L556 1036"/><circle cx="198" cy="461" r="43" stroke-width="30"/><circle cx="826" cy="461" r="43" stroke-width="30"/><circle cx="253" cy="620" r="39" stroke-width="32"/><circle cx="771" cy="620" r="39" stroke-width="32"/><circle cx="512" cy="1080" r="46" stroke-width="32"/></g><circle cx="512" cy="437" r="49" fill="currentColor"/></svg>`);
 const icon = (name) => new Raw(`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[name]}</svg>`);
@@ -244,7 +261,7 @@ const authViews = {
           <div class="auth-row"><a href="#" data-go="forgot">Forgot password?</a></div>
           <button type="submit" class="wide">Sign In</button>
         </form>
-        <button type="button" class="secondary wide" data-install hidden style="margin-top:12px">📲 Install as App</button>`,
+        <button type="button" class="secondary wide" data-install hidden style="margin-top:12px">${ic('install')} Install as App</button>`,
       // Accounts are only created by Techyverve (hotels) and hotel owners (staff), never from this screen.
       footer: 'No account? Ask your hotel owner for a Login ID, or contact Techyverve to register your hotel.',
     });
@@ -394,9 +411,9 @@ async function tablesView(token) {
     <div class="page-head"><div><p class="eyebrow">${today}</p><h1>Tables</h1>
       ${account.role === 'owner' ? '' : html`<p class="muted">${loginName(session.user.email)} · ${account.role === 'manager' ? 'Manager' : 'Waiter'}</p>`}</div>
       <div class="head-actions">
-        ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
-        ${canBill || settings.kot_tables ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>` : ''}
-        <button type="button" class="secondary" data-install hidden>📲 Install App</button>
+        ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">${ic('bag')} New Parcel</a>` : ''}
+        ${canBill || settings.kot_tables ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">${ic('printer')}${directPrinting() ? '' : html` <span>Setup</span>`}</button>` : ''}
+        <button type="button" class="secondary" data-install hidden>${ic('install')} Install App</button>
       </div>
     </div>
     ${parcels.length ? html`
@@ -431,7 +448,7 @@ async function tablesView(token) {
         const bills = orders.map((o) => orderBill(o, o.order_items, settings.tax_rate_bp));
         const total = bills.reduce((sum, b) => sum + b.total, 0);
         const billed = orders.every((o) => o.billed_at);
-        const label = billed ? 'Bill printed' : 'Eating';
+        const label = billed ? 'Billed' : 'Eating';
         const o = orders[0];
         const items = bills.reduce((n, b) => n + b.itemCount, 0);
         const detail = orders.length > 1
@@ -538,7 +555,7 @@ async function tableView(token, tableId, sectionArg, parcelId) {
   ];
   const kotTag = (i) => (i.quantity > sentQty(i) ? html` · <span class="kot-new">+${i.quantity - sentQty(i)} new</span>`
     : i.quantity < sentQty(i) ? html` · <span class="kot-new">−${sentQty(i) - i.quantity} cancel</span>`
-    : sentQty(i) ? html` · <span class="kot-sent">🍳 sent</span>` : '');
+    : sentQty(i) ? html` · <span class="kot-sent">✓ sent</span>` : '');
 
   const dish = (m, showSold) => {
     const n = qtyOf(m.id);
@@ -626,8 +643,8 @@ async function tableView(token, tableId, sectionArg, parcelId) {
         ${billed ? html`<p class="order-note">Bill printed. Added or removed items? Print it again so the customer gets the right total.</p>` : ''}
         ${kotOn && state.cancelled.length ? html`<p class="order-note">Kitchen will be told to cancel: ${state.cancelled.map((c) => `${c.quantity} × ${c.name}`).join(', ')}</p>` : ''}
         ${kotOn ? (toKitchen
-          ? html`<button type="button" class="kot-send" id="send-kot">🍳 Send to Kitchen · ${toKitchen} item${toKitchen === 1 ? '' : 's'}</button>`
-          : html`<p class="order-note">🍳 Kitchen has the full order.</p>`) : ''}
+          ? html`<button type="button" class="kot-send" id="send-kot">${ic('kitchen')} Send to Kitchen · ${toKitchen} item${toKitchen === 1 ? '' : 's'}</button>`
+          : html`<p class="order-note">✓ Kitchen has the full order.</p>`) : ''}
         ${parcel && canBill ? html`<p class="order-note">Print Bill prints two slips: the customer’s bill and a kitchen copy, both with the bill number to call out.</p>` : ''}
         <div class="order-actions">
           ${!canBill
@@ -985,7 +1002,7 @@ function printerDialog() {
     const p = getPrinter();
     setHTML(dialog, html`
       <form class="dialog-body" novalidate>
-        <h2 style="margin:0">🖨️ Printer</h2>
+        <h2 style="margin:0" class="with-ic">${ic('printer')} Printer</h2>
         <p class="hint">Saved on this phone only. Each phone that prints sets this once.</p>
         ${isApple() && !bluetoothSupported() ? html`<div class="ios-tip">
           <strong>On iPhone / iPad</strong>
@@ -1092,12 +1109,12 @@ async function billView(token, orderId, autoPrint) {
         ${paid
           ? html`<a class="button secondary" href="#/bills">All Bills</a>
                  <button type="button" class="secondary" id="print">Print</button>
-                 <button type="button" class="secondary" id="printer-setup" aria-label="Printer setup">🖨️</button>
+                 <button type="button" class="secondary" id="printer-setup" aria-label="Printer setup">${ic('printer')}</button>
                  ${owner && feat('bill_edit') ? html`<button type="button" class="secondary" id="edit-bill">Edit Bill</button>
                    <button type="button" class="secondary danger-outline" id="delete-bill">Delete</button>` : html`<a class="button secondary" href="#/">Tables</a>`}`
           : html`<a class="button secondary" href="${order.is_parcel ? `#/parcel/${order.id}` : `#/table/${order.table_id}/${order.section}`}">Add Items</a>
                  <button type="button" class="secondary" id="print">Print Again</button>
-                 <button type="button" class="secondary" id="printer-setup" aria-label="Printer setup">🖨️</button>
+                 <button type="button" class="secondary" id="printer-setup" aria-label="Printer setup">${ic('printer')}</button>
                  <button type="button" id="pay">Receive Payment</button>`}
       </div>
       ${paid ? html`<p class="paid-note no-print">Paid by ${order.payment_method} · ${dateTime(order.closed_at)}${order.edit_count ? html` · <span class="edited-tag">Edited ${order.edit_count}×</span>` : ''}</p>`
@@ -1131,7 +1148,7 @@ async function billView(token, orderId, autoPrint) {
         <div class="center">Thank you! Visit again.</div>
       </article>
       ${order.is_parcel && order.bill_no ? html`
-        <div class="kot-actions no-print"><button type="button" class="wide" id="print-kot">🍳 Print Kitchen Copy</button></div>
+        <div class="kot-actions no-print"><button type="button" class="wide" id="print-kot">${ic('kitchen')} Print Kitchen Copy</button></div>
         <p class="paid-note no-print" style="margin-top:12px">Kitchen copy</p>
         <article class="receipt kot" aria-label="Kitchen copy">
           <div class="center"><div class="shop">KITCHEN · PARCEL</div></div>
@@ -1209,7 +1226,7 @@ async function billsView(token, day = localDay()) {
       <div class="split-legend">${METHODS.map((m) => html`<div class="m-${m.toLowerCase()}"><span class="k">${m}</span><strong>${rs(byMethod[m]).replace('.00', '')}</strong></div>`)}</div>
     </section>
     <div class="bills-tools">
-      <label class="date-pick">📅 <input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
+      <label class="date-pick">${ic('calendar')} <input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
       ${owner && feat('bill_edit') ? html`<a class="button secondary" href="#/bills/log">Change Log</a>` : ''}
     </div>
     ${unpaid.length ? html`
@@ -1489,7 +1506,7 @@ async function analyticsView(token) {
     <div class="page-head"><div><p class="eyebrow">Sales report</p><h1>Analytics</h1></div></div>
     <div class="filter-tabs" role="toolbar" aria-label="Date range">
       ${Object.entries(RANGES).map(([k, [label]]) => html`<button type="button" class="chip" data-range="${k}" aria-pressed="${k === a.range}">${label}</button>`)}
-      <button type="button" class="chip" data-range="custom" aria-pressed="${a.range === 'custom'}">📅 Dates</button>
+      <button type="button" class="chip" data-range="custom" aria-pressed="${a.range === 'custom'}">${ic('calendar')} Dates</button>
     </div>
     <form class="range-form card" id="range-form" ${a.range === 'custom' ? '' : new Raw('hidden')}>
       <label>From <input type="date" name="from" value="${a.from}" max="${localDay(new Date())}" required></label>
@@ -1651,7 +1668,7 @@ async function menuView(token) {
   const readCategory = (f) => (f.category_pick === NEW_CATEGORY ? (f.category_new || '').trim() : (f.category_pick || '').trim());
   const root = mount(html`
     <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'} · tap ☆ to show a dish first when taking orders</p></div>
-      ${feat('qr_menu') ? html`<button type="button" class="secondary" id="menu-qr">▦ QR Menu</button>` : ''}</div>
+      ${feat('qr_menu') ? html`<button type="button" class="secondary" id="menu-qr">${ic('qr')} QR Menu</button>` : ''}</div>
     <div class="two-col">
       <div>
         ${menu.length ? categories.map((c) => html`
@@ -1827,7 +1844,7 @@ async function staffSettingsView(token) {
           <p class="small" style="margin-top:-6px">Show this to customers. They scan it with the phone camera to see the menu.</p>
           <div class="qr-box" id="qr-box"><div class="skeleton"><div class="block"></div></div></div>
           <div class="hotel-actions" style="margin-top:12px">
-            <button type="button" id="qr-big">⤢ Show Big</button>
+            <button type="button" id="qr-big">${ic('expand')} Show Big</button>
             <button type="button" class="secondary" id="qr-share">Share Link</button>
             <a class="button secondary" id="qr-open" target="_blank" rel="noopener">Open Menu</a>
           </div>
@@ -1835,7 +1852,7 @@ async function staffSettingsView(token) {
         <div class="card" style="margin-top:${feat('qr_menu') ? 14 : 0}px">
           <h2>This phone</h2>
           <div class="app-actions">
-            ${canPrint ? html`<button type="button" class="secondary wide" id="printer-setup">🖨️ Printer Setup</button>` : ''}
+            ${canPrint ? html`<button type="button" class="secondary wide" id="printer-setup">${ic('printer')} Printer Setup</button>` : ''}
             <button type="button" class="secondary wide" data-install hidden>📲 Install App</button>
             <button type="button" class="wide danger-fill" id="signout">Sign Out</button>
           </div>
@@ -1881,8 +1898,8 @@ async function settingsView(token) {
     <div class="two-col">
       <form id="settings" class="card form">
         <h2 style="margin:0">Bill Details</h2>
-        <div class="locked-field"><span>Restaurant name 🔒</span><strong>${s.hotel_name}</strong></div>
-        <div class="locked-field"><span>Address 🔒</span><strong>${s.hotel_address || '—'}</strong></div>
+        <div class="locked-field"><span>Restaurant name ${ic('lock')}</span><strong>${s.hotel_name}</strong></div>
+        <div class="locked-field"><span>Address ${ic('lock')}</span><strong>${s.hotel_address || '—'}</strong></div>
         <p class="small" style="margin:-4px 0 0">To change the name or address, contact Techyverve.</p>
         <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}" maxlength="20"></label>
         <div class="gst-box">
@@ -1942,8 +1959,8 @@ async function settingsView(token) {
           <div class="qr-box" id="qr-box"><div class="skeleton"><div class="block"></div></div></div>
           <p class="qr-link small" id="qr-link"></p>
           <div class="hotel-actions">
-            <button type="button" id="qr-print">🖨️ Print Poster</button>
-            <button type="button" class="secondary" id="qr-download">⬇️ Download</button>
+            <button type="button" id="qr-print">${ic('printer')} Print Poster</button>
+            <button type="button" class="secondary" id="qr-download">${ic('download')} Download</button>
             <button type="button" class="secondary" id="qr-share">Share Link</button>
             <a class="button secondary" id="qr-open" target="_blank" rel="noopener">Open Menu</a>
             <button type="button" class="secondary danger-outline" id="qr-new">Change Link</button>
@@ -1963,9 +1980,9 @@ async function settingsView(token) {
                 <div class="staff-id">${m.email.endsWith(STAFF_DOMAIN) ? html`Login ID <code>${loginName(m.email)}</code>` : m.email}</div>
               </div>
               ${isOwner && m.role !== 'owner' ? html`<div class="staff-actions">
-                <button type="button" class="mini" data-role-staff="${m.email}" title="${m.role === 'manager' ? 'Make Waiter' : 'Make Manager'}">⇄ ${m.role === 'manager' ? 'To Waiter' : 'To Manager'}</button>
-                <button type="button" class="mini" data-reset-staff="${m.email}">🔑 Password</button>
-                <button type="button" class="mini danger" data-del-staff="${m.email}" aria-label="Remove ${name}" title="Remove">🗑 Remove</button></div>` : ''}
+                <button type="button" class="mini" data-role-staff="${m.email}" title="${m.role === 'manager' ? 'Make Waiter' : 'Make Manager'}">${ic('swap')} ${m.role === 'manager' ? 'To Waiter' : 'To Manager'}</button>
+                <button type="button" class="mini" data-reset-staff="${m.email}">${ic('key')} Password</button>
+                <button type="button" class="mini danger" data-del-staff="${m.email}" aria-label="Remove ${name}" title="Remove">${ic('trash')} Remove</button></div>` : ''}
             </div>`;
           })}
           </div>
@@ -2185,7 +2202,7 @@ async function qrDialog() {
   document.body.append(dialog);
   const close = () => { dialog.close(); dialog.remove(); };
   setHTML(dialog, html`<div class="dialog-body">
-    <h2 style="margin:0">▦ Scan for Menu</h2>
+    <h2 style="margin:0" class="with-ic">${ic('qr')} Scan for Menu</h2>
     <div class="qr-box big" id="qr-dlg-box"><div class="skeleton"><div class="block"></div></div></div>
     <p class="hint" style="text-align:center">Customer opens the phone camera and points it at this code.</p>
     <div class="hotel-actions">
@@ -2728,7 +2745,7 @@ async function adminView(token) {
     <div class="page-head">
       <div><p class="eyebrow">Techyverve · Super Admin</p><h1>Hotels</h1><p class="muted">${session.user.email}</p></div>
       <div class="head-actions">
-        <button type="button" class="secondary" data-install hidden>📲 Install App</button>
+        <button type="button" class="secondary" data-install hidden>${ic('install')} Install App</button>
         <button type="button" class="secondary" id="sa-signout">Sign Out</button>
         <button type="button" id="new-hotel">＋ New Hotel</button>
       </div>
@@ -2757,7 +2774,7 @@ async function adminView(token) {
       <div class="usage-top"><span><strong>Backups</strong><span class="small"> · ${lastBackup ? `last on this computer ${dateTime(lastBackup)}` : 'none on this computer yet'}</span></span></div>
       <p class="small" style="margin:0">Saves every hotel into its own folder: menu, staff, and bills month by month (Excel files). Later backups only fetch what’s new.</p>
       <div class="hotel-actions">
-        <button type="button" id="backup-all">⬇️ Back Up All Hotels</button>
+        <button type="button" id="backup-all">${ic('download')} Back Up All Hotels</button>
         ${window.showDirectoryPicker ? html`<button type="button" class="secondary" id="backup-choose">Change Folder</button>` : ''}
       </div>
     </section>
@@ -3058,7 +3075,7 @@ async function route() {
     document.querySelectorAll('[data-tab]').forEach((a) => (a.dataset.tab === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
     if (feature && !feat(feature)) {
       setHTML($view, html`<div class="card empty"><span class="emoji" aria-hidden="true">🔒</span>This part of the app isn’t turned on for your hotel.
-        Contact Techyverve to add it.<br><br><a href="#/bills">Go to Bills</a></div>`);
+        Contact Techyverve to add it.<br><br><a href="#/">Back to start</a></div>`);
       return;
     }
     // Show placeholders only if loading takes a moment, so fast screens don't flash.
@@ -3073,7 +3090,14 @@ async function route() {
       if (token === renderToken) window.scrollTo(0, 0);
     } catch (err) {
       clearTimeout(placeholder);
-      if (token === renderToken) setHTML($view, html`<div class="card empty">${friendly(err)}<br><br><a href="#/">Back to start</a></div>`);
+      if (token === renderToken) {
+        setHTML($view, html`<div class="card empty state-error" role="alert">
+          <span class="emoji" aria-hidden="true">${navigator.onLine ? '⚠️' : '📶'}</span>
+          <strong>${navigator.onLine ? 'Couldn’t load this screen' : 'No internet connection'}</strong>
+          <span>${navigator.onLine ? friendly(err) : 'Check Wi-Fi or mobile data, then try again.'}</span>
+          <button type="button" id="retry">Try Again</button></div>`);
+        document.getElementById('retry').addEventListener('click', route);
+      }
     }
     return;
   }
@@ -3081,6 +3105,14 @@ async function route() {
 }
 
 document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
+
+// Offline notice: orders and bills need the internet, so say so before a tap fails.
+const $offline = Object.assign(document.createElement('div'), { className: 'offline-bar', role: 'status', textContent: 'You’re offline. Orders and bills can’t be saved until the internet is back.' });
+document.body.append($offline);
+const showOnline = () => { $offline.hidden = navigator.onLine; };
+window.addEventListener('online', () => { showOnline(); toast('Back online'); });
+window.addEventListener('offline', showOnline);
+showOnline();
 // Coming back to the app (from another app or a locked screen): check for changes made by the super admin.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !session || !account) return;
