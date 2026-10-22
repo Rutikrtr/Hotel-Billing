@@ -1,63 +1,78 @@
-/* Hotel Billing design tokens.
-   Saffron accent (the colour of misal tarri) on cool neutral surfaces. Contrast against --surface:
-   light: text 18.1, muted 6.3, accent 5.2, free 5.0, billed 7.1, danger 6.5 · white on accent 5.2
-   dark:  text 15.1, muted 7.1, accent 7.4, free 9.9, billed 8.3, danger 6.9 · dark text on accent 8.1 */
+/* Hotel Billing design tokens: "Masala" theme.
+   Saffron-to-rose brand gradient on warm cream surfaces, espresso ink for strong contrast.
+   Contrast against --surface (light): text 17.8, muted 5.8, accent 5.2 · white on the button gradient 4.3 to 5.7
+   dark: accent 7.6, muted 7.8 · dark text on the dark-mode gradient 7.1 to 8.2 */
+@font-face {
+  font-family: 'Jakarta'; font-style: normal; font-display: swap; font-weight: 200 800;
+  src: url(fonts/plus-jakarta-sans-latin-wght-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  /* This half has the rupee sign. */
+  font-family: 'Jakarta'; font-style: normal; font-display: swap; font-weight: 200 800;
+  src: url(fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+20A0-20AB, U+20AD-20C0, U+2113, U+A720-A7FF;
+}
 :root {
   color-scheme: light dark;
-  --bg: #F4F5F7;
+  --bg: #FAF6F2;
   --surface: #FFFFFF;
-  --surface-2: #F1F2F5;
-  --line: #E4E6EB;
-  --text: #14161A;
-  --muted: #5B606B;
+  --surface-2: #F7F0EA;
+  --line: #EEE4DB;
+  --text: #1F1611;
+  --muted: #6F635B;
   --accent: #C2410C;
   --accent-strong: #9A3412;
-  --accent-soft: #FFF1E8;
+  --accent-soft: #FFF0E6;
   --on-accent: #FFFFFF;
+  --brand: linear-gradient(135deg, #D9480F 0%, #C2255C 100%);
+  --brand-glow: rgb(217 72 15 / 0.30);
   --free: #15803D;
-  --free-soft: #E9F8EF;
+  --free-soft: #E7F7EC;
   --billed: #6D28D9;
-  --billed-soft: #F3EEFF;
+  --billed-soft: #F2ECFF;
   --veg: #15803D;
-  --nonveg: #9A3412;
+  --nonveg: #B91C1C;
   --danger: #B91C1C;
-  --ink: #1B1D22;
+  --ink: #2B1B16;
   --on-ink: #FFFFFF;
   --star: #B45309;
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
-  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 6px 20px rgb(16 24 40 / 0.06);
-  --shadow-lg: 0 12px 40px rgb(16 24 40 / 0.18);
+  --shadow-sm: 0 1px 2px rgb(72 36 18 / 0.06);
+  --shadow: 0 1px 2px rgb(72 36 18 / 0.05), 0 6px 18px rgb(72 36 18 / 0.07);
+  --shadow-lg: 0 14px 40px rgb(72 36 18 / 0.20);
   --radius: 18px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", system-ui, sans-serif;
+  --font: 'Jakarta', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --tabbar-h: 68px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0E0F12;
-    --surface: #191B20;
-    --surface-2: #22252B;
-    --line: #2C2F36;
-    --text: #EEF0F3;
-    --muted: #A2A7B2;
+    --bg: #120D0B;
+    --surface: #1E1714;
+    --surface-2: #29201C;
+    --line: #382C26;
+    --text: #F6EEE8;
+    --muted: #B9A99E;
     --accent: #FF8A4C;
     --accent-strong: #FF8A4C;
     --accent-soft: #3A2216;
     --on-accent: #1A0D05;
+    --brand: linear-gradient(135deg, #FF8A4C 0%, #FF6F7E 100%);
+    --brand-glow: rgb(255 120 90 / 0.18);
     --free: #4ADE80;
     --free-soft: #12301D;
     --billed: #C4A5FF;
     --billed-soft: #2A2140;
     --veg: #4ADE80;
-    --nonveg: #FF9466;
+    --nonveg: #FF7B7B;
     --danger: #FF7B7B;
-    --ink: #F3F4F6;
-    --on-ink: #14161A;
+    --ink: #F6EEE8;
+    --on-ink: #1F1611;
     --star: #FBBF24;
     --shadow-sm: none;
     --shadow: none;
-    --shadow-lg: 0 12px 40px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 14px 40px rgb(0 0 0 / 0.55);
   }
 }
 
@@ -124,7 +139,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 16px 16px 32px; }
 button, .button {
   font: inherit; font-weight: 700; min-height: 48px; padding: 0 20px; border-radius: 14px;
   border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  background: var(--accent); color: var(--on-accent); text-decoration: none; white-space: nowrap;
+  background: var(--brand); color: var(--on-accent); text-decoration: none; white-space: nowrap;
   transition: transform 0.12s var(--ease), background 0.15s, box-shadow 0.15s;
 }
 button:active, .button:active { transform: scale(0.97); }
@@ -315,7 +330,7 @@ label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(-
   }
   .cart-bar .count { font-size: 13px; font-weight: 600; opacity: 0.8; display: block; }
   .cart-bar .money { font-size: 19px; font-weight: 800; }
-  .cart-bar button { background: var(--accent); color: var(--on-accent); min-height: 44px; border-radius: 13px; padding: 0 16px; }
+  .cart-bar button { background: var(--brand); color: var(--on-accent); min-height: 44px; border-radius: 13px; padding: 0 16px; }
   .order-page { padding-bottom: 92px; }
 }
 @keyframes rise { from { transform: translateY(20px); opacity: 0; } }
@@ -631,116 +646,237 @@ button.room-edit strong { font-weight: 800; }
 .login-id { font-family: var(--mono); font-weight: 700; color: var(--text); }
 .qr-box.big { width: min(300px, 100%); }
 
-/* ---------- Phones: a more compact layout (more fits on screen, same tap-friendly controls) ---------- */
-@media (max-width: 599px) {
-  :root { --tabbar-h: 58px; --radius: 15px; }
-  body { font-size: 14.5px; line-height: 1.4; }
-  main { padding: 10px 12px 24px; }
-  h1 { font-size: 23px; }
-  h2 { font-size: 17px; margin-bottom: 10px; }
-  h3 { font-size: 12px; margin: 16px 0 8px; }
-  .small { font-size: 13px; }
-  .page-head { margin: 2px 0 12px; gap: 8px; }
-  .page-head p { margin-top: 2px; }
-  .eyebrow { font-size: 12px; }
+/* ---------- Theme layer: colour, depth and polish on top of the layout above ---------- */
+body {
+  background:
+    radial-gradient(900px 340px at 85% -120px, color-mix(in srgb, #F97316 13%, transparent), transparent 70%),
+    radial-gradient(700px 300px at -10% -80px, color-mix(in srgb, #E11D48 9%, transparent), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  font-feature-settings: "cv11", "ss01";
+}
+h1 { letter-spacing: -0.03em; }
+.eyebrow { color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 800; }
 
-  /* Controls: 40-42px tall instead of 48px; inputs keep 16px text so phones don't zoom in. */
-  button, .button { min-height: 42px; padding: 0 14px; border-radius: 12px; font-size: 14.5px; }
-  input, select, textarea { min-height: 42px; padding: 8px 12px; border-radius: 11px; font-size: 16px; }
-  label { font-size: 13px; gap: 4px; }
-  .segmented span { min-height: 38px; font-size: 14px; }
-  .card { padding: 14px; }
-  .chip { min-height: 34px; padding: 0 12px; font-size: 13.5px; border-radius: 17px; }
-  .hotel-actions button, .hotel-actions a.button { min-height: 38px; font-size: 13.5px; padding: 0 10px; }
+button.secondary, .button.secondary { border-color: var(--line); }
+button.danger-fill { background: var(--danger) !important; box-shadow: none !important; }
+input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* Tab bar: active tab gets a gradient pill. */
+.tabbar { background: color-mix(in srgb, var(--surface) 90%, transparent); box-shadow: 0 -6px 24px rgb(72 36 18 / 0.06); border-top-color: transparent; }
+.tab[aria-current="page"] { color: var(--accent); font-weight: 800; }
+.tab[aria-current="page"] svg { background: var(--brand); color: #fff; box-shadow: 0 6px 14px -4px var(--brand-glow); }
+@media (prefers-color-scheme: dark) { .tab[aria-current="page"] svg { color: #1A0D05; } }
+@media (min-width: 900px) {
+  .tabbar { box-shadow: 0 6px 24px rgb(72 36 18 / 0.05); }
+  .tabbar .brand::before { background-color: transparent; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 3.5h12v17l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z' fill='white'/%3E%3C/svg%3E"), var(--brand); }
+  .tab[aria-current="page"] { background: var(--accent-soft); }
+}
+
+/* Today summary and other hero cards. */
+.hero { background: var(--brand); box-shadow: 0 14px 30px -12px var(--brand-glow); }
+.hero::before { content: ""; position: absolute; left: -30px; bottom: -60px; width: 140px; height: 140px; border-radius: 50%; background: rgb(255 255 255 / 0.07); }
+.hero .fact { background: rgb(255 255 255 / 0.16); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+@media (prefers-color-scheme: dark) { .hero { color: #1A0D05; } .hero .fact { background: rgb(255 255 255 / 0.22); } }
+.sales-card { position: relative; overflow: hidden; }
+.sales-card::after { content: ""; position: absolute; right: -50px; top: -50px; width: 150px; height: 150px; border-radius: 50%; background: var(--brand); opacity: 0.08; pointer-events: none; }
+
+/* Chips: the selected one is espresso, like a pressed key. */
+.chip { border-color: var(--line); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); box-shadow: 0 6px 14px -8px rgb(43 27 22 / 0.6); }
+
+/* Table tiles */
+.table-tile { border-color: var(--line); }
+.table-tile.free { background: var(--surface); }
+.table-tile.free .pill { background: var(--free-soft); }
+.table-tile.busy { background: linear-gradient(160deg, color-mix(in srgb, var(--accent-soft) 90%, var(--surface)) 0%, var(--surface) 70%); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.table-tile.billed { background: linear-gradient(160deg, var(--billed-soft) 0%, var(--surface) 70%); }
+.table-tile.busy::before { background: var(--brand); }
+.table-tile.busy .amount { color: var(--accent-strong); }
+.table-tile.billed .amount { color: var(--billed); }
+
+/* Dishes */
+.dish { border-color: var(--line); }
+.dish.in-order { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: linear-gradient(100deg, color-mix(in srgb, var(--accent-soft) 70%, var(--surface)), var(--surface)); }
+.add-btn { color: var(--accent); border: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent); background: var(--surface); }
+.add-btn:hover, .add-btn:active { background: var(--accent-soft); }
+.qty { background: var(--brand); box-shadow: 0 6px 14px -6px var(--brand-glow); }
+.section-tab[aria-current="page"] { background: linear-gradient(160deg, var(--accent-soft), var(--surface)); }
+
+/* Order sheet and cart bar */
+.order-panel { border-color: var(--line); }
+.order-head .title { letter-spacing: -0.02em; }
+.totals .grand .money { background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.cart-bar { background: var(--ink); }
+@media (prefers-color-scheme: dark) { .cart-bar { background: #2B211D; color: var(--text); border: 1px solid var(--line); } }
+button.kot-send { background: var(--ink) !important; color: var(--on-ink) !important; box-shadow: none !important; }
+@media (prefers-color-scheme: dark) { button.kot-send { background: #2B211D !important; color: var(--text) !important; border: 1px solid var(--line); } }
+
+/* Cards, lists, dialogs */
+.card, .list, .sales-card { border-color: var(--line); }
+.list-row .money { color: var(--text); }
+.method-badge { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 18%, transparent); }
+dialog { border: 1px solid var(--line); }
+dialog::backdrop { background: rgb(31 22 17 / 0.5); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.toast { border-radius: 999px; }
+.gst-box { background: var(--surface-2); border-color: var(--line); }
+
+/* Sign in: a warm splash behind the card. */
+body.signed-out {
+  background:
+    radial-gradient(600px 400px at 100% 0%, rgb(225 29 72 / 0.22), transparent 70%),
+    radial-gradient(600px 420px at 0% 100%, rgb(249 115 22 / 0.24), transparent 70%),
+    var(--bg);
+}
+.auth-card { box-shadow: var(--shadow-lg); border-color: transparent; }
+.auth-icon { background: var(--brand); box-shadow: 0 10px 22px -6px var(--brand-glow); }
+.auth h1 { background: var(--brand); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* ---------- Phones: compact layout (more fits on screen, controls still easy to tap) ---------- */
+@media (max-width: 599px) {
+  :root { --tabbar-h: 56px; --radius: 14px; }
+  body { font-size: 14px; line-height: 1.4; }
+  main { padding: 8px 12px 22px; }
+  h1 { font-size: 21px; }
+  h2 { font-size: 16px; margin-bottom: 8px; }
+  h3 { font-size: 11px; margin: 14px 0 7px; }
+  .small { font-size: 12.5px; }
+  .page-head { margin: 2px 0 10px; gap: 8px; align-items: center; }
+  .page-head p { margin-top: 1px; font-size: 12.5px; }
+  .eyebrow { font-size: 10.5px; }
+
+  /* Controls: 38-40px tall. Inputs keep 16px text so iPhones don't zoom on focus. */
+  button, .button { min-height: 40px; padding: 0 14px; border-radius: 12px; font-size: 14px; }
+  input, select, textarea { min-height: 40px; padding: 7px 12px; border-radius: 11px; font-size: 16px; }
+  textarea { min-height: 64px; }
+  label { font-size: 12.5px; gap: 4px; }
+  .form { gap: 11px; }
+  .segmented { border-radius: 12px; padding: 3px; }
+  .segmented span { min-height: 36px; font-size: 13.5px; border-radius: 9px; }
+  .card { padding: 13px; }
+  .toggle { font-size: 14px; gap: 10px; }
+  .toggle input { width: 42px; height: 25px; }
+  .toggle input::after { width: 19px; height: 19px; }
+  .toggle input:checked::after { transform: translateX(17px); }
+  .chip { min-height: 32px; padding: 0 12px; font-size: 13px; border-radius: 16px; }
+  .chip .count-badge { font-size: 11px; }
+  .hotel-actions button, .hotel-actions a.button { min-height: 36px; font-size: 13px; padding: 0 10px; }
   .head-actions { gap: 6px; }
-  .head-actions .button, .head-actions button { min-height: 36px; padding: 0 10px; font-size: 13.5px; }
+  .head-actions .button, .head-actions button { min-height: 34px; padding: 0 11px; font-size: 13px; border-radius: 999px; }
+  .gst-box { padding: 11px; gap: 8px; border-radius: 12px; }
+  .edit-btn { min-width: 56px; min-height: 34px; padding: 0 12px; }
+  .star-btn { min-height: 38px; min-width: 38px; font-size: 21px; }
+  .menu-row { padding-top: 3px; padding-bottom: 3px; }
 
   /* Tab bar */
-  .tab { min-height: 46px; font-size: 10.5px; gap: 2px; }
-  .tab svg { width: 21px; height: 21px; padding: 2px 12px; }
+  .tab { min-height: 44px; font-size: 10px; gap: 1px; }
+  .tab svg { width: 20px; height: 20px; padding: 3px 13px; border-radius: 13px; }
 
   /* Today summary */
-  .hero, .sales-card { padding: 13px 14px 12px; margin-bottom: 12px; border-radius: 18px; }
-  .hero .label, .sales-card .label { font-size: 13px; }
-  .hero .big, .sales-card .big { font-size: 27px; margin: 0 0 8px; }
-  .hero .fact { padding: 6px 8px; border-radius: 11px; }
-  .hero .fact strong { font-size: 16px; }
-  .hero .fact span { font-size: 11.5px; }
-  .filter-tabs { margin-bottom: 10px; gap: 6px; }
+  .hero, .sales-card { padding: 12px 13px 11px; margin-bottom: 11px; border-radius: 16px; }
+  .hero .label, .sales-card .label { font-size: 12px; }
+  .hero .big, .sales-card .big { font-size: 25px; margin: 0 0 8px; }
+  .hero .facts { gap: 6px; }
+  .hero .fact { padding: 5px 8px; border-radius: 10px; }
+  .hero .fact strong { font-size: 15px; }
+  .hero .fact span { font-size: 11px; }
+  .filter-tabs { margin-bottom: 9px; gap: 6px; }
 
-  /* Table tiles */
-  .tables { gap: 9px; }
-  .table-tile { min-height: 100px; padding: 10px 10px 10px 12px; gap: 8px; }
-  .table-tile.free { min-height: 86px; }
-  .table-tile .name { font-size: 18px; }
-  .table-tile .amount { font-size: 18px; }
-  .table-tile .pill { font-size: 11px; padding: 3px 7px; }
-  .table-tile .state, .table-tile.free .tap { font-size: 12px; }
-  .table-tile.busy::before, .table-tile.billed::before { top: 12px; bottom: 12px; }
+  /* Table tiles: three across on most phones */
+  .tables { gap: 8px; }
+  .table-tile { min-height: 82px; padding: 9px 9px 9px 11px; gap: 6px; border-radius: 13px; }
+  .table-tile.free { min-height: 70px; }
+  .table-tile .tile-top { flex-wrap: wrap; gap: 4px; }
+  .table-tile .name { font-size: 16px; }
+  .table-tile .amount { font-size: 15.5px; }
+  .table-tile .pill { font-size: 10px; padding: 2px 6px; gap: 4px; }
+  .table-tile .pill::before { width: 5px; height: 5px; }
+  .table-tile .state, .table-tile.free .tap { font-size: 11px; }
+  .table-tile.busy::before, .table-tile.billed::before { top: 10px; bottom: 10px; width: 3px; }
 
   /* Order screen */
-  .order-top { margin-bottom: 8px; gap: 8px; }
-  .order-top h1 { font-size: 20px; }
-  .order-top p { font-size: 12.5px; }
-  .back { width: 38px; height: 38px; border-radius: 12px; font-size: 20px; }
-  .order-top .add-section { min-height: 36px; font-size: 13px; padding: 0 10px; }
-  .menu-tools { gap: 8px; padding-top: 4px; padding-bottom: 8px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
-  .menu-list { gap: 7px; }
-  .dish { min-height: 56px; padding: 8px 8px 8px 11px; gap: 10px; border-radius: 13px; }
-  .dish .info { gap: 2px; }
-  .dish .dname { font-size: 14.5px; }
-  .dish .price { font-size: 14px; }
-  .dish .meta { font-size: 12px; }
-  .add-btn { min-width: 74px; min-height: 36px; padding: 0 12px; font-size: 13.5px; border-radius: 10px; }
-  .qty { min-width: 82px; height: 36px; border-radius: 10px; }
-  .qty button { min-height: 36px; width: 30px; font-size: 20px; }
+  .order-top { margin-bottom: 7px; gap: 8px; }
+  .order-top h1 { font-size: 19px; }
+  .order-top p { font-size: 12px; }
+  .back { width: 36px; height: 36px; border-radius: 11px; font-size: 19px; }
+  .order-top .add-section { min-height: 34px; font-size: 12.5px; padding: 0 10px; border-radius: 999px; }
+  .menu-tools { gap: 7px; padding-top: 4px; padding-bottom: 7px; margin: 0 -12px; padding-left: 12px; padding-right: 12px; }
+  .search input { padding-left: 38px; }
+  .search::before { left: 13px; width: 16px; height: 16px; }
+  .menu-list { gap: 6px; }
+  .dish { min-height: 52px; padding: 7px 7px 7px 10px; gap: 9px; border-radius: 12px; }
+  .dish .info { gap: 1px; }
+  .dish .dname { font-size: 14px; }
+  .dish .price { font-size: 13.5px; }
+  .dish .meta { font-size: 11.5px; }
+  .dish .line1 .diet { margin-top: 2px; }
+  .diet { width: 13px; height: 13px; }
+  .diet::after { width: 6px; height: 6px; }
+  .add-btn { min-width: 68px; min-height: 34px; padding: 0 10px; font-size: 13px; border-radius: 10px; }
+  .qty { min-width: 78px; height: 34px; border-radius: 10px; }
+  .qty button { min-height: 34px; width: 28px; font-size: 19px; }
+  .list-head { font-size: 11px; }
   .order-lines { padding: 2px 14px; }
-  .order-line { padding: 9px 0; }
-  .order-line .each { font-size: 12.5px; }
-  .order-line .qty { min-width: 94px; height: 34px; }
-  .order-line .qty button { min-height: 34px; width: 32px; }
-  .cart-bar .money { font-size: 17px; }
-  .cart-bar button { min-height: 40px; }
+  .order-line { padding: 8px 0; gap: 3px 10px; }
+  .order-line .name { font-size: 14px; }
+  .order-line .each { font-size: 12px; }
+  .order-line .qty { min-width: 88px; height: 32px; }
+  .order-line .qty button { min-height: 32px; width: 30px; }
+  .cart-bar { min-height: 54px; padding: 6px 6px 6px 16px; border-radius: 16px; left: 10px; right: 10px; bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 8px); }
+  .cart-bar .count { font-size: 12px; }
+  .cart-bar .money { font-size: 16px; }
+  .cart-bar button { min-height: 40px; border-radius: 12px; }
+  .order-page { padding-bottom: 80px; }
 
   /* Lists, bills, dialogs */
-  .list-row { min-height: 50px; padding: 9px 12px; gap: 10px; }
-  .list-row .sub { font-size: 12.5px; }
-  .method-badge { width: 34px; height: 34px; border-radius: 10px; font-size: 11px; }
-  .rank-row { padding: 9px 12px; gap: 10px; }
-  dialog .dialog-body { padding: 16px; gap: 12px; }
-  dialog .due .money { font-size: 32px; }
-  .receipt { padding: 18px 14px 16px; font-size: 12.5px; }
-  .receipt-wrap { gap: 10px; }
-  .receipt-actions { gap: 8px; }
-  .empty { padding: 24px 14px; }
+  .list-row { min-height: 48px; padding: 8px 12px; gap: 10px; }
+  .list-row .sub { font-size: 12px; }
+  .method-badge { width: 32px; height: 32px; border-radius: 10px; font-size: 10.5px; }
+  .rank-row { padding: 8px 12px; gap: 10px; }
+  dialog { border-radius: 20px; }
+  dialog .dialog-body { padding: 15px; gap: 11px; }
+  dialog .due .money { font-size: 30px; }
+  .receipt { padding: 16px 13px 15px; font-size: 12px; }
+  .receipt-wrap { gap: 9px; }
+  .receipt-actions { gap: 7px; }
+  .receipt-actions .button, .receipt-actions button { min-height: 36px; padding: 0 11px; font-size: 13px; }
+  .paid-note { font-size: 12.5px; margin: 0; }
+  .empty { padding: 22px 14px; }
+  .empty .emoji { font-size: 28px; }
+  .toast { padding: 10px 16px; font-size: 13.5px; }
 
   /* Sign in */
-  .auth-card { padding: 24px 18px 18px; gap: 12px; border-radius: 22px; }
-  .auth-icon { width: 50px; height: 50px; border-radius: 15px; }
-  .field label { font-size: 14px; }
+  .auth-card { padding: 22px 16px 16px; gap: 12px; border-radius: 22px; }
+  .auth-icon { width: 48px; height: 48px; border-radius: 14px; }
+  .auth-icon svg { width: 26px; height: 26px; }
+  .auth h1 { font-size: 24px; }
+  .field label { font-size: 13.5px; }
   .field input { min-height: 46px; font-size: 16px; }
 
-  .receipt-actions .button, .receipt-actions button { min-height: 38px; padding: 0 11px; font-size: 13.5px; }
-  .paid-note { font-size: 13px; margin: 0; }
-  .sections { gap: 7px; margin-bottom: 8px; }
-  .section-tab { min-height: 44px; min-width: 96px; padding: 5px 12px; border-radius: 12px; }
-  .section-tab .section-name { font-size: 13.5px; }
-  .section-tab .section-total { font-size: 14px; }
+  .sections { gap: 6px; margin-bottom: 7px; }
+  .section-tab { min-height: 42px; min-width: 92px; padding: 4px 12px; border-radius: 12px; }
+  .section-tab .section-name { font-size: 13px; }
+  .section-tab .section-total { font-size: 13px; }
 
-  .order-head { padding-top: 10px; padding-bottom: 10px; }
-  .order-head .title { font-size: 19px; }
-  .totals { padding-top: 8px; padding-bottom: 8px; gap: 4px; }
-  .totals .grand { font-size: 21px; padding-top: 6px; }
-  .order-actions { padding-top: 8px; padding-bottom: 12px; gap: 8px; }
-  .order-actions button { min-height: 44px; font-size: 15px; }
-  .discount-row input { min-height: 38px; }
+  .order-head { padding: 9px 14px 9px; }
+  .order-head .title { font-size: 18px; }
+  .order-head .sub { font-size: 12px; }
+  .totals { padding: 8px 14px; gap: 3px; font-size: 14px; }
+  .totals .grand { font-size: 20px; padding-top: 6px; }
+  .order-actions { padding: 8px 14px 12px; gap: 8px; }
+  .order-actions button { min-height: 44px; font-size: 14.5px; }
+  .order-note { margin: 0 14px; font-size: 13px; padding: 8px 10px; }
+  button.kot-send { width: calc(100% - 28px); min-height: 44px; }
+  .discount-row input { min-height: 34px; width: 96px; }
 
   /* Super admin cards */
   .hotel-card { gap: 10px; }
-  .hotel-stats strong { font-size: 15px; }
+  .hotel-stats strong { font-size: 14.5px; }
   .hotel-stats div { padding: 6px 8px; }
-  .feature-chip { font-size: 12px; padding: 3px 8px; }
+  .feature-chip { font-size: 11.5px; padding: 3px 8px; }
 }
+@media (min-width: 340px) and (max-width: 599px) { .tables { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
 .ios-tip { border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; font-size: 14px; }
 .ios-tip p { margin: 0; }
 .ios-tip ol { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
@@ -750,7 +886,7 @@ button.room-edit strong { font-weight: 800; }
   background: var(--surface); color: var(--accent); box-shadow: 0 2px 12px rgb(0 0 0 / 0.22); font-size: 22px; font-weight: 800;
   transform: translate(-50%, -60px); pointer-events: none; }
 .ptr.back { transition: transform 0.2s; }
-.ptr.ready { background: var(--accent); color: var(--on-accent); }
+.ptr.ready { background: var(--brand); color: var(--on-accent); }
 @media print { .ptr { display: none !important; } }
 
 /* Kitchen tickets for tables */

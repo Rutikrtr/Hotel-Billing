@@ -426,7 +426,7 @@ async function tablesView(token) {
         const orders = (byTable[t.id] ?? []).sort((a, b) => a.section.localeCompare(b.section));
         if (!orders.length) return html`<a class="table-tile free" href="#/table/${t.id}" aria-label="${t.name}, free">
           <span class="tile-top"><span class="name">${t.name}</span><span class="pill">Free</span></span>
-          <span class="tap">Tap to take order</span></a>`;
+          <span class="tap">Tap to order</span></a>`;
         const bills = orders.map((o) => orderBill(o, o.order_items, settings.tax_rate_bp));
         const total = bills.reduce((sum, b) => sum + b.total, 0);
         const billed = orders.every((o) => o.billed_at);

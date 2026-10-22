@@ -4,16 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#C2410C">
+  <meta name="theme-color" content="#D9480F">
   <title>Menu</title>
   <link rel="icon" href="icons/icon-192.png">
   <style>
+    @font-face { font-family: 'Jakarta'; font-display: swap; font-weight: 200 800; src: url(fonts/plus-jakarta-sans-latin-wght-normal.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F; }
+    @font-face { font-family: 'Jakarta'; font-display: swap; font-weight: 200 800; src: url(fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2) format('woff2'); unicode-range: U+0100-02BA, U+20A0-20C0; }
     :root {
       color-scheme: light dark;
-      --bg: #F4F5F7; --surface: #FFFFFF; --surface-2: #F1F2F5; --line: #E4E6EB;
-      --text: #14161A; --muted: #5B606B; --accent: #C2410C; --accent-soft: #FFF1E8; --on-accent: #FFFFFF;
+      --bg: #FAF6F2; --surface: #FFFFFF; --surface-2: #F7F0EA; --line: #EEE4DB;
+      --text: #1F1611; --muted: #6F635B; --accent: #C2410C; --accent-soft: #FFF1E8; --on-accent: #FFFFFF;
       --veg: #15803D; --nonveg: #B91C1C; --star: #B45309;
-      --radius: 18px; --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", system-ui, sans-serif;
+      --radius: 18px; --font: 'Jakarta', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans", system-ui, sans-serif;
     }
     @media (prefers-color-scheme: dark) {
       :root { --bg: #0E0F12; --surface: #191B20; --surface-2: #22252B; --line: #2C2F36; --text: #EEF0F3; --muted: #A2A7B2;
@@ -21,7 +23,7 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.45 var(--font); }
-    .hero { background: linear-gradient(140deg, #C2410C, #9A3412); color: #fff; padding: 28px 18px 22px; }
+    .hero { background: linear-gradient(135deg, #D9480F, #C2255C); color: #fff; padding: 28px 18px 22px; }
     .hero h1 { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; }
     .hero p { margin: 6px 0 0; opacity: 0.92; font-size: 14.5px; }
     .hero .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }

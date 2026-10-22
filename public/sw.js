@@ -1,7 +1,7 @@
 // Lets Hotel Billing install as an app and open quickly. Pages and code come from the network first, so
 // updates show up at once; the saved copy is only used when the phone is offline. Data (Supabase) is never cached.
-const CACHE = 'hotel-billing-v1';
-const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'billing.js', 'printer.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png'];
+const CACHE = 'hotel-billing-v2';
+const SHELL = ['./', 'index.html', 'style.css', 'fonts/plus-jakarta-sans-latin-wght-normal.woff2', 'fonts/plus-jakarta-sans-latin-ext-wght-normal.woff2', 'app.js', 'billing.js', 'printer.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
