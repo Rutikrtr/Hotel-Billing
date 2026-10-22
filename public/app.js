@@ -3666,34 +3666,54 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
   el.setAttribute('aria-hidden', 'true');
   el.textContent = '↻';
   document.body.append(el);
-  const PULL = 90;
+  const DEAD = 32;     // ignore small finger movements: the circle only appears on a clear pull down
+  const PULL = 110;    // pull this far (after the dead zone) to refresh
+  let startX = 0;
   let startY = null;
-  let dist = 0;
+  let pull = 0;
+  let refreshing = false;
   const scrolledInside = (node) => {
     for (let n = node; n && n !== document.body; n = n.parentElement) if (n.scrollTop > 0) return true;
     return false;
   };
+  const hide = () => { el.classList.add('back'); el.classList.remove('ready', 'show'); el.style.transform = ''; el.style.opacity = ''; };
   addEventListener('touchstart', (e) => {
-    dist = 0;
-    startY = e.touches.length === 1 && window.scrollY <= 0 && !document.querySelector('dialog[open]')
-      && !document.body.classList.contains('sheet-open') && !scrolledInside(e.target) ? e.touches[0].clientY : null;
+    pull = 0;
+    startY = !refreshing && e.touches.length === 1 && window.scrollY <= 0 && !document.querySelector('dialog[open]')
+      && !document.body.classList.contains('sheet-open') && !scrolledInside(e.target) && !e.target.closest('.chips, .filter-tabs, .sections, input, textarea, select')
+      ? e.touches[0].clientY : null;
+    startX = e.touches[0]?.clientX ?? 0;
   }, { passive: true });
   addEventListener('touchmove', (e) => {
     if (startY == null) return;
-    if (window.scrollY > 0) { startY = null; dist = 0; }
-    else dist = Math.max(0, e.touches[0].clientY - startY);
+    const dy = e.touches[0].clientY - startY;
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    // Sideways swipes and scrolling down the page are not a pull.
+    if (window.scrollY > 0 || dy < 0 || (dx > 12 && dx > dy)) { startY = null; hide(); return; }
+    pull = Math.max(0, dy - DEAD);
+    if (!pull) return;
     el.classList.remove('back');
-    el.style.transform = `translate(-50%, ${Math.min(dist, 150) * 0.6 - 60}px) rotate(${dist * 2}deg)`;
-    el.classList.toggle('ready', dist > PULL);
+    el.classList.add('show');
+    el.style.opacity = String(Math.min(1, pull / 50));
+    el.style.transform = `translate(-50%, ${Math.min(pull, 160) * 0.55 - 60}px) rotate(${pull * 2}deg)`;
+    el.classList.toggle('ready', pull > PULL);
   }, { passive: true });
-  addEventListener('touchend', () => {
+  const end = () => {
     if (startY == null) return;
     startY = null;
-    if (dist > PULL) { el.style.transform = 'translate(-50%, 30px)'; location.reload(); return; }
-    el.classList.add('back');
-    el.classList.remove('ready');
-    el.style.transform = '';
-  });
+    if (pull <= PULL) { hide(); return; }
+    // Refresh the data in place (no page reload): the circle spins until the screen is up to date.
+    refreshing = true;
+    el.classList.add('spin');
+    el.style.transform = 'translate(-50%, 24px)';
+    for (const x of readStore.values()) x.stale = true;
+    accountCheck = null;
+    getSettings.clear();
+    getMenu.clear();
+    Promise.resolve(route()).finally(() => setTimeout(() => { refreshing = false; el.classList.remove('spin'); hide(); }, 250));
+  };
+  addEventListener('touchend', end);
+  addEventListener('touchcancel', () => { startY = null; hide(); });
 })();
 window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {

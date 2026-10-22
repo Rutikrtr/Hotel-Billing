@@ -1159,3 +1159,7 @@ body.loading::after { content: ""; position: fixed; z-index: 300; top: 0; left: 
 a.list-row, .table-tile, .dish, .chip, .tab { -webkit-user-select: none; user-select: none; }
 .tab:active svg { transform: scale(0.92); }
 .tab svg { transition: transform 0.12s var(--ease), background 0.2s var(--ease); }
+.ptr { opacity: 0; transition: opacity 0.15s; }
+.ptr.back { transition: transform 0.2s, opacity 0.2s; }
+.ptr.spin { opacity: 1; animation: ptr-spin 0.7s linear infinite; }
+@keyframes ptr-spin { from { rotate: 0deg; } to { rotate: 360deg; } }
