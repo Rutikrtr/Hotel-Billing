@@ -6,7 +6,52 @@ import {
   feedLines, getPrinter, isApple, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
 } from './printer.js';
 
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+// ---------- Smooth screens: a small store of what each screen last read (Redux-style, for server data) ----------
+// List screens draw at once from memory and refresh quietly behind; anything saved makes the next read go to the
+// internet first, so a saved bill or order is never shown out of date. Offline, the last copy is shown.
+const READ_RPCS = new Set(['sales_total', 'bill_list', 'dish_sales', 'sales_report', 'popular_menu_items', 'sa_list_hotels', 'sa_usage', 'my_menu_token']);
+const readStore = new Map();
+const FRESH_MS = 1500;          // the same read within 1.5 s (quick tab taps) is answered from memory without asking again
+let readMode = 'network';       // 'cache' while a list screen is drawing
+let onFresherData = () => {};   // set below: quietly redraws the screen when a background read brought changes
+const INSTANT_VIEWS = new Set();  // list screens that draw from memory (filled where the routes are defined)
+async function storeFetch(input, init = {}) {
+  const url = typeof input === 'string' ? input : input.url;
+  const method = (init.method || 'GET').toUpperCase();
+  const rest = url.includes('/rest/v1/');
+  const rpc = url.match(/\/rest\/v1\/rpc\/(\w+)/)?.[1];
+  if (!rest || !(method === 'GET' || (method === 'POST' && READ_RPCS.has(rpc)))) {
+    const res = await fetch(input, init);
+    if (rest) for (const e of readStore.values()) e.stale = true;   // something changed: re-check before showing
+    return res;
+  }
+  const h = new Headers(init.headers);
+  const key = `${method} ${url} ${init.body ?? ''} ${h.get('Accept') ?? ''} ${h.get('Prefer') ?? ''}`;
+  const hit = readStore.get(key);
+  const answer = (e) => new Response(e.body, { status: 200, headers: e.headers });
+  const load = async () => {
+    const res = await fetch(input, init);
+    if (res.status !== 200) return { res, changed: false };
+    const body = await res.text();
+    const before = readStore.get(key);
+    readStore.delete(key);
+    readStore.set(key, { body, headers: [...res.headers], at: Date.now(), stale: false });
+    if (readStore.size > 150) readStore.delete(readStore.keys().next().value);
+    return { res: new Response(body, { status: 200, headers: res.headers }), changed: !before || before.body !== body };
+  };
+  if (hit && !hit.stale && (Date.now() - hit.at < FRESH_MS)) return answer(hit);
+  if (hit && !hit.stale && readMode === 'cache') {
+    load().then((r) => { if (r.changed) onFresherData(); }, () => {});
+    return answer(hit);
+  }
+  try {
+    return (await load()).res;
+  } catch (err) {
+    if (hit) return answer(hit);   // offline: show the last copy
+    throw err;
+  }
+}
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { global: { fetch: storeFetch } });
 const METHODS = ['Cash', 'UPI', 'Card'];
 const $view = document.getElementById('view');
 let session = null;
@@ -3033,6 +3078,7 @@ const routes = [
   [/^\/settings(\?qr)?$/, settingsView, 'settings', null, 'any'],
 ];
 const allowed = (who) => who === 'any' || (who === 'bill' ? account.can_bill === true : account.role === 'owner');
+[tablesView, billsView, analyticsView, roomsView, logView].forEach((v) => INSTANT_VIEWS.add(v));
 // ---------- Super admin: plans, Techyverve bills and the activity log ----------
 
 const PLANS = { Starter: { price: 499900, staff: 0 }, Pro: { price: 599900, staff: 2 } };
@@ -3399,6 +3445,7 @@ const adminRoutes = [
   [/^\/admin\/bill\/(\d+)$/, adminBillView, 'admin', null, 'any'],
   [/^\/admin\/log$/, adminLogView, 'admin', null, 'any'],
 ];
+[adminView, adminBillingView, adminLogView].forEach((v) => INSTANT_VIEWS.add(v));
 
 /** Full-screen notice shown instead of the app (no access yet, hotel paused, …). */
 function blockedScreen({ iconName = 'lock', title, body, retry = true }) {
@@ -3429,9 +3476,15 @@ function setTabs(a) {
   document.querySelectorAll('[data-tab]').forEach((t) => { t.hidden = !show[t.dataset.tab]; });
 }
 
-async function route() {
+// List screens draw from memory at once and refresh behind; screens where people edit (an order, a form) always load fresh.
+const scrollMemo = new Map();      // each list screen keeps its scroll position, like app tabs do
+let shownPath = '';                // the screen currently on display
+let silentTimer = 0;
+
+async function route(opts) {
+  const silent = opts?.silent === true;
   const token = ++renderToken;
-  document.body.classList.remove('sheet-open');
+  if (!silent) document.body.classList.remove('sheet-open');
   if (!session) return signInView();
   if (recoveringPassword) return authViews.newPassword();
   try {
@@ -3490,18 +3543,38 @@ async function route() {
         Contact Techyverve to add it.<br><br><a href="#/">Back to start</a></div>`);
       return;
     }
-    // Show placeholders only if loading takes a moment, so fast screens don't flash.
-    const placeholder = setTimeout(() => {
-      if (token === renderToken) setHTML($view, html`<div class="skeleton" aria-label="Loading"><div class="bar"></div><div class="block"></div>
+    const changedScreen = path !== shownPath;
+    if (changedScreen && shownPath) scrollMemo.set(shownPath, window.scrollY);
+    const keepY = window.scrollY;
+    // Keep the current screen while the next one loads (a thin bar shows progress); placeholders only on a slow first load.
+    if (!silent) document.body.classList.add('loading');
+    const placeholder = silent ? 0 : setTimeout(() => {
+      if (token === renderToken && (changedScreen || !$view.firstElementChild)) setHTML($view, html`<div class="skeleton" aria-label="Loading"><div class="bar"></div><div class="block"></div>
         <div class="grid">${[1, 2, 3, 4].map(() => html`<div class="block"></div>`)}</div></div>`);
-    }, 150);
+    }, 900);
+    const instant = INSTANT_VIEWS.has(view);
+    readMode = instant ? 'cache' : 'network';
     try {
       await view(token, ...m.slice(1).filter(Boolean));
-      showInstall();
+      readMode = 'network';
       clearTimeout(placeholder);
-      if (token === renderToken) window.scrollTo(0, 0);
+      if (token === renderToken) {
+        document.body.classList.remove('loading');
+        showInstall();
+        if (silent || !changedScreen) window.scrollTo(0, keepY);
+        else {
+          window.scrollTo(0, instant ? scrollMemo.get(path) ?? 0 : 0);
+          if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            $view.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+          }
+        }
+        shownPath = path;
+      }
     } catch (err) {
+      readMode = 'network';
       clearTimeout(placeholder);
+      document.body.classList.remove('loading');
+      if (silent) return;   // a quiet refresh that failed keeps the screen as it is
       if (token === renderToken) {
         setHTML($view, html`<div class="card empty state-error" role="alert">
           <span class="emoji" aria-hidden="true">${navigator.onLine ? '⚠️' : '📶'}</span>
@@ -3518,6 +3591,30 @@ async function route() {
 
 document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
 
+// A background read found changes: redraw the list screen quietly, unless someone is typing, a dialog or the order sheet is open.
+onFresherData = () => {
+  clearTimeout(silentTimer);
+  silentTimer = setTimeout(() => {
+    const busy = document.querySelector('dialog[open]') || document.body.classList.contains('sheet-open')
+      || document.activeElement?.matches('input, textarea, select') || document.visibilityState !== 'visible';
+    const path = location.hash.replace(/^#/, '') || '/';
+    if (!busy && path === shownPath && session && account) route({ silent: true });
+  }, 80);
+};
+// The Tables screen keeps itself up to date while it is open (other phones take orders too).
+setInterval(() => {
+  if (document.visibilityState !== 'visible' || !session || !account?.staff) return;
+  const path = location.hash.replace(/^#/, '') || '/';
+  if (path !== '/' || path !== shownPath) return;
+  for (const e of readStore.values()) e.stale = true;
+  onFresherData();
+}, 30000);
+// Tapping the tab you're already on scrolls back to the top.
+document.querySelector('.tabbar').addEventListener('click', (e) => {
+  const tab = e.target.closest('a.tab[aria-current="page"]');
+  if (tab && tab.getAttribute('href') === location.hash) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+});
+
 // Offline notice: orders and bills need the internet, so say so before a tap fails.
 const $offline = Object.assign(document.createElement('div'), { className: 'offline-bar', role: 'status', textContent: 'You’re offline. Orders and bills can’t be saved until the internet is back.' });
 document.body.append($offline);
@@ -3530,7 +3627,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !session || !account) return;
   const before = JSON.stringify(account);
   accountCheck = null;
-  getAccount().then((a) => { if (JSON.stringify(a) !== before) route(); }).catch(() => {});
+  getAccount().then((a) => {
+    if (JSON.stringify(a) !== before) { route(); return; }
+    // Same access: bring the open list screen up to date quietly.
+    for (const e of readStore.values()) e.stale = true;
+    onFresherData();
+  }).catch(() => {});
 });
 
 // ---------- install as an app (opens full screen, without the browser bar) ----------
@@ -3597,7 +3699,7 @@ window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
   session = s;
-  if (changed) { accountCheck = null; account = null; getSettings.clear(); getMenu.clear(); }
+  if (changed) { accountCheck = null; account = null; getSettings.clear(); getMenu.clear(); readStore.clear(); shownPath = ''; scrollMemo.clear(); }
   if (event === 'PASSWORD_RECOVERY') { recoveringPassword = true; setTimeout(route, 0); return; }
   if (event === 'SIGNED_OUT') { recoveringPassword = false; lastEmail = ''; }
   // Defer: calling Supabase from inside this callback can deadlock the auth client.

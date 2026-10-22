@@ -1149,3 +1149,13 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
   .admin-tabs a { font-size: 13px; }
   .inv-title { text-align: left; }
 }
+
+/* Loading: a thin moving line at the top while the next screen loads (the current one stays visible). */
+body.loading::after { content: ""; position: fixed; z-index: 300; top: 0; left: 0; width: 40%; height: 3px; border-radius: 0 2px 2px 0;
+  background: var(--brand); animation: load-line 0.9s cubic-bezier(0.4, 0, 0.2, 1) infinite; pointer-events: none; }
+@keyframes load-line { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@media (prefers-reduced-motion: reduce) { body.loading::after { animation: none; width: 100%; opacity: 0.6; } }
+/* Taps feel instant: no 300 ms delay, no grey flash, pressed state on rows and tiles. */
+a.list-row, .table-tile, .dish, .chip, .tab { -webkit-user-select: none; user-select: none; }
+.tab:active svg { transform: scale(0.92); }
+.tab svg { transition: transform 0.12s var(--ease), background 0.2s var(--ease); }
