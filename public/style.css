@@ -62,7 +62,9 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+/* The app has its own pull-to-refresh (see app.js), so the browser's is turned off to avoid reloading twice. */
+html, body { overscroll-behavior-y: none; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
   font: 16px/1.45 var(--font);
@@ -742,3 +744,22 @@ button.room-edit strong { font-weight: 800; }
 .ios-tip { border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); border-radius: 14px; padding: 12px 14px; display: grid; gap: 6px; font-size: 14px; }
 .ios-tip p { margin: 0; }
 .ios-tip ol { margin: 0; padding-left: 20px; display: grid; gap: 3px; }
+
+/* Pull down to refresh */
+.ptr { position: fixed; top: 0; left: 50%; z-index: 1000; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface); color: var(--accent); box-shadow: 0 2px 12px rgb(0 0 0 / 0.22); font-size: 22px; font-weight: 800;
+  transform: translate(-50%, -60px); pointer-events: none; }
+.ptr.back { transition: transform 0.2s; }
+.ptr.ready { background: var(--accent); color: var(--on-accent); }
+@media print { .ptr { display: none !important; } }
+
+/* Kitchen tickets for tables */
+button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4px; background: var(--accent-strong); color: #fff; }
+.kot-new { color: var(--accent); font-weight: 700; }
+.kot-sent { color: var(--muted); }
+.kot-ticket { display: none; }
+.kot-ticket .kot-item { font-size: 16px; font-weight: 700; padding: 4px 0; }
+@media print {
+  body.print-ticket > :not(.kot-ticket) { display: none !important; }
+  body.print-ticket > .kot-ticket { display: block !important; }
+}

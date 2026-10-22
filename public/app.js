@@ -394,8 +394,8 @@ async function tablesView(token) {
         <button type="button" class="secondary" data-install hidden>📲 Install App</button>
         ${feat('qr_menu') ? html`<button type="button" class="secondary" id="qr-head">▦ QR Menu</button>` : ''}
         ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
-        ${canBill ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>
-          <a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
+        ${canBill || settings.kot_tables ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>` : ''}
+        ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
       </div>
     </div>
     ${parcels.length ? html`
@@ -487,7 +487,10 @@ async function tableView(token, tableId, sectionArg, parcelId) {
   const totals = Object.fromEntries(open.map((o) => [o.section, orderBill(o, o.order_items, settings.tax_rate_bp).total]));
   const label = parcel ? (current?.bill_no ? `Parcel #${tokenNo(current.bill_no)}` : 'Parcel') : tableLabel(table.name, section, multi || Boolean(current?.is_split));
   const canBill = account.can_bill === true;
-  const state = { order: current, items: current ? current.order_items : [], filter: hasPopular ? POPULAR : 'All', search: '' };
+  // Kitchen tickets (KOT): each "Send to Kitchen" prints only what changed since the last ticket.
+  const kotOn = !parcel && settings.kot_tables === true;
+  // cancelled: dishes the kitchen was told about and then removed from the order (until the next ticket).
+  const state = { order: current, items: current ? current.order_items : [], cancelled: [], filter: hasPopular ? POPULAR : 'All', search: '' };
   const categories = [...(hasPopular ? [POPULAR] : []), 'All', ...new Set(menu.map((m) => m.category))];
   let queue = Promise.resolve();
 
@@ -528,6 +531,15 @@ async function tableView(token, tableId, sectionArg, parcelId) {
   const $sub = document.getElementById('order-sub');
   const qtyOf = (menuId) => state.items.find((i) => i.menu_item_id === menuId)?.quantity ?? 0;
   const bill = () => orderBill(state.order, state.items, settings.tax_rate_bp);
+  const sentQty = (i) => i.kot_qty ?? 0;
+  /** What the kitchen hasn't been told yet: positive = new dishes, negative = cancelled. */
+  const kotChanges = () => [
+    ...state.items.filter((i) => i.quantity !== sentQty(i)).map((i) => ({ name: i.name, quantity: i.quantity - sentQty(i) })),
+    ...state.cancelled.map((c) => ({ name: c.name, quantity: -c.quantity })),
+  ];
+  const kotTag = (i) => (i.quantity > sentQty(i) ? html` · <span class="kot-new">+${i.quantity - sentQty(i)} new</span>`
+    : i.quantity < sentQty(i) ? html` · <span class="kot-new">−${sentQty(i) - i.quantity} cancel</span>`
+    : sentQty(i) ? html` · <span class="kot-sent">🍳 sent</span>` : '');
 
   const dish = (m, showSold) => {
     const n = qtyOf(m.id);
@@ -570,6 +582,7 @@ async function tableView(token, tableId, sectionArg, parcelId) {
 
   function renderOrder() {
     const b = bill();
+    const toKitchen = kotOn ? kotChanges().reduce((n, c) => n + Math.abs(c.quantity), 0) : 0;
     const billed = Boolean(state.order?.billed_at);
     document.getElementById('add-section').hidden = !state.items.length || parcel;
     const tabTotal = document.querySelector('.section-tab[aria-current="page"] .section-total');
@@ -593,7 +606,7 @@ async function tableView(token, tableId, sectionArg, parcelId) {
             <li class="order-line">
               <span class="name">${i.name}</span>
               <span class="line-total">${rs(i.unit_price * i.quantity)}</span>
-              <span class="each">${rs(i.unit_price)} each</span>
+              <span class="each">${rs(i.unit_price)} each${kotOn ? kotTag(i) : ''}</span>
               <span class="qty" role="group" aria-label="Quantity of ${i.name}">
                 <button type="button" data-dec="${i.id}" aria-label="Remove one ${i.name}">−</button>
                 <output>${i.quantity}</output>
@@ -612,6 +625,10 @@ async function tableView(token, tableId, sectionArg, parcelId) {
           <div class="grand"><span>Total</span><span class="money">${rs(b.total)}</span></div>
         </div>
         ${billed ? html`<p class="order-note">Bill printed. Added or removed items? Print it again so the customer gets the right total.</p>` : ''}
+        ${kotOn && state.cancelled.length ? html`<p class="order-note">Kitchen will be told to cancel: ${state.cancelled.map((c) => `${c.quantity} × ${c.name}`).join(', ')}</p>` : ''}
+        ${kotOn ? (toKitchen
+          ? html`<button type="button" class="kot-send" id="send-kot">🍳 Send to Kitchen · ${toKitchen} item${toKitchen === 1 ? '' : 's'}</button>`
+          : html`<p class="order-note">🍳 Kitchen has the full order.</p>`) : ''}
         ${parcel && canBill ? html`<p class="order-note">Print Bill prints two slips: the customer’s bill and a kitchen copy, both with the bill number to call out.</p>` : ''}
         <div class="order-actions">
           ${!canBill
@@ -657,7 +674,10 @@ async function tableView(token, tableId, sectionArg, parcelId) {
 
   function changeQty(item, delta) {
     item.quantity += delta;
-    if (item.quantity <= 0) state.items = state.items.filter((i) => i !== item);
+    if (item.quantity <= 0) {
+      state.items = state.items.filter((i) => i !== item);
+      if (kotOn && sentQty(item)) state.cancelled.push({ menu_item_id: item.menu_item_id, name: item.name, quantity: sentQty(item) });
+    }
     render();
     enqueue(async () => {
       const order = await ensureOrder();
@@ -667,7 +687,7 @@ async function tableView(token, tableId, sectionArg, parcelId) {
         await q(sb.from('order_items').update({ quantity: item.quantity }).eq('id', item.id));
       } else {
         const row = await q(sb.from('order_items').insert({
-          order_id: order.id, menu_item_id: item.menu_item_id, name: item.name, unit_price: item.unit_price, quantity: item.quantity,
+          order_id: order.id, menu_item_id: item.menu_item_id, name: item.name, unit_price: item.unit_price, quantity: item.quantity, kot_qty: sentQty(item),
         }).select().single());
         item.id = row.id;
         if (item.quantity !== row.quantity) await q(sb.from('order_items').update({ quantity: item.quantity }).eq('id', item.id));
@@ -689,7 +709,9 @@ async function tableView(token, tableId, sectionArg, parcelId) {
     const m = menu.find((x) => x.id === Number(btn.dataset.add));
     let item = state.items.find((i) => i.menu_item_id === m.id);
     if (!item) {
-      item = { id: --tempId, menu_item_id: m.id, name: m.name, unit_price: m.price, quantity: 0 };
+      const was = state.cancelled.find((c) => c.menu_item_id === m.id);
+      state.cancelled = state.cancelled.filter((c) => c !== was);
+      item = { id: --tempId, menu_item_id: m.id, name: m.name, unit_price: m.price, quantity: 0, kot_qty: was?.quantity ?? 0 };
       state.items.push(item);
     }
     tick();
@@ -711,7 +733,28 @@ async function tableView(token, tableId, sectionArg, parcelId) {
         toast(`${label} order saved`);
         location.hash = '#/';
       });
+    } else if (t.id === 'send-kot') {
+      const p = getPrinter();
+      if (p.method === 'bluetooth') connectBluetooth(p.kitchen.separate ? 'kitchen' : 'bill', true).catch(() => {});
+      act(t, async () => {
+        await queue;
+        const changes = kotChanges();
+        if (!changes.length) return;
+        const sent = state.items.filter((i) => i.quantity !== sentQty(i)).map((i) => ({ item: i, qty: i.quantity }));
+        const ticket = { label, changes, addOn: state.items.some((i) => sentQty(i) > 0) || state.cancelled.length > 0,
+          by: loginName(session.user.email), at: new Date().toISOString() };
+        if (directPrinting()) {
+          const failed = await printSlips([kotSlip(ticket)], { pick: true });
+          if (failed.length) throw failed[0].error;
+        } else printTicket(ticket);
+        sent.forEach(({ item, qty }) => { item.kot_qty = qty; });
+        state.cancelled = [];
+        renderOrder();
+        enqueue(() => Promise.all(sent.map(({ item, qty }) => q(sb.from('order_items').update({ kot_qty: qty }).eq('id', item.id)))));
+        toast(`Sent to kitchen · ${label}`);
+      });
     } else if (t.id === 'print-bill') {
+      if (kotOn && kotChanges().length && !confirm('Some dishes haven’t been sent to the kitchen yet. Print the bill anyway?')) return;
       warmPrinter();
       act(t, async () => {
         await queue;
@@ -837,14 +880,43 @@ function kitchenSlip(order) {
   return kot.cut();
 }
 
+const ticketLabel = (label) => (/^table/i.test(label) ? label : `Table ${label}`);
+
+/** Kitchen ticket for a table: the table in big letters, then only the dishes added (or cancelled) since the last ticket. */
+function kotSlip(t) {
+  const s = new Slip(paperWidth(), 'kitchen');
+  s.align('center').bold(true).size(2, 2).wrap(ticketLabel(t.label).toUpperCase(), Math.floor(s.width / 2)).size(1, 1)
+    .line(t.addOn ? 'KOT - ADD-ON' : 'KOT').bold(false)
+    .line(`${time(t.at)}${t.by ? `  ${t.by}` : ''}`).align('left').rule();
+  for (const c of t.changes) {
+    s.bold(true).size(1, 2).wrap(c.quantity > 0 ? `${c.quantity} x ${c.name}` : `CANCEL ${-c.quantity} x ${c.name}`).size(1, 1).bold(false);
+  }
+  return s.cut();
+}
+
+/** Kitchen ticket through the phone's print dialog (no direct printer set up). */
+function printTicket(t) {
+  document.querySelector('.kot-ticket')?.remove();
+  const el = document.createElement('article');
+  el.className = 'receipt kot-ticket';
+  setHTML(el, html`
+    <div class="center"><div class="shop">${ticketLabel(t.label)}</div><div>${t.addOn ? 'KOT · ADD-ON' : 'KOT'} · ${time(t.at)}${t.by ? ` · ${t.by}` : ''}</div></div>
+    <div class="rule"></div>
+    <table><tbody>${t.changes.map((c) => html`<tr><td class="kot-item">${c.quantity > 0 ? c.name : `CANCEL ${c.name}`}</td><td class="r kot-item">${Math.abs(c.quantity)}</td></tr>`)}</tbody></table>`);
+  document.body.append(el);
+  document.body.classList.add('print-ticket');
+  window.print();
+  setTimeout(() => { document.body.classList.remove('print-ticket'); el.remove(); }, 1000);
+}
+
 /** The customer's bill. A parcel's bill shows its number big so it can be called out. */
 function billSlip(order, settings) {
   const rate = order.status === 'paid' ? order.tax_rate_bp ?? 0 : settings.tax_rate_bp;
   const b = orderBill(order, order.order_items, rate);
   const bill = slipHeader(new Slip(paperWidth()), settings, rate);
   if (order.is_parcel && order.bill_no) bill.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(order.bill_no)}`).size(1, 1).bold(false).align('left');
-  bill.cols(`${order.bill_no ?? 'Bill'} ${order.is_parcel ? 'Parcel' : orderLabel(order)}`, order.status === 'paid' ? order.payment_method ?? '' : '');
-  bill.line(shortStamp(order.closed_at ?? order.billed_at ?? new Date().toISOString())).rule();
+  bill.bold(true).cols(order.bill_no ?? 'Bill', order.is_parcel ? 'Parcel' : ticketLabel(orderLabel(order))).bold(false);
+  bill.cols(shortStamp(order.closed_at ?? order.billed_at ?? new Date().toISOString()), order.status === 'paid' ? order.payment_method ?? '' : '').rule();
   return slipBody(bill, b.lines, b, rate).align('center').line('Thank you! Visit again.').cut();
 }
 
@@ -1617,6 +1689,8 @@ async function settingsView(token) {
         <div class="gst-box" ${feat('tables') ? '' : new Raw('hidden')}>
           <label class="toggle"><input type="checkbox" name="quick_close" ${s.quick_close !== false ? new Raw('checked') : ''}> Print Bill clears the table</label>
           <p class="small" style="margin:0">On: tapping Print Bill finishes the bill and frees the table straight away (recorded as Cash). Turn off when you have a printer and want to choose Cash / UPI / Card with Receive Payment.</p>
+          <label class="toggle" style="margin-top:8px"><input type="checkbox" name="kot_tables" ${s.kot_tables ? new Raw('checked') : ''}> Kitchen tickets (KOT) for tables</label>
+          <p class="small" style="margin:0">On: table orders get a “Send to Kitchen” button. Each tap prints only the newly added dishes with the table number, on the kitchen printer (or the bill printer if you have one). The full bill prints at the counter when the customer pays. Off: no kitchen printing for tables.</p>
         </div>
         <button type="submit">Save Changes</button>
       </form>
@@ -1689,7 +1763,7 @@ async function settingsView(token) {
     if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
     await q(sb.from('restaurants').update({
       hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
-      hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate, quick_close: f.quick_close === 'on',
+      hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate, quick_close: f.quick_close === 'on', kot_tables: f.kot_tables === 'on',
     }).eq('id', s.id));
     getSettings.clear();
     document.getElementById('brand').textContent = f.hotel_name.trim();
@@ -2819,6 +2893,46 @@ document.addEventListener('click', async (e) => {
   }
 });
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+
+// No zooming: it's an app, not a web page. iPhones ignore the viewport setting, so stop the pinch there too.
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+// Pull down from the top to reload: the installed app has no browser reload button.
+(function pullToRefresh() {
+  const el = document.createElement('div');
+  el.className = 'ptr';
+  el.setAttribute('aria-hidden', 'true');
+  el.textContent = '↻';
+  document.body.append(el);
+  const PULL = 90;
+  let startY = null;
+  let dist = 0;
+  const scrolledInside = (node) => {
+    for (let n = node; n && n !== document.body; n = n.parentElement) if (n.scrollTop > 0) return true;
+    return false;
+  };
+  addEventListener('touchstart', (e) => {
+    dist = 0;
+    startY = e.touches.length === 1 && window.scrollY <= 0 && !document.querySelector('dialog[open]')
+      && !document.body.classList.contains('sheet-open') && !scrolledInside(e.target) ? e.touches[0].clientY : null;
+  }, { passive: true });
+  addEventListener('touchmove', (e) => {
+    if (startY == null) return;
+    if (window.scrollY > 0) { startY = null; dist = 0; }
+    else dist = Math.max(0, e.touches[0].clientY - startY);
+    el.classList.remove('back');
+    el.style.transform = `translate(-50%, ${Math.min(dist, 150) * 0.6 - 60}px) rotate(${dist * 2}deg)`;
+    el.classList.toggle('ready', dist > PULL);
+  }, { passive: true });
+  addEventListener('touchend', () => {
+    if (startY == null) return;
+    startY = null;
+    if (dist > PULL) { el.style.transform = 'translate(-50%, 30px)'; location.reload(); return; }
+    el.classList.add('back');
+    el.classList.remove('ready');
+    el.style.transform = '';
+  });
+})();
 window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
