@@ -3060,12 +3060,13 @@ async function adminBillingView(token) {
   const [hotels, subs, invoices] = await Promise.all([
     q(sb.rpc('sa_list_hotels')),
     q(sb.from('sa_subscriptions').select('*')),
-    q(sb.from('sa_invoices').select('id, invoice_no, restaurant_id, hotel_name, issued_on, due_on, total, status, paid_on, payment_method').order('id', { ascending: false }).limit(300)),
+    q(sb.from('sa_bills').select('*').order('id', { ascending: false }).limit(300)),
   ]);
   if (token !== renderToken) return;
   const subOf = new Map(subs.map((s) => [s.restaurant_id, s]));
   const year = String(new Date().getFullYear());
   const collected = invoices.filter((i) => i.status === 'paid' && (i.paid_on ?? '').startsWith(year)).reduce((n, i) => n + Number(i.total), 0);
+  const annualIn = invoices.filter((i) => i.status === 'paid' && (i.paid_on ?? '').startsWith(year)).reduce((n, i) => n + Number(i.annual_amount), 0);
   const pending = invoices.filter((i) => i.status === 'unpaid');
   const pendingTotal = pending.reduce((n, i) => n + Number(i.total), 0);
   const yearly = hotels.filter((h) => h.active).reduce((n, h) => n + Number(subOf.get(h.id)?.annual_price ?? 0), 0);
@@ -3087,6 +3088,7 @@ async function adminBillingView(token) {
     <section class="hero" aria-label="Collections">
       <span class="label">Collected in ${year}</span>
       <span class="big">${money(collected)}</span>
+      <span class="an-compare">${money(annualIn)} from yearly plans · ${money(collected - annualIn)} installation & extras</span>
       <div class="facts">
         <div class="fact"><strong>${money(pendingTotal)}</strong><span>${pending.length} unpaid bill${pending.length === 1 ? '' : 's'}</span></div>
         <div class="fact"><strong>${money(yearly)}</strong><span>Yearly plans</span></div>
@@ -3107,9 +3109,9 @@ async function adminBillingView(token) {
       </div></div>
     ${shown.length ? html`<div class="list">${shown.map((i) => html`
       <a class="list-row" href="#/admin/bill/${i.id}">
-        <span class="method-badge ${i.status === 'paid' ? 'm-cash' : i.status === 'cancelled' ? 'm-wait' : 'm-card'}" aria-hidden="true">${i.status === 'paid' ? '✓' : i.status === 'cancelled' ? '✕' : '₹'}</span>
+        <span class="method-badge ${i.status === 'paid' ? 'm-cash' : 'm-card'}" aria-hidden="true">${i.status === 'paid' ? '✓' : '₹'}</span>
         <span class="grow"><strong>${i.hotel_name}</strong>
-          <div class="sub">${i.invoice_no} · ${shortDay(i.issued_on)} · ${i.status === 'paid' ? `Paid ${shortDay(i.paid_on)}${i.payment_method ? ` · ${i.payment_method}` : ''}` : i.status === 'cancelled' ? 'Cancelled' : i.due_on ? `Due ${shortDay(i.due_on)}` : 'Unpaid'}</div></span>
+          <div class="sub">${i.bill_no} · ${shortDay(i.bill_date)} · ${i.status === 'paid' ? `Paid ${shortDay(i.paid_on)}${i.method ? ` · ${i.method}` : ''}` : 'Unpaid'}</div></span>
         <span class="money">${money(i.total)}</span><span class="chevron" aria-hidden="true">›</span>
       </a>`)}</div>`
       : html`<div class="card empty"><span class="emoji" aria-hidden="true">🧾</span>${invoices.length ? 'No bills here.' : 'No bills yet. Tap New Bill to make the first one.'}</div>`}`);
@@ -3118,142 +3120,85 @@ async function adminBillingView(token) {
     const t = e.target.closest('button');
     if (!t) return;
     if (t.dataset.filter) { adminBillFilter = t.dataset.filter; adminBillingView(renderToken); }
-    else if (t.id === 'new-bill') invoiceDialog({ hotels, subOf });
-    else if (t.dataset.renew) invoiceDialog({ hotels, subOf, hotelId: Number(t.dataset.renew), renewal: true });
+    else if (t.id === 'new-bill') billDialog({ hotels, subOf });
+    else if (t.dataset.renew) billDialog({ hotels, subOf, hotelId: Number(t.dataset.renew) });
     else if (t.id === 'biz-details') businessDialog();
   });
 }
 let adminBillFilter = 'all';
 
-/** Create or edit a Techyverve bill: pick the hotel, add lines (plan, installation, any extra charge). */
-async function invoiceDialog({ hotels, subOf, hotelId = null, renewal = false, invoice = null }) {
+/** Create or edit a Techyverve bill: yearly plan, installation and one optional extra charge. */
+async function billDialog({ hotels, subOf, hotelId = null, bill = null }) {
   const profile = await getProfile().catch(() => ({ invoice_gst_bp: 0 }));
-  const lines = invoice ? invoice.items.map((x) => ({ ...x })) : [];
-  const pickHotel = (id) => hotels.find((h) => h.id === id);
-  let hotel = invoice ? pickHotel(invoice.restaurant_id) : hotelId ? pickHotel(hotelId) : null;
-  const planLine = (h) => {
-    const sub = subOf.get(h.id);
-    const from = sub?.renews_on && daysUntil(sub.renews_on) > -365 ? sub.renews_on : localDay();
-    return { text: `${sub?.plan ?? 'Pro'} plan · 1 year (${shortDay(from)} – ${shortDay(addYear(from))})`, qty: 1, amount: Number(sub?.annual_price ?? PLANS.Pro.price) };
-  };
-  if (!invoice && hotel && renewal) lines.push(planLine(hotel));
-
   const dialog = document.createElement('dialog');
-  dialog.className = 'tall';
   document.body.append(dialog);
   const close = () => { dialog.close(); dialog.remove(); };
-  const draw = () => {
-    const sub = hotel ? subOf.get(hotel.id) : null;
-    const subtotal = lines.reduce((n, l) => n + Number(l.qty || 0) * Number(l.amount || 0), 0);
-    setHTML(dialog, html`
-      <form class="dialog-body" novalidate>
-        <h2 style="margin:0">${invoice ? `Edit ${invoice.invoice_no}` : 'New Bill'}</h2>
-        <div class="auth-alert error" role="alert" hidden></div>
-        <label>Hotel
-          <select name="hotel" ${invoice ? new Raw('disabled') : ''}>
-            <option value="">Choose a hotel…</option>
-            ${hotels.map((h) => html`<option value="${h.id}" ${hotel?.id === h.id ? new Raw('selected') : ''}>${h.name}</option>`)}
-          </select></label>
-        ${hotel ? html`
-          <div class="quick-lines">
-            <button type="button" class="mini" data-add="plan">＋ ${sub?.plan ?? 'Pro'} plan ${rs(sub?.annual_price ?? PLANS.Pro.price).replace('.00', '')}</button>
-            <button type="button" class="mini" data-add="install">＋ Installation ${rs(sub?.install_fee ?? DEFAULT_INSTALL).replace('.00', '')}</button>
-            <button type="button" class="mini" data-add="extra">＋ Extra charge</button>
-          </div>` : ''}
-        <div class="bill-lines">${lines.map((l, i) => html`
-          <div class="bill-line">
-            <input name="text_${i}" value="${l.text}" placeholder="What for" aria-label="Line ${i + 1} description" data-i="${i}" data-k="text">
-            <input name="qty_${i}" value="${l.qty}" inputmode="numeric" aria-label="Line ${i + 1} quantity" data-i="${i}" data-k="qty">
-            <input name="amount_${i}" value="${l.amountText ?? (l.amount ? plain(l.amount) : '')}" inputmode="decimal" placeholder="₹" aria-label="Line ${i + 1} amount (₹ each)" data-i="${i}" data-k="amount">
-            <button type="button" class="destructive" data-del="${i}" aria-label="Remove line ${i + 1}">✕</button>
-          </div>`)}
-          ${lines.length ? '' : html`<p class="small" style="margin:0">${hotel ? 'Add the plan, installation or any extra charge above.' : 'Choose the hotel first.'}</p>`}
-        </div>
-        <div class="row">
-          <label>GST % <input name="gst" inputmode="decimal" value="${+((invoice?.gst_rate_bp ?? profile.invoice_gst_bp ?? 0) / 100).toFixed(2)}"></label>
-          <label>Pay by <input name="due" type="date" value="${invoice?.due_on ?? localDay(new Date(Date.now() + 7 * 86400000))}"></label>
-        </div>
-        <label>Note on the bill <input name="notes" value="${invoice?.notes ?? ''}" maxlength="200" placeholder="Optional"></label>
-        <p class="bill-sum">Subtotal <strong id="bill-subtotal">${rs(subtotal)}</strong> · GST is added when saved</p>
-        <button type="submit" class="wide">${invoice ? 'Save Bill' : 'Create Bill'}</button>
-        <button type="button" class="secondary wide" data-cancel>Cancel</button>
-      </form>`);
+  const pick = (id) => hotels.find((h) => h.id === id);
+  const startHotel = bill ? pick(bill.restaurant_id) : hotelId ? pick(hotelId) : null;
+  const sub0 = startHotel ? subOf.get(startHotel.id) : null;
+  const rupee = (p) => (p ? plain(p) : '');
+  setHTML(dialog, html`
+    <form class="dialog-body" novalidate>
+      <h2 style="margin:0">${bill ? `Edit ${bill.bill_no}` : 'New Bill'}</h2>
+      <div class="auth-alert error" role="alert" hidden></div>
+      <label>Hotel
+        <select name="hotel" ${bill ? new Raw('disabled') : ''} required>
+          <option value="">Choose a hotel…</option>
+          ${hotels.map((h) => html`<option value="${h.id}" ${startHotel?.id === h.id ? new Raw('selected') : ''}>${h.name}</option>`)}
+        </select></label>
+      <div class="row">
+        <label>Yearly plan (₹) <input name="annual" inputmode="decimal" value="${bill ? rupee(bill.annual_amount) : rupee(sub0?.annual_price)}" placeholder="0"></label>
+        <label>Installation (₹) <input name="install" inputmode="decimal" value="${bill ? rupee(bill.install_amount) : ''}" placeholder="0"></label>
+      </div>
+      <div class="row">
+        <label>Extra charge (₹) <input name="extra" inputmode="decimal" value="${bill ? rupee(bill.extra_amount) : ''}" placeholder="0"></label>
+        <label>Extra is for <input name="extra_text" value="${bill?.extra_text ?? ''}" maxlength="80" placeholder="e.g. Printer"></label>
+      </div>
+      <label>GST % <input name="gst" inputmode="decimal" value="${+((bill?.gst_rate_bp ?? profile.invoice_gst_bp ?? 0) / 100).toFixed(2)}"></label>
+      <p class="bill-sum">Total <strong id="bill-total">₹0.00</strong></p>
+      <button type="submit" class="wide">${bill ? 'Save Bill' : 'Create Bill'}</button>
+      <button type="button" class="secondary wide" data-cancel>Cancel</button>
+    </form>`);
+  const form = dialog.querySelector('form');
+  const val = (n) => { try { return toPaise(form.elements[n].value || '0'); } catch { return NaN; } };
+  const sum = () => {
+    const sub = val('annual') + val('install') + val('extra');
+    const total = sub + Math.floor((sub * val('gst') + 5000) / 10000);
+    dialog.querySelector('#bill-total').textContent = Number.isFinite(total) ? rs(total) : '—';
   };
-  const readLines = () => dialog.querySelectorAll('[data-i]').forEach((el) => {
-    const l = lines[Number(el.dataset.i)];
-    if (el.dataset.k === 'text') l.text = el.value;
-    else if (el.dataset.k === 'qty') l.qty = el.value;
-    else l.amountText = el.value;
+  form.addEventListener('input', sum);
+  form.elements.hotel.addEventListener('change', () => {
+    const s = subOf.get(Number(form.elements.hotel.value));
+    form.elements.annual.value = rupee(s?.annual_price);
+    sum();
   });
-  dialog.addEventListener('change', (e) => {
-    if (e.target.name === 'hotel') { readLines(); hotel = pickHotel(Number(e.target.value)) ?? null; draw(); }
-  });
-  // Keep the subtotal up to date while typing.
-  dialog.addEventListener('input', (e) => {
-    if (!e.target.dataset.k) return;
-    readLines();
-    const sum = lines.reduce((n, l) => {
-      let amt = Number(l.amount || 0);
-      if (l.amountText !== undefined) { try { amt = toPaise(l.amountText || '0'); } catch { amt = 0; } }
-      return n + (Number(l.qty) || 0) * amt;
-    }, 0);
-    const out = dialog.querySelector('#bill-subtotal');
-    if (out) out.textContent = rs(sum);
-  });
-  dialog.addEventListener('click', (e) => {
-    const t = e.target.closest('button');
-    if (!t) return;
-    if (t.dataset.cancel !== undefined) return close();
-    if (t.dataset.add) {
-      readLines();
-      for (const l of lines) if (l.amountText !== undefined) { try { l.amount = toPaise(l.amountText || '0'); } catch { /* fixed on save */ } delete l.amountText; }
-      const sub = subOf.get(hotel.id);
-      if (t.dataset.add === 'plan') lines.push(planLine(hotel));
-      else if (t.dataset.add === 'install') lines.push({ text: 'Installation, menu setup and staff training', qty: 1, amount: Number(sub?.install_fee ?? DEFAULT_INSTALL) });
-      else lines.push({ text: '', qty: 1, amount: 0 });
-      draw();
-    } else if (t.dataset.del) { readLines(); lines.splice(Number(t.dataset.del), 1); draw(); }
-  });
-  dialog.addEventListener('submit', async (e) => {
+  sum();
+  dialog.querySelector('[data-cancel]').addEventListener('click', close);
+  dialog.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    readLines();
-    const f = Object.fromEntries(new FormData(e.target));
     const alertBox = dialog.querySelector('[role=alert]');
-    const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; alertBox.scrollIntoView({ block: 'nearest' }); };
-    if (!hotel) return fail('Choose the hotel.');
-    let items;
-    let gst;
-    try {
-      items = lines.map((l, i) => {
-        const qty = Number(l.qty);
-        const amount = l.amountText !== undefined ? toPaise(l.amountText || '0') : Number(l.amount);
-        if (!String(l.text).trim()) throw new Error(`Line ${i + 1}: say what the charge is for.`);
-        if (!Number.isInteger(qty) || qty < 1) throw new Error(`Line ${i + 1}: quantity must be 1 or more.`);
-        if (amount <= 0) throw new Error(`Line ${i + 1}: enter the amount.`);
-        return { text: String(l.text).trim(), qty, amount };
-      });
-      gst = toPaise(f.gst || '0');
-      if (gst > 2800) throw new Error('GST can’t be more than 28%.');
-    } catch (err) { return fail(err.message); }
-    if (!items.length) return fail('Add at least one line.');
-    const row = { items, gst_rate_bp: gst, due_on: f.due || null, notes: (f.notes || '').trim() };
-    const btn = e.target.querySelector('button[type=submit]');
+    const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; };
+    const hotel = bill ? pick(bill.restaurant_id) : pick(Number(form.elements.hotel.value));
+    if (!bill && !hotel) return fail('Choose the hotel.');
+    const row = { annual_amount: val('annual'), install_amount: val('install'), extra_amount: val('extra'),
+      extra_text: form.elements.extra_text.value.trim(), gst_rate_bp: val('gst') };
+    if (Object.values(row).some((v) => typeof v === 'number' && !Number.isFinite(v))) return fail('Enter amounts as numbers, like 5999.');
+    if (row.annual_amount + row.install_amount + row.extra_amount <= 0) return fail('Enter at least one amount.');
+    if (row.gst_rate_bp > 2800) return fail('GST can’t be more than 28%.');
+    if (row.extra_amount && !row.extra_text) return fail('Say what the extra charge is for.');
+    const btn = form.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
-      let id = invoice?.id;
-      if (invoice) await q(sb.from('sa_invoices').update(row).eq('id', invoice.id));
-      else {
-        id = (await q(sb.from('sa_invoices').insert({
-          ...row, restaurant_id: hotel.id, hotel_name: hotel.name, hotel_address: hotel.address ?? '', hotel_phone: hotel.phone ?? '',
-        }).select('id').single())).id;
-      }
+      let id = bill?.id;
+      if (bill) await q(sb.from('sa_bills').update(row).eq('id', bill.id));
+      else id = (await q(sb.from('sa_bills').insert({ ...row, restaurant_id: hotel.id, hotel_name: hotel.name }).select('id').single())).id;
       close();
-      toast(invoice ? 'Bill saved' : 'Bill created');
+      toast(bill ? 'Bill saved' : 'Bill created');
       location.hash = `#/admin/bill/${id}`;
-      if (invoice) route();
+      if (bill) route();
     } catch (err) { btn.disabled = false; fail(friendly(err)); }
   });
-  draw();
   dialog.showModal();
 }
 
@@ -3297,67 +3242,71 @@ async function businessDialog() {
 
 /** One Techyverve bill: printable (A4), with paid / unpaid, edit, share and delete. */
 async function adminBillView(token, id) {
-  const [inv, profile, hotels, subs] = await Promise.all([
-    q(sb.from('sa_invoices').select('*').eq('id', id).single()),
+  const [bill, profile, hotels, subs] = await Promise.all([
+    q(sb.from('sa_bills').select('*').eq('id', id).single()),
     getProfile(),
     q(sb.rpc('sa_list_hotels')),
     q(sb.from('sa_subscriptions').select('*')),
   ]);
   if (token !== renderToken) return;
   const subOf = new Map(subs.map((s) => [s.restaurant_id, s]));
-  const sub = subOf.get(inv.restaurant_id);
-  const hasPlan = inv.items.some((l) => / plan · 1 year/.test(l.text));
-  const stamp = inv.status === 'paid' ? 'PAID' : inv.status === 'cancelled' ? 'CANCELLED' : 'UNPAID';
+  const sub = subOf.get(bill.restaurant_id);
+  const hotel = hotels.find((h) => h.id === bill.restaurant_id);
+  const lines = [
+    [`${sub?.plan ?? 'Yearly'} plan · 1 year`, bill.annual_amount],
+    ['Installation, menu setup and staff training', bill.install_amount],
+    [bill.extra_text || 'Extra charge', bill.extra_amount],
+  ].filter(([, amt]) => amt > 0);
+  const subtotal = bill.annual_amount + bill.install_amount + bill.extra_amount;
+  const gst = bill.total - subtotal;
   mount(html`
     <div class="receipt-actions no-print" style="margin-bottom:14px">
       <a class="button secondary" href="#/admin/billing">‹ Billing</a>
       <button type="button" id="inv-print">${ic('printer')} Print / PDF</button>
       <button type="button" class="secondary" id="inv-share">${ic('share')} Share</button>
-      ${inv.status === 'paid'
+      ${bill.status === 'paid'
         ? html`<button type="button" class="secondary" id="inv-unpaid">Mark Unpaid</button>`
-        : inv.status === 'unpaid' ? html`<button type="button" id="inv-paid">Mark Paid</button>
-            <button type="button" class="secondary" id="inv-edit">Edit</button>
-            <button type="button" class="secondary" id="inv-cancel">Cancel Bill</button>` : ''}
+        : html`<button type="button" id="inv-paid">Mark Paid</button>
+            <button type="button" class="secondary" id="inv-edit">Edit</button>`}
       <button type="button" class="secondary danger-outline" id="inv-delete">Delete</button>
     </div>
-    <article class="invoice" aria-label="Bill ${inv.invoice_no}">
+    <article class="invoice" aria-label="Bill ${bill.bill_no}">
       <header class="inv-head">
         <div class="inv-brand">${LOGO}<div><strong>${profile.business_name}</strong>
           <span>${[profile.address, profile.phone, profile.email, profile.website].filter(Boolean).join(' · ')}</span>
           ${profile.gstin ? html`<span>GSTIN ${profile.gstin}</span>` : ''}</div></div>
-        <div class="inv-title"><span>${inv.gst_rate_bp ? 'TAX INVOICE' : 'BILL'}</span><strong>${inv.invoice_no}</strong></div>
+        <div class="inv-title"><span>${bill.gst_rate_bp ? 'TAX INVOICE' : 'BILL'}</span><strong>${bill.bill_no}</strong></div>
       </header>
       <div class="inv-meta">
-        <div><span>Bill to</span><strong>${inv.hotel_name}</strong>${inv.hotel_address ? html`<em>${inv.hotel_address}</em>` : ''}${inv.hotel_phone ? html`<em>Ph ${inv.hotel_phone}</em>` : ''}</div>
-        <div><span>Date</span><strong>${shortDay(inv.issued_on)}</strong>${inv.due_on && inv.status === 'unpaid' ? html`<span style="margin-top:6px">Pay by</span><strong>${shortDay(inv.due_on)}</strong>` : ''}</div>
+        <div><span>Bill to</span><strong>${bill.hotel_name}</strong>${hotel?.address ? html`<em>${hotel.address}</em>` : ''}${hotel?.phone ? html`<em>Ph ${hotel.phone}</em>` : ''}</div>
+        <div><span>Date</span><strong>${shortDay(bill.bill_date)}</strong></div>
       </div>
       <table class="inv-table">
-        <thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
-        <tbody>${inv.items.map((l) => html`<tr><td>${l.text}</td><td class="r">${l.qty}</td><td class="r">${fmt(l.amount)}</td><td class="r">${fmt(l.qty * l.amount)}</td></tr>`)}</tbody>
+        <thead><tr><th>Description</th><th class="r">Amount</th></tr></thead>
+        <tbody>${lines.map(([text, amt]) => html`<tr><td>${text}</td><td class="r">${fmt(amt)}</td></tr>`)}</tbody>
       </table>
       <div class="inv-totals">
-        <div><span>Subtotal</span><span>${rs(inv.subtotal)}</span></div>
-        ${inv.gst_rate_bp ? html`<div><span>CGST ${pct(inv.gst_rate_bp / 2)}</span><span>${rs(Math.floor(inv.gst / 2))}</span></div>
-          <div><span>SGST ${pct(inv.gst_rate_bp / 2)}</span><span>${rs(inv.gst - Math.floor(inv.gst / 2))}</span></div>` : ''}
-        <div class="grand"><span>Total</span><span>${rs(inv.total)}</span></div>
+        ${bill.gst_rate_bp ? html`<div><span>Subtotal</span><span>${rs(subtotal)}</span></div>
+          <div><span>CGST ${pct(bill.gst_rate_bp / 2)}</span><span>${rs(Math.floor(gst / 2))}</span></div>
+          <div><span>SGST ${pct(bill.gst_rate_bp / 2)}</span><span>${rs(gst - Math.floor(gst / 2))}</span></div>` : ''}
+        <div class="grand"><span>Total</span><span>${rs(bill.total)}</span></div>
       </div>
       <div class="inv-foot">
-        <span class="inv-stamp ${inv.status}">${stamp}${inv.status === 'paid' ? ` · ${shortDay(inv.paid_on)}${inv.payment_method ? ` · ${inv.payment_method}` : ''}` : ''}</span>
-        ${inv.status === 'unpaid' && profile.upi_id ? html`<span>Pay by UPI: <strong>${profile.upi_id}</strong></span>` : ''}
+        <span class="inv-stamp ${bill.status}">${bill.status === 'paid' ? `PAID · ${shortDay(bill.paid_on)}${bill.method ? ` · ${bill.method}` : ''}` : 'UNPAID'}</span>
+        ${bill.status === 'unpaid' && profile.upi_id ? html`<span>Pay by UPI: <strong>${profile.upi_id}</strong></span>` : ''}
       </div>
-      ${inv.notes ? html`<p class="inv-note">${inv.notes}</p>` : ''}
       <p class="inv-thanks">Thank you for choosing Hotel Billing by ${profile.business_name}.</p>
     </article>`);
 
   const reload = () => adminBillView(renderToken, id);
-  const setStatus = async (status, extra = {}) => { await q(sb.from('sa_invoices').update({ status, ...extra }).eq('id', inv.id)); };
+  const setStatus = (status, extra = {}) => q(sb.from('sa_bills').update({ status, ...extra }).eq('id', bill.id));
   document.getElementById('inv-print').addEventListener('click', () => window.print());
   document.getElementById('inv-share').addEventListener('click', async () => {
-    const text = `${profile.business_name} bill ${inv.invoice_no}\n${inv.hotel_name}\n`
-      + inv.items.map((l) => `${l.text}: ${rs(l.qty * l.amount)}`).join('\n')
-      + `\nTotal: ${rs(inv.total)}${inv.status === 'paid' ? ' (paid)' : profile.upi_id ? `\nPay by UPI: ${profile.upi_id}` : ''}`;
+    const text = `${profile.business_name} bill ${bill.bill_no}\n${bill.hotel_name}\n`
+      + lines.map(([t, a]) => `${t}: ${rs(a)}`).join('\n')
+      + `\nTotal: ${rs(bill.total)}${bill.status === 'paid' ? ' (paid)' : profile.upi_id ? `\nPay by UPI: ${profile.upi_id}` : ''}`;
     try {
-      if (navigator.share) await navigator.share({ title: `Bill ${inv.invoice_no}`, text });
+      if (navigator.share) await navigator.share({ title: `Bill ${bill.bill_no}`, text });
       else { await navigator.clipboard.writeText(text); toast('Bill copied'); }
     } catch { /* cancelled */ }
   });
@@ -3367,11 +3316,11 @@ async function adminBillView(token, id) {
     document.body.append(dialog);
     const close = () => { dialog.close(); dialog.remove(); };
     setHTML(dialog, html`<form class="dialog-body">
-      <h2 style="margin:0">Payment received · ${rs(inv.total)}</h2>
+      <h2 style="margin:0">Payment received · ${rs(bill.total)}</h2>
       <div class="segmented" role="radiogroup" aria-label="Paid by">
         ${['UPI', 'Cash', 'Bank', 'Cheque'].map((m, i) => html`<label><input type="radio" name="method" value="${m}" ${i === 0 ? new Raw('checked') : ''}><span>${m}</span></label>`)}
       </div>
-      ${hasPlan && sub ? html`<label class="toggle"><input type="checkbox" name="renew" checked> Renew ${inv.hotel_name}’s plan till ${shortDay(renewTo)}</label>` : ''}
+      ${bill.annual_amount && sub ? html`<label class="toggle"><input type="checkbox" name="renew" checked> Renew ${bill.hotel_name}’s plan till ${shortDay(renewTo)}</label>` : ''}
       <button type="submit" class="wide">Mark Paid</button>
       <button type="button" class="secondary wide" data-cancel>Cancel</button>
     </form>`);
@@ -3380,8 +3329,8 @@ async function adminBillView(token, id) {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(e.target));
       act(e.target.querySelector('button[type=submit]'), async () => {
-        await setStatus('paid', { payment_method: f.method });
-        if (f.renew === 'on') await q(sb.from('sa_subscriptions').update({ renews_on: renewTo }).eq('restaurant_id', inv.restaurant_id));
+        await setStatus('paid', { method: f.method });
+        if (f.renew === 'on') await q(sb.from('sa_subscriptions').update({ renews_on: renewTo }).eq('restaurant_id', bill.restaurant_id));
         close();
         toast(f.renew === 'on' ? `Paid · plan renewed till ${shortDay(renewTo)}` : 'Marked paid');
         reload();
@@ -3390,14 +3339,10 @@ async function adminBillView(token, id) {
     dialog.showModal();
   });
   document.getElementById('inv-unpaid')?.addEventListener('click', (e) => act(e.currentTarget, async () => { await setStatus('unpaid'); reload(); }));
-  document.getElementById('inv-cancel')?.addEventListener('click', (e) => {
-    if (!confirm(`Cancel bill ${inv.invoice_no}? It stays in the list as cancelled.`)) return;
-    act(e.currentTarget, async () => { await setStatus('cancelled'); reload(); });
-  });
-  document.getElementById('inv-edit')?.addEventListener('click', () => invoiceDialog({ hotels, subOf, invoice: inv }));
+  document.getElementById('inv-edit')?.addEventListener('click', () => billDialog({ hotels, subOf, bill }));
   document.getElementById('inv-delete').addEventListener('click', (e) => {
-    if (!confirm(`Delete bill ${inv.invoice_no} for ${inv.hotel_name}? This can’t be undone (it stays in the Activity Log).`)) return;
-    act(e.currentTarget, async () => { await q(sb.from('sa_invoices').delete().eq('id', inv.id)); toast('Bill deleted'); location.hash = '#/admin/billing'; });
+    if (!confirm(`Delete bill ${bill.bill_no} for ${bill.hotel_name}? This can’t be undone.`)) return;
+    act(e.currentTarget, async () => { await q(sb.from('sa_bills').delete().eq('id', bill.id)); toast('Bill deleted'); location.hash = '#/admin/billing'; });
   });
 }
 
@@ -3423,14 +3368,15 @@ let adminLogHotel = '';
 async function adminLogView(token) {
   const [hotels, rows] = await Promise.all([
     q(sb.rpc('sa_list_hotels')),
-    q((adminLogHotel ? sb.from('sa_audit').select('*').eq('restaurant_id', adminLogHotel) : sb.from('sa_audit').select('*')).order('id', { ascending: false }).limit(300)),
+    q((adminLogHotel ? sb.from('sa_audit').select('*').eq('restaurant_id', adminLogHotel) : sb.from('sa_audit').select('*'))
+      .in('action', ['Hotel created', 'Hotel edited', 'Plan edited']).order('id', { ascending: false }).limit(300)),
   ]);
   if (token !== renderToken) return;
   const detail = (d) => Object.entries(d ?? {}).map(([k, v]) => html`<span class="log-change"><b>${LOG_FIELDS[k] ?? k}</b> ${Array.isArray(v)
     ? html`${logValue(k, v[0])} → ${logValue(k, v[1])}` : logValue(k, v)}</span>`);
   const root = mount(html`
     <div class="page-head"><div><p class="eyebrow">Techyverve · Super Admin</p><h1>Activity Log</h1>
-      <p class="muted">Every change to hotels, logins, plans and bills, newest first.</p></div></div>
+      <p class="muted">Hotels created and edited, newest first.</p></div></div>
     ${adminTabs('log')}
     <label class="log-filter">Hotel
       <select id="log-hotel"><option value="">All hotels</option>

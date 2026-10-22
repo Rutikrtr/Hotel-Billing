@@ -1101,12 +1101,6 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
 .renew.soon { color: var(--star); }
 .renew.over { color: var(--danger); }
 .renew.none { color: var(--muted); font-weight: 500; }
-.quick-lines { display: flex; flex-wrap: wrap; gap: 6px; }
-.bill-lines { display: grid; gap: 8px; }
-.bill-line { display: grid; grid-template-columns: 64px minmax(0, 1fr) 40px; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
-.bill-line [data-k=text] { grid-column: 1 / -1; }
-.bill-line input { min-height: 40px; padding: 6px 9px; }
-.bill-line .destructive { min-height: 40px; padding: 0; }
 .bill-sum { margin: 0; font-size: 13.5px; color: var(--muted); }
 .bill-sum strong { color: var(--text); }
 .log-filter { margin-bottom: 12px; max-width: 360px; }
@@ -1144,8 +1138,6 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
 .inv-stamp { font-weight: 800; letter-spacing: 0.08em; padding: 4px 12px; border-radius: 8px; border: 2px solid; font-size: 13px; }
 .inv-stamp.paid { color: #15803D; }
 .inv-stamp.unpaid { color: #B91C1C; }
-.inv-stamp.cancelled { color: #6F635B; }
-.inv-note { margin: 12px 0 0; font-size: 13px; color: #4A3F38; }
 .inv-thanks { margin: 18px 0 0; font-size: 12.5px; color: #6F635B; text-align: center; }
 @page a4 { size: A4; margin: 14mm; }
 @media print {
@@ -1154,7 +1146,6 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
 }
 @media (max-width: 599px) {
   .invoice { padding: 18px 14px; border-radius: 12px; }
-  .inv-table th:nth-child(3), .inv-table td:nth-child(3) { display: none; }
   .admin-tabs a { font-size: 13px; }
   .inv-title { text-align: left; }
 }
