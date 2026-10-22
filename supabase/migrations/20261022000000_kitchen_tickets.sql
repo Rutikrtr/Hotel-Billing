@@ -4,3 +4,5 @@
 alter table public.order_items add column if not exists kot_qty integer not null default 0 check (kot_qty >= 0);
 -- Hotel switch: show "Send to Kitchen" on table orders. Off by default; printing to the kitchen is optional.
 alter table public.restaurants add column if not exists kot_tables boolean not null default false;
+-- Owners change hotel settings column by column (row access is limited by RLS to the owner).
+grant update (kot_tables) on public.restaurants to authenticated;
