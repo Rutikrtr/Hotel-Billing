@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 370 784 800" role="img" aria-label="Techyverve">
+  <g fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M512 470V1022"/>
+    <path d="M236 486 512 664 788 486"/>
+    <path d="M288 640 410 722Q424 732 424 750V922"/>
+    <path d="M736 640 614 722Q600 732 600 750V988L556 1036"/>
+    <circle cx="198" cy="461" r="43" stroke-width="30"/>
+    <circle cx="826" cy="461" r="43" stroke-width="30"/>
+    <circle cx="253" cy="620" r="39" stroke-width="32"/>
+    <circle cx="771" cy="620" r="39" stroke-width="32"/>
+    <circle cx="512" cy="1080" r="46" stroke-width="32"/>
+  </g>
+  <circle cx="512" cy="437" r="49" fill="currentColor"/>
+</svg>

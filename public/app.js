@@ -128,6 +128,8 @@ const ICONS = {
   pause: '<path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20zM9 8v8h2V8zm4 0v8h2V8z" fill-rule="evenodd"/>',
   lock: '<path d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z" fill-rule="evenodd"/>',
 };
+/** Techyverve logo (same drawing as icons/techyverve.svg), coloured by the text colour. */
+const LOGO = new Raw(`<svg class="tv-logo" viewBox="120 370 784 800" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"><path d="M512 470V1022"/><path d="M236 486 512 664 788 486"/><path d="M288 640 410 722Q424 732 424 750V922"/><path d="M736 640 614 722Q600 732 600 750V988L556 1036"/><circle cx="198" cy="461" r="43" stroke-width="30"/><circle cx="826" cy="461" r="43" stroke-width="30"/><circle cx="253" cy="620" r="39" stroke-width="32"/><circle cx="771" cy="620" r="39" stroke-width="32"/><circle cx="512" cy="1080" r="46" stroke-width="32"/></g><circle cx="512" cy="437" r="49" fill="currentColor"/></svg>`);
 const icon = (name) => new Raw(`<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${ICONS[name]}</svg>`);
 let recoveringPassword = false; // set when someone arrives from a password-reset email
 let lastEmail = '';             // carried between sign-in screens so nobody retypes it
@@ -161,13 +163,14 @@ function authScreen({ iconName = 'receipt', title, subtitle, body, footer = '' }
   const root = mount(html`
     <div class="auth">
       <div class="auth-card">
-        <div class="auth-icon">${icon(iconName)}</div>
+        <div class="auth-icon">${iconName === 'receipt' ? LOGO : icon(iconName)}</div>
         <h1>${title}</h1>
         <p class="auth-sub">${subtitle}</p>
         <div class="auth-alert" role="alert" hidden></div>
         ${body}
       </div>
       ${footer ? html`<p class="auth-footer">${footer}</p>` : ''}
+      <p class="auth-brand">${LOGO} Powered by <strong>Techyverve</strong></p>
     </div>`);
   root.querySelectorAll('.reveal').forEach((b) => b.addEventListener('click', () => {
     const input = b.previousElementSibling;
@@ -391,11 +394,10 @@ async function tablesView(token) {
     <div class="page-head"><div><p class="eyebrow">${today}</p><h1>Tables</h1>
       ${account.role === 'owner' ? '' : html`<p class="muted">${loginName(session.user.email)} · ${account.role === 'manager' ? 'Manager' : 'Waiter'}</p>`}</div>
       <div class="head-actions">
-        <button type="button" class="secondary" data-install hidden>📲 Install App</button>
-        ${feat('qr_menu') ? html`<button type="button" class="secondary" id="qr-head">▦ QR Menu</button>` : ''}
-        ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
-        ${canBill || settings.kot_tables ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>` : ''}
         ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
+        ${canBill || settings.kot_tables ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>` : ''}
+        <button type="button" class="secondary" data-install hidden>📲 Install App</button>
+        ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
       </div>
     </div>
     ${parcels.length ? html`
@@ -444,7 +446,6 @@ async function tablesView(token) {
     ${tables.length && !visible.length ? html`<div class="card empty">${tableFilter === 'free' ? 'Every table is busy right now.' : 'No tables are running right now.'}</div>` : ''}`);
   root.querySelector('#signout-head')?.addEventListener('click', () => sb.auth.signOut());
   root.querySelector('#printer-head')?.addEventListener('click', printerDialog);
-  root.querySelector('#qr-head')?.addEventListener('click', qrDialog);
   root.addEventListener('click', (e) => {
     const f = e.target.closest('[data-filter]');
     if (!f) return;
@@ -1202,10 +1203,6 @@ async function billsView(token, day = localDay()) {
     <div class="page-head">
       <div><p class="eyebrow">${isToday ? 'Today' : new Date(start).toLocaleDateString('en-IN', { weekday: 'long' })}</p>
         <h1>Bills</h1></div>
-      <div class="head-actions">
-        ${owner && feat('bill_edit') ? html`<a class="button secondary" href="#/bills/log">Change Log</a>` : ''}
-        <label class="date-pick"><span class="sr-only">Date</span><input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
-      </div>
     </div>
     <section class="sales-card" aria-label="Sales">
       <span class="label">${isToday ? 'Today’s sales' : `Sales on ${new Date(start).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}`} · ${rows.length} bill${rows.length === 1 ? '' : 's'}</span>
@@ -1213,6 +1210,10 @@ async function billsView(token, day = localDay()) {
       <div class="split-bar" aria-hidden="true">${total ? METHODS.filter((m) => byMethod[m]).map((m) => html`<span class="m-${m.toLowerCase()}" style="flex:${byMethod[m]}"></span>`) : ''}</div>
       <div class="split-legend">${METHODS.map((m) => html`<div class="m-${m.toLowerCase()}"><span class="k">${m}</span><strong>${rs(byMethod[m]).replace('.00', '')}</strong></div>`)}</div>
     </section>
+    <div class="bills-tools">
+      <label class="date-pick">📅 <input type="date" id="day" value="${day}" max="${localDay()}" aria-label="Show bills for date"></label>
+      ${owner && feat('bill_edit') ? html`<a class="button secondary" href="#/bills/log">Change Log</a>` : ''}
+    </div>
     ${unpaid.length ? html`
       <h3 style="margin-top:0">Waiting for payment · ${unpaid.length}</h3>
       <div class="list" style="margin-bottom:20px">${unpaid.map((o) => html`
@@ -1406,11 +1407,8 @@ const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00`) - new D
 /** Quick ranges: [label, () => [from, to]] with both days included. */
 const RANGES = {
   today: ['Today', () => { const t = localDay(new Date()); return [t, t]; }],
-  yesterday: ['Yesterday', () => { const y = addDays(localDay(new Date()), -1); return [y, y]; }],
   week: ['7 days', () => { const t = localDay(new Date()); return [addDays(t, -6), t]; }],
-  month: ['30 days', () => { const t = localDay(new Date()); return [addDays(t, -29), t]; }],
-  this_month: ['This month', () => { const n = new Date(); return [localDay(new Date(n.getFullYear(), n.getMonth(), 1)), localDay(n)]; }],
-  last_month: ['Last month', () => { const n = new Date(); return [localDay(new Date(n.getFullYear(), n.getMonth() - 1, 1)), localDay(new Date(n.getFullYear(), n.getMonth(), 0))]; }],
+  month: ['This month', () => { const n = new Date(); return [localDay(new Date(n.getFullYear(), n.getMonth(), 1)), localDay(n)]; }],
 };
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
@@ -1490,11 +1488,10 @@ async function analyticsView(token) {
     <div class="col ${cls}" title="${title}"><span class="col-bar" style="height:${max ? Math.max(value ? 4 : 0, (value / max) * 100) : 0}%"></span><span class="col-label">${label}</span></div>`;
 
   const root = mount(html`
-    <div class="page-head"><div><p class="eyebrow">Sales report</p><h1>Analytics</h1></div>
-      ${t.bills ? html`<button type="button" class="secondary" id="an-export">⬇️ Export</button>` : ''}</div>
-    <div class="filter-tabs range-chips" role="toolbar" aria-label="Date range">
+    <div class="page-head"><div><p class="eyebrow">Sales report</p><h1>Analytics</h1></div></div>
+    <div class="filter-tabs" role="toolbar" aria-label="Date range">
       ${Object.entries(RANGES).map(([k, [label]]) => html`<button type="button" class="chip" data-range="${k}" aria-pressed="${k === a.range}">${label}</button>`)}
-      <button type="button" class="chip" data-range="custom" aria-pressed="${a.range === 'custom'}">📅 Pick dates</button>
+      <button type="button" class="chip" data-range="custom" aria-pressed="${a.range === 'custom'}">📅 Dates</button>
     </div>
     <form class="range-form card" id="range-form" ${a.range === 'custom' ? '' : new Raw('hidden')}>
       <label>From <input type="date" name="from" value="${a.from}" max="${localDay(new Date())}" required></label>
@@ -1503,6 +1500,8 @@ async function analyticsView(token) {
     </form>
     <section class="hero an-hero" aria-label="Sales">
       <span class="label">Sales · ${rangeName}</span>
+      ${t.bills ? html`<button type="button" class="an-export" id="an-export" aria-label="Export to spreadsheet" title="Export to spreadsheet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg></button>` : ''}
       <span class="big">${money(t.sales)}</span>
       <span class="an-compare">${change(t.sales, prev.sales)} vs ${prevName} (${money(prev.sales)})</span>
       <div class="facts">
@@ -1654,7 +1653,7 @@ async function menuView(token) {
   const readCategory = (f) => (f.category_pick === NEW_CATEGORY ? (f.category_new || '').trim() : (f.category_pick || '').trim());
   const root = mount(html`
     <div class="page-head"><div><h1>Menu</h1><p class="muted">${menu.length} item${menu.length === 1 ? '' : 's'} · tap ☆ to show a dish first when taking orders</p></div>
-      ${account.role === 'owner' ? html`<a class="button secondary" href="#/settings?qr" id="menu-qr">▦ QR Menu</a>` : ''}</div>
+      ${feat('qr_menu') ? html`<button type="button" class="secondary" id="menu-qr">▦ QR Menu</button>` : ''}</div>
     <div class="two-col">
       <div>
         ${menu.length ? categories.map((c) => html`
@@ -1750,6 +1749,7 @@ async function menuView(token) {
     form.querySelector('[name=name]').focus();
   }
 
+  root.querySelector('#menu-qr')?.addEventListener('click', qrDialog);
   onSubmit(root, '#add-item', async (f, form) => {
     if (!f.price.trim()) throw new Error('Enter the rate in rupees.');
     const price = toPaise(f.price);
@@ -1807,9 +1807,10 @@ async function settingsView(token) {
     <div class="two-col">
       <form id="settings" class="card form">
         <h2 style="margin:0">Bill Details</h2>
-        <label>Restaurant name <input name="hotel_name" value="${s.hotel_name}" required></label>
-        <label>Address <textarea name="hotel_address" rows="2">${s.hotel_address}</textarea></label>
-        <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}"></label>
+        <div class="locked-field"><span>Restaurant name 🔒</span><strong>${s.hotel_name}</strong></div>
+        <div class="locked-field"><span>Address 🔒</span><strong>${s.hotel_address || '—'}</strong></div>
+        <p class="small" style="margin:-4px 0 0">To change the name or address, contact Techyverve.</p>
+        <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}" maxlength="20"></label>
         <div class="gst-box">
           <label class="toggle"><input type="checkbox" name="gst_on" id="gst-on" ${s.tax_rate_bp > 0 ? new Raw('checked') : ''}> Charge GST on bills</label>
           <p class="small" style="margin:0">Off: bills show only items and the total. Turn on if your restaurant is GST-registered.</p>
@@ -1897,11 +1898,10 @@ async function settingsView(token) {
     if (f.gst_on === 'on' && rate <= 0) throw new Error('Enter a GST rate, like 5, or turn GST off.');
     if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
     await q(sb.from('restaurants').update({
-      hotel_name: f.hotel_name.trim(), hotel_address: f.hotel_address.trim(), hotel_phone: f.hotel_phone.trim(),
+      hotel_phone: f.hotel_phone.trim(),
       hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate, quick_close: f.quick_close === 'on', kot_tables: f.kot_tables === 'on',
     }).eq('id', s.id));
     getSettings.clear();
-    document.getElementById('brand').textContent = f.hotel_name.trim();
     toast('Changes saved');
   });
   onSubmit(root, '#add-table', async (f) => {
