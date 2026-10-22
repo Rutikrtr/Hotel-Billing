@@ -2734,10 +2734,12 @@ async function runBackup(hotels, chooseFolder) {
 }
 
 async function adminView(token) {
-  const [hotels, usage] = await Promise.all([
+  const [hotels, usage, subs] = await Promise.all([
     q(sb.rpc('sa_list_hotels')),
     q(sb.rpc('sa_usage')).catch(() => null),
+    q(sb.from('sa_subscriptions').select('*')).catch(() => []),
   ]);
+  const subOf = new Map(subs.map((s) => [s.restaurant_id, s]));
   if (token !== renderToken) return;
   let lastBackup = null;
   try { lastBackup = localStorage.getItem('hb-last-backup'); } catch { /* private mode */ }
@@ -2758,6 +2760,7 @@ async function adminView(token) {
         <button type="button" id="new-hotel">＋ New Hotel</button>
       </div>
     </div>
+    ${adminTabs('hotels')}
     <section class="hero" aria-label="All hotels today">
       <span class="label">Sales today · all hotels</span>
       <span class="big">${rs(sales)}</span>
@@ -2795,6 +2798,8 @@ async function adminView(token) {
             <span class="status-pill ${h.active ? 'on' : 'off'}">${h.active ? 'Active' : 'Paused'}</span>
           </div>
           ${!h.active && h.paused_reason ? html`<p class="pause-reason">Paused: “${h.paused_reason}”</p>` : ''}
+          ${subOf.get(h.id) ? (() => { const sub = subOf.get(h.id); const st = renewalState(sub); return html`<p class="plan-line"><span class="plan-pill">${sub.plan}</span>
+            ${rs(sub.annual_price).replace('.00', '')}/year · <span class="renew ${st.cls}">${st.text}</span></p>`; })() : ''}
           <div class="hotel-stats">
             <div><strong>${rs(Number(h.sales_today)).replace('.00', '')}</strong><span>Today</span></div>
             <div><strong>${h.bills}</strong><span>Bills</span></div>
@@ -2809,7 +2814,8 @@ async function adminView(token) {
           <p class="small hotel-meta">Owner: ${h.owners.join(', ') || '—'}<br>
             Last bill: ${h.last_bill_at ? dateTime(h.last_bill_at) : 'none yet'} · Since ${new Date(h.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
           <div class="hotel-actions">
-            <button type="button" class="secondary" data-edit="${h.id}">Edit & Features</button>
+            <button type="button" class="secondary" data-edit="${h.id}">Edit & Plan</button>
+            <a class="button secondary" href="#/admin/billing">Bills</a>
             <button type="button" class="secondary" data-reset="${h.id}">Reset Password</button>
             ${h.active ? html`<button type="button" class="secondary" data-pause="${h.id}">Pause Service</button>`
                        : html`<button type="button" data-resume="${h.id}">Resume Service</button>`}
@@ -2835,7 +2841,7 @@ async function adminView(token) {
     else if (t.id === 'backup-all' || t.id === 'backup-choose') act(t, () => runBackup(hotels, t.id === 'backup-choose').then(reload));
     else if (t.dataset.backup) act(t, () => runBackup([byId(t.dataset.backup)], false));
     else if (t.id === 'new-hotel') hotelDialog(null, reload);
-    else if (t.dataset.edit) hotelDialog(byId(t.dataset.edit), reload);
+    else if (t.dataset.edit) hotelDialog(byId(t.dataset.edit), reload, subOf.get(Number(t.dataset.edit)));
     else if (t.dataset.reset) {
       const h = byId(t.dataset.reset);
       formDialog({
@@ -2891,7 +2897,7 @@ async function adminView(token) {
 }
 
 /** Create a hotel (with its owner login) or edit one. */
-function hotelDialog(hotel, done) {
+function hotelDialog(hotel, done, sub = null) {
   const creating = !hotel;
   const f = hotel?.features ?? { tables: true, rooms: false, trending: true, bill_edit: true, qr_menu: false };
   const dialog = document.createElement('dialog');
@@ -2912,6 +2918,17 @@ function hotelDialog(hotel, done) {
         ${FEATURES.map(([k, label, desc]) => html`
           <label class="feature-pick"><input type="checkbox" name="feat_${k}" ${f[k] ? new Raw('checked') : ''}>
             <span><strong>${label}</strong><span class="small">${desc}</span></span></label>`)}
+      </fieldset>
+      <fieldset class="feature-picks">
+        <legend>Plan & price</legend>
+        <div class="row">
+          <label>Plan <select name="plan">${[...Object.keys(PLANS), 'Custom'].map((p) => html`<option ${(sub?.plan ?? 'Pro') === p ? new Raw('selected') : ''}>${p}</option>`)}</select></label>
+          <label>Yearly price (₹) <input name="annual_price" inputmode="decimal" value="${plain(sub?.annual_price ?? PLANS.Pro.price)}"></label>
+        </div>
+        <div class="row">
+          <label>Installation (₹) <input name="install_fee" inputmode="decimal" value="${plain(sub?.install_fee ?? DEFAULT_INSTALL)}"></label>
+          <label>Renews on <input name="renews_on" type="date" value="${sub?.renews_on ?? (creating ? addYear(localDay()) : '')}"></label>
+        </div>
       </fieldset>
       <label>Staff logins (besides the owner)
         <input name="staff_limit" type="number" inputmode="numeric" min="0" max="50" value="${hotel?.staff_limit ?? 2}">
@@ -2940,6 +2957,13 @@ function hotelDialog(hotel, done) {
   };
   dialog.querySelector('[name=feat_rooms]').addEventListener('change', syncRooms);
   syncRooms();
+  // Picking Starter or Pro fills in that plan's price and staff logins (both can still be changed).
+  dialog.querySelector('[name=plan]').addEventListener('change', (e) => {
+    const preset = PLANS[e.target.value];
+    if (!preset) return;
+    dialog.querySelector('[name=annual_price]').value = plain(preset.price);
+    dialog.querySelector('[name=staff_limit]').value = preset.staff;
+  });
   dialog.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const v = Object.fromEntries(new FormData(e.target));
@@ -2951,6 +2975,10 @@ function hotelDialog(hotel, done) {
     if (!v.name.trim()) return fail('Enter the hotel name.');
     if (!flags.p_feat_tables && !flags.p_feat_rooms) return fail('Tick Tables & Orders, Rooms, or both.');
     const staffLimit = Number(v.staff_limit);
+    let plan;
+    try {
+      plan = { plan: v.plan, annual_price: toPaise(v.annual_price || '0'), install_fee: toPaise(v.install_fee || '0'), renews_on: v.renews_on || null };
+    } catch (err) { return fail(err.message); }
     if (!Number.isInteger(staffLimit) || staffLimit < 0 || staffLimit > 50) return fail('Staff logins must be a whole number from 0 to 50.');
     const btn = e.target.querySelector('button[type=submit]');
     btn.disabled = true;
@@ -2965,11 +2993,17 @@ function hotelDialog(hotel, done) {
         }));
         if (qrOn) await q(sb.rpc('sa_set_qr_menu', { p_id: id, p_on: true }));
         await q(sb.rpc('sa_set_staff_limit', { p_id: id, p_limit: staffLimit }));
+        await q(sb.from('sa_subscriptions').upsert({ restaurant_id: id, ...plan }));
         toast(`${v.name.trim()} created · owner can sign in now`);
       } else {
         await q(sb.rpc('sa_update_hotel', { p_id: hotel.id, p_name: v.name, p_address: v.address, p_phone: v.phone, ...flags }));
         if (qrOn !== Boolean(hotel.features.qr_menu)) await q(sb.rpc('sa_set_qr_menu', { p_id: hotel.id, p_on: qrOn }));
         if (staffLimit !== hotel.staff_limit) await q(sb.rpc('sa_set_staff_limit', { p_id: hotel.id, p_limit: staffLimit }));
+        const planChanged = !sub || sub.plan !== plan.plan || Number(sub.annual_price) !== plan.annual_price
+          || Number(sub.install_fee) !== plan.install_fee || (sub.renews_on ?? null) !== plan.renews_on;
+        if (planChanged) {
+          await q(sb.from('sa_subscriptions').upsert({ restaurant_id: hotel.id, ...plan }));
+        }
         toast(`${v.name.trim()} saved`);
       }
       close();
@@ -2999,8 +3033,425 @@ const routes = [
   [/^\/settings(\?qr)?$/, settingsView, 'settings', null, 'any'],
 ];
 const allowed = (who) => who === 'any' || (who === 'bill' ? account.can_bill === true : account.role === 'owner');
+// ---------- Super admin: plans, Techyverve bills and the activity log ----------
+
+const PLANS = { Starter: { price: 499900, staff: 0 }, Pro: { price: 599900, staff: 2 } };
+const DEFAULT_INSTALL = 200000;
+const adminTabs = (active) => html`
+  <nav class="admin-tabs" aria-label="Super admin sections">
+    <a href="#/admin" ${active === 'hotels' ? new Raw('aria-current="page"') : ''}>Hotels</a>
+    <a href="#/admin/billing" ${active === 'billing' ? new Raw('aria-current="page"') : ''}>Billing</a>
+    <a href="#/admin/log" ${active === 'log' ? new Raw('aria-current="page"') : ''}>Activity Log</a>
+  </nav>`;
+const shortDay = (d) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const addYear = (d) => { const x = new Date(`${(d || localDay())}T00:00:00`); x.setFullYear(x.getFullYear() + 1); return localDay(x); };
+const daysUntil = (d) => Math.round((new Date(`${d}T00:00:00`) - new Date(`${localDay()}T00:00:00`)) / 86400000);
+/** Renewal status for a hotel's plan: due soon, overdue, or fine. */
+function renewalState(sub) {
+  if (!sub?.renews_on) return { cls: 'none', text: 'No renewal date' };
+  const n = daysUntil(sub.renews_on);
+  if (n < 0) return { cls: 'over', text: `Renewal overdue by ${-n} day${n === -1 ? '' : 's'}` };
+  if (n <= 30) return { cls: 'soon', text: `Renews in ${n} day${n === 1 ? '' : 's'}` };
+  return { cls: 'ok', text: `Renews ${shortDay(sub.renews_on)}` };
+}
+const getProfile = () => q(sb.from('sa_profile').select('*').eq('id', 1).single());
+
+async function adminBillingView(token) {
+  const [hotels, subs, invoices] = await Promise.all([
+    q(sb.rpc('sa_list_hotels')),
+    q(sb.from('sa_subscriptions').select('*')),
+    q(sb.from('sa_invoices').select('id, invoice_no, restaurant_id, hotel_name, issued_on, due_on, total, status, paid_on, payment_method').order('id', { ascending: false }).limit(300)),
+  ]);
+  if (token !== renderToken) return;
+  const subOf = new Map(subs.map((s) => [s.restaurant_id, s]));
+  const year = String(new Date().getFullYear());
+  const collected = invoices.filter((i) => i.status === 'paid' && (i.paid_on ?? '').startsWith(year)).reduce((n, i) => n + Number(i.total), 0);
+  const pending = invoices.filter((i) => i.status === 'unpaid');
+  const pendingTotal = pending.reduce((n, i) => n + Number(i.total), 0);
+  const yearly = hotels.filter((h) => h.active).reduce((n, h) => n + Number(subOf.get(h.id)?.annual_price ?? 0), 0);
+  const due = hotels.map((h) => ({ h, sub: subOf.get(h.id), st: renewalState(subOf.get(h.id)) }))
+    .filter((x) => x.st.cls === 'over' || x.st.cls === 'soon')
+    .sort((a, b) => (a.sub.renews_on < b.sub.renews_on ? -1 : 1));
+  const shown = invoices.filter((i) => adminBillFilter === 'all' || i.status === adminBillFilter);
+  const money = (p) => rs(p).replace('.00', '');
+
+  const root = mount(html`
+    <div class="page-head">
+      <div><p class="eyebrow">Techyverve · Super Admin</p><h1>Billing</h1></div>
+      <div class="head-actions">
+        <button type="button" id="new-bill">＋ New Bill</button>
+        <button type="button" class="secondary" id="biz-details">Business Details</button>
+      </div>
+    </div>
+    ${adminTabs('billing')}
+    <section class="hero" aria-label="Collections">
+      <span class="label">Collected in ${year}</span>
+      <span class="big">${money(collected)}</span>
+      <div class="facts">
+        <div class="fact"><strong>${money(pendingTotal)}</strong><span>${pending.length} unpaid bill${pending.length === 1 ? '' : 's'}</span></div>
+        <div class="fact"><strong>${money(yearly)}</strong><span>Yearly plans</span></div>
+        <div class="fact"><strong>${due.length}</strong><span>Renewals due</span></div>
+      </div>
+    </section>
+    ${due.length ? html`
+      <h3 style="margin-top:0">Renewals due · next 30 days</h3>
+      <div class="list" style="margin-bottom:18px">${due.map(({ h, sub, st }) => html`
+        <div class="list-row">
+          <span class="grow"><strong>${h.name}</strong>
+            <div class="sub"><span class="renew ${st.cls}">${st.text}</span> · ${sub.plan} ${money(sub.annual_price)}/year</div></span>
+          <button type="button" class="mini" data-renew="${h.id}">Make Bill</button>
+        </div>`)}</div>` : ''}
+    <div class="an-head" style="margin-top:4px"><h3>Bills</h3>
+      <div class="filter-tabs" role="toolbar" aria-label="Show bills">
+        ${[['all', 'All'], ['unpaid', 'Unpaid'], ['paid', 'Paid']].map(([k, label]) => html`<button type="button" class="chip" data-filter="${k}" aria-pressed="${adminBillFilter === k}">${label}</button>`)}
+      </div></div>
+    ${shown.length ? html`<div class="list">${shown.map((i) => html`
+      <a class="list-row" href="#/admin/bill/${i.id}">
+        <span class="method-badge ${i.status === 'paid' ? 'm-cash' : i.status === 'cancelled' ? 'm-wait' : 'm-card'}" aria-hidden="true">${i.status === 'paid' ? '✓' : i.status === 'cancelled' ? '✕' : '₹'}</span>
+        <span class="grow"><strong>${i.hotel_name}</strong>
+          <div class="sub">${i.invoice_no} · ${shortDay(i.issued_on)} · ${i.status === 'paid' ? `Paid ${shortDay(i.paid_on)}${i.payment_method ? ` · ${i.payment_method}` : ''}` : i.status === 'cancelled' ? 'Cancelled' : i.due_on ? `Due ${shortDay(i.due_on)}` : 'Unpaid'}</div></span>
+        <span class="money">${money(i.total)}</span><span class="chevron" aria-hidden="true">›</span>
+      </a>`)}</div>`
+      : html`<div class="card empty"><span class="emoji" aria-hidden="true">🧾</span>${invoices.length ? 'No bills here.' : 'No bills yet. Tap New Bill to make the first one.'}</div>`}`);
+
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.filter) { adminBillFilter = t.dataset.filter; adminBillingView(renderToken); }
+    else if (t.id === 'new-bill') invoiceDialog({ hotels, subOf });
+    else if (t.dataset.renew) invoiceDialog({ hotels, subOf, hotelId: Number(t.dataset.renew), renewal: true });
+    else if (t.id === 'biz-details') businessDialog();
+  });
+}
+let adminBillFilter = 'all';
+
+/** Create or edit a Techyverve bill: pick the hotel, add lines (plan, installation, any extra charge). */
+async function invoiceDialog({ hotels, subOf, hotelId = null, renewal = false, invoice = null }) {
+  const profile = await getProfile().catch(() => ({ invoice_gst_bp: 0 }));
+  const lines = invoice ? invoice.items.map((x) => ({ ...x })) : [];
+  const pickHotel = (id) => hotels.find((h) => h.id === id);
+  let hotel = invoice ? pickHotel(invoice.restaurant_id) : hotelId ? pickHotel(hotelId) : null;
+  const planLine = (h) => {
+    const sub = subOf.get(h.id);
+    const from = sub?.renews_on && daysUntil(sub.renews_on) > -365 ? sub.renews_on : localDay();
+    return { text: `${sub?.plan ?? 'Pro'} plan · 1 year (${shortDay(from)} – ${shortDay(addYear(from))})`, qty: 1, amount: Number(sub?.annual_price ?? PLANS.Pro.price) };
+  };
+  if (!invoice && hotel && renewal) lines.push(planLine(hotel));
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'tall';
+  document.body.append(dialog);
+  const close = () => { dialog.close(); dialog.remove(); };
+  const draw = () => {
+    const sub = hotel ? subOf.get(hotel.id) : null;
+    const subtotal = lines.reduce((n, l) => n + Number(l.qty || 0) * Number(l.amount || 0), 0);
+    setHTML(dialog, html`
+      <form class="dialog-body" novalidate>
+        <h2 style="margin:0">${invoice ? `Edit ${invoice.invoice_no}` : 'New Bill'}</h2>
+        <div class="auth-alert error" role="alert" hidden></div>
+        <label>Hotel
+          <select name="hotel" ${invoice ? new Raw('disabled') : ''}>
+            <option value="">Choose a hotel…</option>
+            ${hotels.map((h) => html`<option value="${h.id}" ${hotel?.id === h.id ? new Raw('selected') : ''}>${h.name}</option>`)}
+          </select></label>
+        ${hotel ? html`
+          <div class="quick-lines">
+            <button type="button" class="mini" data-add="plan">＋ ${sub?.plan ?? 'Pro'} plan ${rs(sub?.annual_price ?? PLANS.Pro.price).replace('.00', '')}</button>
+            <button type="button" class="mini" data-add="install">＋ Installation ${rs(sub?.install_fee ?? DEFAULT_INSTALL).replace('.00', '')}</button>
+            <button type="button" class="mini" data-add="extra">＋ Extra charge</button>
+          </div>` : ''}
+        <div class="bill-lines">${lines.map((l, i) => html`
+          <div class="bill-line">
+            <input name="text_${i}" value="${l.text}" placeholder="What for" aria-label="Line ${i + 1} description" data-i="${i}" data-k="text">
+            <input name="qty_${i}" value="${l.qty}" inputmode="numeric" aria-label="Line ${i + 1} quantity" data-i="${i}" data-k="qty">
+            <input name="amount_${i}" value="${l.amountText ?? (l.amount ? plain(l.amount) : '')}" inputmode="decimal" placeholder="₹" aria-label="Line ${i + 1} amount (₹ each)" data-i="${i}" data-k="amount">
+            <button type="button" class="destructive" data-del="${i}" aria-label="Remove line ${i + 1}">✕</button>
+          </div>`)}
+          ${lines.length ? '' : html`<p class="small" style="margin:0">${hotel ? 'Add the plan, installation or any extra charge above.' : 'Choose the hotel first.'}</p>`}
+        </div>
+        <div class="row">
+          <label>GST % <input name="gst" inputmode="decimal" value="${+((invoice?.gst_rate_bp ?? profile.invoice_gst_bp ?? 0) / 100).toFixed(2)}"></label>
+          <label>Pay by <input name="due" type="date" value="${invoice?.due_on ?? localDay(new Date(Date.now() + 7 * 86400000))}"></label>
+        </div>
+        <label>Note on the bill <input name="notes" value="${invoice?.notes ?? ''}" maxlength="200" placeholder="Optional"></label>
+        <p class="bill-sum">Subtotal <strong id="bill-subtotal">${rs(subtotal)}</strong> · GST is added when saved</p>
+        <button type="submit" class="wide">${invoice ? 'Save Bill' : 'Create Bill'}</button>
+        <button type="button" class="secondary wide" data-cancel>Cancel</button>
+      </form>`);
+  };
+  const readLines = () => dialog.querySelectorAll('[data-i]').forEach((el) => {
+    const l = lines[Number(el.dataset.i)];
+    if (el.dataset.k === 'text') l.text = el.value;
+    else if (el.dataset.k === 'qty') l.qty = el.value;
+    else l.amountText = el.value;
+  });
+  dialog.addEventListener('change', (e) => {
+    if (e.target.name === 'hotel') { readLines(); hotel = pickHotel(Number(e.target.value)) ?? null; draw(); }
+  });
+  // Keep the subtotal up to date while typing.
+  dialog.addEventListener('input', (e) => {
+    if (!e.target.dataset.k) return;
+    readLines();
+    const sum = lines.reduce((n, l) => {
+      let amt = Number(l.amount || 0);
+      if (l.amountText !== undefined) { try { amt = toPaise(l.amountText || '0'); } catch { amt = 0; } }
+      return n + (Number(l.qty) || 0) * amt;
+    }, 0);
+    const out = dialog.querySelector('#bill-subtotal');
+    if (out) out.textContent = rs(sum);
+  });
+  dialog.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.cancel !== undefined) return close();
+    if (t.dataset.add) {
+      readLines();
+      for (const l of lines) if (l.amountText !== undefined) { try { l.amount = toPaise(l.amountText || '0'); } catch { /* fixed on save */ } delete l.amountText; }
+      const sub = subOf.get(hotel.id);
+      if (t.dataset.add === 'plan') lines.push(planLine(hotel));
+      else if (t.dataset.add === 'install') lines.push({ text: 'Installation, menu setup and staff training', qty: 1, amount: Number(sub?.install_fee ?? DEFAULT_INSTALL) });
+      else lines.push({ text: '', qty: 1, amount: 0 });
+      draw();
+    } else if (t.dataset.del) { readLines(); lines.splice(Number(t.dataset.del), 1); draw(); }
+  });
+  dialog.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    readLines();
+    const f = Object.fromEntries(new FormData(e.target));
+    const alertBox = dialog.querySelector('[role=alert]');
+    const fail = (m) => { alertBox.textContent = m; alertBox.hidden = false; alertBox.scrollIntoView({ block: 'nearest' }); };
+    if (!hotel) return fail('Choose the hotel.');
+    let items;
+    let gst;
+    try {
+      items = lines.map((l, i) => {
+        const qty = Number(l.qty);
+        const amount = l.amountText !== undefined ? toPaise(l.amountText || '0') : Number(l.amount);
+        if (!String(l.text).trim()) throw new Error(`Line ${i + 1}: say what the charge is for.`);
+        if (!Number.isInteger(qty) || qty < 1) throw new Error(`Line ${i + 1}: quantity must be 1 or more.`);
+        if (amount <= 0) throw new Error(`Line ${i + 1}: enter the amount.`);
+        return { text: String(l.text).trim(), qty, amount };
+      });
+      gst = toPaise(f.gst || '0');
+      if (gst > 2800) throw new Error('GST can’t be more than 28%.');
+    } catch (err) { return fail(err.message); }
+    if (!items.length) return fail('Add at least one line.');
+    const row = { items, gst_rate_bp: gst, due_on: f.due || null, notes: (f.notes || '').trim() };
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      let id = invoice?.id;
+      if (invoice) await q(sb.from('sa_invoices').update(row).eq('id', invoice.id));
+      else {
+        id = (await q(sb.from('sa_invoices').insert({
+          ...row, restaurant_id: hotel.id, hotel_name: hotel.name, hotel_address: hotel.address ?? '', hotel_phone: hotel.phone ?? '',
+        }).select('id').single())).id;
+      }
+      close();
+      toast(invoice ? 'Bill saved' : 'Bill created');
+      location.hash = `#/admin/bill/${id}`;
+      if (invoice) route();
+    } catch (err) { btn.disabled = false; fail(friendly(err)); }
+  });
+  draw();
+  dialog.showModal();
+}
+
+/** Techyverve's name, address, GSTIN and UPI ID printed on every bill. */
+async function businessDialog() {
+  const p = await getProfile();
+  formDialog({
+    title: 'Business Details',
+    submit: 'Save Details',
+    hint: 'Printed at the top of every bill you give to hotels.',
+    fields: [
+      { name: 'business_name', label: 'Business name', value: p.business_name, attrs: { required: '', maxlength: 80 } },
+      { name: 'address', label: 'Address', value: p.address, attrs: { maxlength: 160 } },
+      { type: 'row', fields: [
+        { name: 'phone', label: 'Phone', type: 'tel', value: p.phone, attrs: { maxlength: 20 } },
+        { name: 'email', label: 'Email', type: 'email', value: p.email, attrs: { maxlength: 80 } },
+      ] },
+      { type: 'row', fields: [
+        { name: 'website', label: 'Website', value: p.website, attrs: { maxlength: 60 } },
+        { name: 'upi_id', label: 'UPI ID (for payment)', value: p.upi_id, attrs: { maxlength: 60, placeholder: 'name@bank' } },
+      ] },
+      { type: 'row', fields: [
+        { name: 'gstin', label: 'GSTIN', value: p.gstin, attrs: { maxlength: 15, placeholder: 'Optional' } },
+        { name: 'gst', label: 'GST % on new bills', value: +(p.invoice_gst_bp / 100).toFixed(2), attrs: { inputmode: 'decimal' } },
+      ] },
+      { name: 'invoice_prefix', label: 'Bill number starts with', value: p.invoice_prefix, attrs: { maxlength: 8, required: '' } },
+    ],
+    async onSave(f) {
+      const gst = toPaise(f.gst || '0');
+      if (gst > 2800) throw new Error('GST can’t be more than 28%.');
+      if (!f.business_name.trim()) throw new Error('Enter the business name.');
+      await q(sb.from('sa_profile').update({
+        business_name: f.business_name.trim(), address: f.address.trim(), phone: f.phone.trim(), email: f.email.trim(),
+        website: f.website.trim(), upi_id: f.upi_id.trim(), gstin: f.gstin.trim().toUpperCase(), invoice_gst_bp: gst,
+        invoice_prefix: f.invoice_prefix.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || 'TV',
+      }).eq('id', 1));
+      toast('Business details saved');
+    },
+  });
+}
+
+/** One Techyverve bill: printable (A4), with paid / unpaid, edit, share and delete. */
+async function adminBillView(token, id) {
+  const [inv, profile, hotels, subs] = await Promise.all([
+    q(sb.from('sa_invoices').select('*').eq('id', id).single()),
+    getProfile(),
+    q(sb.rpc('sa_list_hotels')),
+    q(sb.from('sa_subscriptions').select('*')),
+  ]);
+  if (token !== renderToken) return;
+  const subOf = new Map(subs.map((s) => [s.restaurant_id, s]));
+  const sub = subOf.get(inv.restaurant_id);
+  const hasPlan = inv.items.some((l) => / plan · 1 year/.test(l.text));
+  const stamp = inv.status === 'paid' ? 'PAID' : inv.status === 'cancelled' ? 'CANCELLED' : 'UNPAID';
+  mount(html`
+    <div class="receipt-actions no-print" style="margin-bottom:14px">
+      <a class="button secondary" href="#/admin/billing">‹ Billing</a>
+      <button type="button" id="inv-print">${ic('printer')} Print / PDF</button>
+      <button type="button" class="secondary" id="inv-share">${ic('share')} Share</button>
+      ${inv.status === 'paid'
+        ? html`<button type="button" class="secondary" id="inv-unpaid">Mark Unpaid</button>`
+        : inv.status === 'unpaid' ? html`<button type="button" id="inv-paid">Mark Paid</button>
+            <button type="button" class="secondary" id="inv-edit">Edit</button>
+            <button type="button" class="secondary" id="inv-cancel">Cancel Bill</button>` : ''}
+      <button type="button" class="secondary danger-outline" id="inv-delete">Delete</button>
+    </div>
+    <article class="invoice" aria-label="Bill ${inv.invoice_no}">
+      <header class="inv-head">
+        <div class="inv-brand">${LOGO}<div><strong>${profile.business_name}</strong>
+          <span>${[profile.address, profile.phone, profile.email, profile.website].filter(Boolean).join(' · ')}</span>
+          ${profile.gstin ? html`<span>GSTIN ${profile.gstin}</span>` : ''}</div></div>
+        <div class="inv-title"><span>${inv.gst_rate_bp ? 'TAX INVOICE' : 'BILL'}</span><strong>${inv.invoice_no}</strong></div>
+      </header>
+      <div class="inv-meta">
+        <div><span>Bill to</span><strong>${inv.hotel_name}</strong>${inv.hotel_address ? html`<em>${inv.hotel_address}</em>` : ''}${inv.hotel_phone ? html`<em>Ph ${inv.hotel_phone}</em>` : ''}</div>
+        <div><span>Date</span><strong>${shortDay(inv.issued_on)}</strong>${inv.due_on && inv.status === 'unpaid' ? html`<span style="margin-top:6px">Pay by</span><strong>${shortDay(inv.due_on)}</strong>` : ''}</div>
+      </div>
+      <table class="inv-table">
+        <thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead>
+        <tbody>${inv.items.map((l) => html`<tr><td>${l.text}</td><td class="r">${l.qty}</td><td class="r">${fmt(l.amount)}</td><td class="r">${fmt(l.qty * l.amount)}</td></tr>`)}</tbody>
+      </table>
+      <div class="inv-totals">
+        <div><span>Subtotal</span><span>${rs(inv.subtotal)}</span></div>
+        ${inv.gst_rate_bp ? html`<div><span>CGST ${pct(inv.gst_rate_bp / 2)}</span><span>${rs(Math.floor(inv.gst / 2))}</span></div>
+          <div><span>SGST ${pct(inv.gst_rate_bp / 2)}</span><span>${rs(inv.gst - Math.floor(inv.gst / 2))}</span></div>` : ''}
+        <div class="grand"><span>Total</span><span>${rs(inv.total)}</span></div>
+      </div>
+      <div class="inv-foot">
+        <span class="inv-stamp ${inv.status}">${stamp}${inv.status === 'paid' ? ` · ${shortDay(inv.paid_on)}${inv.payment_method ? ` · ${inv.payment_method}` : ''}` : ''}</span>
+        ${inv.status === 'unpaid' && profile.upi_id ? html`<span>Pay by UPI: <strong>${profile.upi_id}</strong></span>` : ''}
+      </div>
+      ${inv.notes ? html`<p class="inv-note">${inv.notes}</p>` : ''}
+      <p class="inv-thanks">Thank you for choosing Hotel Billing by ${profile.business_name}.</p>
+    </article>`);
+
+  const reload = () => adminBillView(renderToken, id);
+  const setStatus = async (status, extra = {}) => { await q(sb.from('sa_invoices').update({ status, ...extra }).eq('id', inv.id)); };
+  document.getElementById('inv-print').addEventListener('click', () => window.print());
+  document.getElementById('inv-share').addEventListener('click', async () => {
+    const text = `${profile.business_name} bill ${inv.invoice_no}\n${inv.hotel_name}\n`
+      + inv.items.map((l) => `${l.text}: ${rs(l.qty * l.amount)}`).join('\n')
+      + `\nTotal: ${rs(inv.total)}${inv.status === 'paid' ? ' (paid)' : profile.upi_id ? `\nPay by UPI: ${profile.upi_id}` : ''}`;
+    try {
+      if (navigator.share) await navigator.share({ title: `Bill ${inv.invoice_no}`, text });
+      else { await navigator.clipboard.writeText(text); toast('Bill copied'); }
+    } catch { /* cancelled */ }
+  });
+  document.getElementById('inv-paid')?.addEventListener('click', () => {
+    const renewTo = addYear(sub?.renews_on && daysUntil(sub.renews_on) > -365 ? sub.renews_on : localDay());
+    const dialog = document.createElement('dialog');
+    document.body.append(dialog);
+    const close = () => { dialog.close(); dialog.remove(); };
+    setHTML(dialog, html`<form class="dialog-body">
+      <h2 style="margin:0">Payment received · ${rs(inv.total)}</h2>
+      <div class="segmented" role="radiogroup" aria-label="Paid by">
+        ${['UPI', 'Cash', 'Bank', 'Cheque'].map((m, i) => html`<label><input type="radio" name="method" value="${m}" ${i === 0 ? new Raw('checked') : ''}><span>${m}</span></label>`)}
+      </div>
+      ${hasPlan && sub ? html`<label class="toggle"><input type="checkbox" name="renew" checked> Renew ${inv.hotel_name}’s plan till ${shortDay(renewTo)}</label>` : ''}
+      <button type="submit" class="wide">Mark Paid</button>
+      <button type="button" class="secondary wide" data-cancel>Cancel</button>
+    </form>`);
+    dialog.querySelector('[data-cancel]').addEventListener('click', close);
+    dialog.querySelector('form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = Object.fromEntries(new FormData(e.target));
+      act(e.target.querySelector('button[type=submit]'), async () => {
+        await setStatus('paid', { payment_method: f.method });
+        if (f.renew === 'on') await q(sb.from('sa_subscriptions').update({ renews_on: renewTo }).eq('restaurant_id', inv.restaurant_id));
+        close();
+        toast(f.renew === 'on' ? `Paid · plan renewed till ${shortDay(renewTo)}` : 'Marked paid');
+        reload();
+      });
+    });
+    dialog.showModal();
+  });
+  document.getElementById('inv-unpaid')?.addEventListener('click', (e) => act(e.currentTarget, async () => { await setStatus('unpaid'); reload(); }));
+  document.getElementById('inv-cancel')?.addEventListener('click', (e) => {
+    if (!confirm(`Cancel bill ${inv.invoice_no}? It stays in the list as cancelled.`)) return;
+    act(e.currentTarget, async () => { await setStatus('cancelled'); reload(); });
+  });
+  document.getElementById('inv-edit')?.addEventListener('click', () => invoiceDialog({ hotels, subOf, invoice: inv }));
+  document.getElementById('inv-delete').addEventListener('click', (e) => {
+    if (!confirm(`Delete bill ${inv.invoice_no} for ${inv.hotel_name}? This can’t be undone (it stays in the Activity Log).`)) return;
+    act(e.currentTarget, async () => { await q(sb.from('sa_invoices').delete().eq('id', inv.id)); toast('Bill deleted'); location.hash = '#/admin/billing'; });
+  });
+}
+
+const LOG_FIELDS = {
+  hotel_name: 'Name', hotel_address: 'Address', hotel_phone: 'Phone', hotel_gstin: 'GSTIN', tax_rate_bp: 'GST rate', quick_close: 'Print Bill clears table',
+  kot_tables: 'Kitchen tickets', feat_tables: 'Tables & Orders', feat_rooms: 'Rooms', feat_trending: 'Analytics', feat_bill_edit: 'Bill editing',
+  feat_qr_menu: 'QR Menu', staff_limit: 'Staff logins', active: 'Active', paused_reason: 'Pause reason', plan: 'Plan', annual_price: 'Yearly price',
+  install_fee: 'Installation', renews_on: 'Renews on', notes: 'Notes', login: 'Login', role: 'Role', bill: 'Bill', total: 'Total', method: 'Paid by',
+};
+const MONEY_FIELDS = new Set(['annual_price', 'install_fee', 'total']);
+function logValue(k, v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'On' : 'Off';
+  if (MONEY_FIELDS.has(k)) return rs(v).replace('.00', '');
+  if (k === 'tax_rate_bp') return pct(v);
+  if (k === 'role') return ROLE_NAMES[v] ?? v;
+  if (k === 'login') return loginName(String(v));
+  if (k === 'renews_on') return shortDay(v);
+  return String(v);
+}
+let adminLogHotel = '';
+
+async function adminLogView(token) {
+  const [hotels, rows] = await Promise.all([
+    q(sb.rpc('sa_list_hotels')),
+    q((adminLogHotel ? sb.from('sa_audit').select('*').eq('restaurant_id', adminLogHotel) : sb.from('sa_audit').select('*')).order('id', { ascending: false }).limit(300)),
+  ]);
+  if (token !== renderToken) return;
+  const detail = (d) => Object.entries(d ?? {}).map(([k, v]) => html`<span class="log-change"><b>${LOG_FIELDS[k] ?? k}</b> ${Array.isArray(v)
+    ? html`${logValue(k, v[0])} → ${logValue(k, v[1])}` : logValue(k, v)}</span>`);
+  const root = mount(html`
+    <div class="page-head"><div><p class="eyebrow">Techyverve · Super Admin</p><h1>Activity Log</h1>
+      <p class="muted">Every change to hotels, logins, plans and bills, newest first.</p></div></div>
+    ${adminTabs('log')}
+    <label class="log-filter">Hotel
+      <select id="log-hotel"><option value="">All hotels</option>
+        ${hotels.map((h) => html`<option value="${h.id}" ${String(h.id) === String(adminLogHotel) ? new Raw('selected') : ''}>${h.name}</option>`)}
+      </select></label>
+    ${rows.length ? html`<ol class="log-list">${rows.map((r) => html`
+      <li class="log-row">
+        <div class="log-top"><strong>${r.action}</strong><span class="small">${dateTime(r.at)}</span></div>
+        <div class="small">${r.hotel_name ?? 'Hotel'} · by ${r.actor_role === 'super admin' ? 'you' : `${loginName(r.actor ?? '')} (${r.actor_role})`}</div>
+        ${r.details && Object.keys(r.details).length ? html`<div class="log-details">${detail(r.details)}</div>` : ''}
+      </li>`)}</ol>
+      ${rows.length === 300 ? html`<p class="small">Showing the latest 300 changes.</p>` : ''}`
+      : html`<div class="card empty"><span class="emoji" aria-hidden="true">📝</span>Nothing logged yet. Changes appear here as they happen.</div>`}`);
+  root.querySelector('#log-hotel').addEventListener('change', (e) => { adminLogHotel = e.target.value; adminLogView(renderToken); });
+}
+
 const adminRoutes = [
   [/^\/admin$/, adminView, 'admin', null, 'any'],
+  [/^\/admin\/billing$/, adminBillingView, 'admin', null, 'any'],
+  [/^\/admin\/bill\/(\d+)$/, adminBillView, 'admin', null, 'any'],
+  [/^\/admin\/log$/, adminLogView, 'admin', null, 'any'],
 ];
 
 /** Full-screen notice shown instead of the app (no access yet, hotel paused, …). */

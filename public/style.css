@@ -1089,3 +1089,72 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
 }
 .staff-quota { margin: 12px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
 .staff-quota.full { color: var(--accent-strong); }
+
+/* Super admin: sections, plans, bills, activity log */
+.admin-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 14px; }
+.admin-tabs a { flex: 1; text-align: center; padding: 9px 6px; border-radius: 10px; font-weight: 700; font-size: 14px; color: var(--muted); text-decoration: none; }
+.admin-tabs a[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / 0.12); }
+.plan-line { margin: 0; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.plan-pill { font-size: 11.5px; font-weight: 800; padding: 1px 8px; border-radius: 999px; background: var(--ink); color: var(--on-ink); }
+.renew { font-weight: 700; }
+.renew.ok { color: var(--free); }
+.renew.soon { color: var(--star); }
+.renew.over { color: var(--danger); }
+.renew.none { color: var(--muted); font-weight: 500; }
+.quick-lines { display: flex; flex-wrap: wrap; gap: 6px; }
+.bill-lines { display: grid; gap: 8px; }
+.bill-line { display: grid; grid-template-columns: 64px minmax(0, 1fr) 40px; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
+.bill-line [data-k=text] { grid-column: 1 / -1; }
+.bill-line input { min-height: 40px; padding: 6px 9px; }
+.bill-line .destructive { min-height: 40px; padding: 0; }
+.bill-sum { margin: 0; font-size: 13.5px; color: var(--muted); }
+.bill-sum strong { color: var(--text); }
+.log-filter { margin-bottom: 12px; max-width: 360px; }
+.log-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.log-row { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; display: grid; gap: 3px; }
+.log-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.log-details { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; }
+.log-change { font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 2px 7px; }
+.log-change b { font-weight: 700; }
+
+/* Techyverve bill (prints on A4) */
+.invoice { max-width: 760px; margin: 0 auto; background: #fff; color: #1F1611; border-radius: 16px; padding: 28px 26px; box-shadow: var(--shadow); font-size: 14px; page: a4; }
+.inv-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 2px solid #1F1611; }
+.inv-brand { display: flex; gap: 12px; align-items: flex-start; }
+.inv-brand .tv-logo { width: 38px; height: 39px; color: #C2410C; flex: none; }
+.inv-brand div { display: grid; gap: 2px; }
+.inv-brand strong { font-size: 20px; font-weight: 800; }
+.inv-brand span { font-size: 12.5px; color: #5E534C; }
+.inv-title { text-align: right; display: grid; gap: 2px; }
+.inv-title span { font-size: 12px; font-weight: 800; letter-spacing: 0.12em; color: #5E534C; }
+.inv-title strong { font-size: 18px; font-family: var(--mono); }
+.inv-meta { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 0; }
+.inv-meta div { display: grid; gap: 1px; }
+.inv-meta span { font-size: 11.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #5E534C; }
+.inv-meta strong { font-size: 16px; }
+.inv-meta em { font-style: normal; font-size: 13px; color: #5E534C; }
+.inv-table { width: 100%; border-collapse: collapse; }
+.inv-table th { text-align: left; font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #5E534C; border-bottom: 1px solid #D9CCC3; padding: 8px 6px; }
+.inv-table td { padding: 10px 6px; border-bottom: 1px solid #EEE4DB; vertical-align: top; }
+.inv-table .r { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.inv-totals { margin-left: auto; max-width: 300px; display: grid; gap: 6px; padding-top: 12px; font-variant-numeric: tabular-nums; }
+.inv-totals div { display: flex; justify-content: space-between; }
+.inv-totals .grand { font-size: 19px; font-weight: 800; border-top: 2px solid #1F1611; padding-top: 8px; }
+.inv-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+.inv-stamp { font-weight: 800; letter-spacing: 0.08em; padding: 4px 12px; border-radius: 8px; border: 2px solid; font-size: 13px; }
+.inv-stamp.paid { color: #15803D; }
+.inv-stamp.unpaid { color: #B91C1C; }
+.inv-stamp.cancelled { color: #6F635B; }
+.inv-note { margin: 12px 0 0; font-size: 13px; color: #4A3F38; }
+.inv-thanks { margin: 18px 0 0; font-size: 12.5px; color: #6F635B; text-align: center; }
+@page a4 { size: A4; margin: 14mm; }
+@media print {
+  .invoice { box-shadow: none; border-radius: 0; padding: 0; max-width: none; font-size: 12.5px; }
+  .admin-tabs { display: none !important; }
+}
+@media (max-width: 599px) {
+  .invoice { padding: 18px 14px; border-radius: 12px; }
+  .inv-table th:nth-child(3), .inv-table td:nth-child(3) { display: none; }
+  .admin-tabs a { font-size: 13px; }
+  .inv-title { text-align: left; }
+}
