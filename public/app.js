@@ -1877,16 +1877,23 @@ async function settingsView(token) {
         </div>`}
         <div class="card" style="margin-top:20px">
           <h2>Staff Logins</h2>
-          <p class="small" style="margin-top:-6px"><strong>Waiter</strong>: only adds dishes to tables. <strong>Manager</strong>: also prints bills, takes parcels and payments, sees Bills.</p>
-          <div class="list" style="box-shadow:none">${staff.map((m) => html`
-            <div class="list-row staff-row">
-              <span class="grow"><strong>${m.display_name || loginName(m.email)}</strong>
-                <div class="sub">${ROLE_NAMES[m.role] ?? m.role} · ${m.email.endsWith(STAFF_DOMAIN) ? html`Login ID <span class="login-id">${loginName(m.email)}</span>` : m.email}</div></span>
-              ${isOwner && m.role !== 'owner' ? html`<span class="staff-actions">
-                <button type="button" class="plain" data-role-staff="${m.email}">${m.role === 'manager' ? 'Make Waiter' : 'Make Manager'}</button>
-                <button type="button" class="plain" data-reset-staff="${m.email}">Password</button>
-                <button type="button" class="destructive" data-del-staff="${m.email}">Remove</button></span>` : ''}
-            </div>`)}
+          <p class="small" style="margin-top:-6px"><span class="role-pill r-staff">Waiter</span> adds dishes to tables · <span class="role-pill r-manager">Manager</span> also bills, parcels and payments</p>
+          <div class="staff-list">${staff.map((m) => {
+            const name = m.display_name || (m.role === 'owner' ? 'Hotel owner' : loginName(m.email));
+            const initials = name.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+            return html`
+            <div class="staff-item">
+              <span class="avatar r-${m.role}" aria-hidden="true">${initials}</span>
+              <div class="staff-main">
+                <div class="staff-name"><strong>${name}</strong><span class="role-pill r-${m.role}">${ROLE_NAMES[m.role] ?? m.role}</span></div>
+                <div class="staff-id">${m.email.endsWith(STAFF_DOMAIN) ? html`Login ID <code>${loginName(m.email)}</code>` : m.email}</div>
+              </div>
+              ${isOwner && m.role !== 'owner' ? html`<div class="staff-actions">
+                <button type="button" class="mini" data-role-staff="${m.email}" title="${m.role === 'manager' ? 'Make Waiter' : 'Make Manager'}">⇄ ${m.role === 'manager' ? 'To Waiter' : 'To Manager'}</button>
+                <button type="button" class="mini" data-reset-staff="${m.email}">🔑 Password</button>
+                <button type="button" class="mini danger" data-del-staff="${m.email}" aria-label="Remove ${name}" title="Remove">🗑 Remove</button></div>` : ''}
+            </div>`;
+          })}
           </div>
           ${isOwner ? html`<button type="button" class="wide" id="add-staff" style="margin-top:12px">＋ Add Staff Login</button>` : ''}
         </div>

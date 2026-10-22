@@ -610,9 +610,27 @@ button.room-edit strong { font-weight: 800; }
 .kot-actions { max-width: 380px; margin: 16px auto 0; }
 
 /* Staff logins */
-.staff-row { flex-wrap: wrap; }
-.staff-actions { display: flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
-.staff-actions button { min-height: 40px; padding: 0 8px; font-size: 14px; }
+/* Staff list: avatar, name with role badge, login ID; actions underneath */
+.staff-list { display: grid; gap: 8px; }
+.staff-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 11px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.avatar { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; color: #fff; background: #8A7B72; }
+.avatar.r-owner { background: var(--brand); }
+.avatar.r-manager { background: #6D28D9; }
+.avatar.r-staff { background: #0F766E; }
+.staff-main { min-width: 0; display: grid; gap: 1px; }
+.staff-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.staff-name strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.staff-id { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.staff-id code { font-family: var(--mono); font-weight: 700; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; }
+.role-pill { flex: none; display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; }
+.role-pill.r-owner { background: var(--accent-soft); color: var(--accent-strong); }
+.role-pill.r-manager { background: var(--billed-soft); color: var(--billed); }
+.role-pill.r-staff { background: color-mix(in srgb, #0F766E 14%, var(--surface)); color: #0F766E; }
+@media (prefers-color-scheme: dark) { .role-pill.r-staff { color: #5EEAD4; background: #10302D; } .avatar.r-manager { background: #7C3AED; } }
+.staff-actions { grid-column: 1 / -1; display: flex; gap: 6px; margin-top: 6px; }
+.staff-actions .mini { flex: 1 1 0; min-width: 0; padding: 0 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+button.mini { min-height: 30px; padding: 0 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: none; }
+button.mini.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
 .cred-box { display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
 .cred-box div { display: grid; gap: 2px; }
 .cred-box span { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -966,8 +984,9 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
   .table-chip button { min-height: 34px; padding: 0 10px; font-size: 13px; }
   .table-chip .chip-name { padding-left: 12px; }
   .table-chips { gap: 6px; }
-  .staff-row { padding-top: 6px; padding-bottom: 6px; }
-  .staff-actions button { min-height: 32px; font-size: 12.5px; padding: 0 7px; }
+  .staff-item { padding: 9px 10px; gap: 3px 10px; }
+  .avatar { width: 36px; height: 36px; font-size: 13px; }
+  .staff-name strong { font-size: 14px; }
   .charge-form input, .charge-form button { min-height: 38px; }
   .qr-box { width: min(190px, 100%); }
 }
@@ -986,11 +1005,13 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
 .locked-field strong { font-weight: 700; color: var(--text); white-space: pre-line; }
 
 /* Start screen (shown until the app has loaded) */
-.boot { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 4px; background: var(--bg); text-align: center; }
-.boot-logo { width: 104px; height: 106px; margin-bottom: 18px; animation: boot-in 0.6s var(--ease) both; filter: drop-shadow(0 10px 18px rgb(217 72 15 / 0.22)); }
-.boot-name { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); animation: boot-in 0.6s 0.1s var(--ease) both; }
-.boot-by { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; animation: boot-in 0.6s 0.18s var(--ease) both; }
-.boot-bar { width: 120px; height: 3px; margin-top: 22px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; }
+.boot { position: fixed; inset: 0; z-index: 100; background: var(--bg); text-align: center; }
+/* The logo sits dead centre at the size the Android start screen uses (120dp), so the hand-over is seamless. */
+.boot-logo { position: absolute; left: 50%; top: 50%; width: 118px; height: 120px; transform: translate(-50%, -50%); }
+.boot-text { position: absolute; left: 0; right: 0; top: calc(50% + 84px); display: grid; justify-items: center; gap: 2px; }
+.boot-name { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); animation: boot-in 0.5s 0.15s var(--ease) both; }
+.boot-by { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em; animation: boot-in 0.5s 0.25s var(--ease) both; }
+.boot-bar { width: 120px; height: 3px; margin-top: 18px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; }
 .boot-bar::after { content: ""; position: absolute; inset: 0; width: 40%; border-radius: 2px; background: var(--brand); animation: boot-load 1.1s ease-in-out infinite; }
 @keyframes boot-in { from { opacity: 0; transform: translateY(8px) scale(0.96); } }
 @keyframes boot-load { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
