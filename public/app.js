@@ -397,7 +397,6 @@ async function tablesView(token) {
         ${canBill ? html`<a class="button" href="#/parcel" id="new-parcel">🛍️ New Parcel</a>` : ''}
         ${canBill || settings.kot_tables ? html`<button type="button" class="secondary" id="printer-head" aria-label="Printer setup">🖨️${directPrinting() ? '' : html` <span class="small">Setup</span>`}</button>` : ''}
         <button type="button" class="secondary" data-install hidden>📲 Install App</button>
-        ${account.role === 'owner' ? '' : html`<button type="button" class="secondary" id="signout-head">Sign Out</button>`}
       </div>
     </div>
     ${parcels.length ? html`
@@ -444,7 +443,6 @@ async function tablesView(token) {
       })}
     </div>
     ${tables.length && !visible.length ? html`<div class="card empty">${tableFilter === 'free' ? 'Every table is busy right now.' : 'No tables are running right now.'}</div>` : ''}`);
-  root.querySelector('#signout-head')?.addEventListener('click', () => sb.auth.signOut());
   root.querySelector('#printer-head')?.addEventListener('click', printerDialog);
   root.addEventListener('click', (e) => {
     const f = e.target.closest('[data-filter]');
@@ -1792,7 +1790,83 @@ async function menuView(token) {
 
 // ---------- Settings ----------
 
+/** Settings for managers and waiters: who they are, the hotel, the QR menu, printer and sign out. */
+async function staffSettingsView(token) {
+  const [s, me] = await Promise.all([
+    getSettings(),
+    sb.from('staff').select('display_name, role').eq('user_id', session.user.id).maybeSingle().then((r) => r.data, () => null),
+  ]);
+  if (token !== renderToken) return;
+  const login = loginName(session.user.email);
+  const name = me?.display_name || login;
+  const initials = name.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+  const role = account.role;
+  const canPrint = account.can_bill === true || s.kot_tables;
+  const root = mount(html`
+    <div class="page-head"><div><p class="eyebrow">My account</p><h1>Settings</h1></div></div>
+    <div class="two-col">
+      <div class="card profile-card">
+        <div class="staff-item">
+          <span class="avatar r-${role}" aria-hidden="true">${initials}</span>
+          <div class="staff-main">
+            <div class="staff-name"><strong>${name}</strong><span class="role-pill r-${role}">${ROLE_NAMES[role] ?? role}</span></div>
+            <div class="staff-id">${session.user.email.endsWith(STAFF_DOMAIN) ? html`Login ID <code>${login}</code>` : session.user.email}</div>
+          </div>
+        </div>
+        <p class="small" style="margin:10px 0 0">${role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'}
+          To change your password or role, ask the hotel owner.</p>
+        <div class="hotel-info">
+          <div><span>Hotel</span><strong>${s.hotel_name}</strong></div>
+          ${s.hotel_address ? html`<div><span>Address</span><strong>${s.hotel_address}</strong></div>` : ''}
+          ${s.hotel_phone ? html`<div><span>Phone</span><strong><a href="tel:${s.hotel_phone}">${s.hotel_phone}</a></strong></div>` : ''}
+        </div>
+      </div>
+      <div>
+        ${feat('qr_menu') ? html`<div class="card qr-card" id="qr-card">
+          <h2>QR Menu</h2>
+          <p class="small" style="margin-top:-6px">Show this to customers. They scan it with the phone camera to see the menu.</p>
+          <div class="qr-box" id="qr-box"><div class="skeleton"><div class="block"></div></div></div>
+          <div class="hotel-actions" style="margin-top:12px">
+            <button type="button" id="qr-big">⤢ Show Big</button>
+            <button type="button" class="secondary" id="qr-share">Share Link</button>
+            <a class="button secondary" id="qr-open" target="_blank" rel="noopener">Open Menu</a>
+          </div>
+        </div>` : ''}
+        <div class="card" style="margin-top:${feat('qr_menu') ? 14 : 0}px">
+          <h2>This phone</h2>
+          <div class="app-actions">
+            ${canPrint ? html`<button type="button" class="secondary wide" id="printer-setup">🖨️ Printer Setup</button>` : ''}
+            <button type="button" class="secondary wide" data-install hidden>📲 Install App</button>
+            <button type="button" class="wide danger-fill" id="signout">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </div>`);
+  showInstall();
+  root.querySelector('#signout').addEventListener('click', () => sb.auth.signOut());
+  root.querySelector('#printer-setup')?.addEventListener('click', printerDialog);
+  root.querySelector('#qr-big')?.addEventListener('click', qrDialog);
+  if (feat('qr_menu')) {
+    const box = root.querySelector('#qr-box');
+    try {
+      const qrToken = await q(sb.rpc('my_menu_token'));
+      if (token !== renderToken) return;
+      if (!qrToken) { box.textContent = 'The QR menu is switched off for this hotel.'; return; }
+      const url = menuUrl(qrToken);
+      box.innerHTML = qrSvg(await loadQr(), url);
+      root.querySelector('#qr-open').href = url;
+      root.querySelector('#qr-share').addEventListener('click', async () => {
+        try {
+          if (navigator.share) await navigator.share({ title: `${s.hotel_name} menu`, url });
+          else { await navigator.clipboard.writeText(url); toast('Menu link copied'); }
+        } catch { /* cancelled */ }
+      });
+    } catch (err) { box.textContent = friendly(err); }
+  }
+}
+
 async function settingsView(token) {
+  if (account.role !== 'owner') return staffSettingsView(token);
   const [s, staff, tables, rooms] = await Promise.all([
     getSettings(),
     q(sb.from('staff').select('*').order('created_at')),
@@ -2890,7 +2964,7 @@ const routes = [
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills', null, 'bill'],
   [/^\/(?:analytics|trending)$/, analyticsView, 'trending', 'trending', 'bill'],
   [/^\/menu$/, menuView, 'menu', 'tables', 'owner'],
-  [/^\/settings(\?qr)?$/, settingsView, 'settings', null, 'owner'],
+  [/^\/settings(\?qr)?$/, settingsView, 'settings', null, 'any'],
 ];
 const allowed = (who) => who === 'any' || (who === 'bill' ? account.can_bill === true : account.role === 'owner');
 const adminRoutes = [
@@ -2921,7 +2995,7 @@ function setTabs(a) {
     bills: bill,
     trending: bill && feat('tables') && feat('trending'),
     menu: owner && feat('tables'),
-    settings: owner,
+    settings: hotel,
   };
   document.querySelectorAll('[data-tab]').forEach((t) => { t.hidden = !show[t.dataset.tab]; });
 }
