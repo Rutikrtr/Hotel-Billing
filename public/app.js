@@ -1884,6 +1884,7 @@ async function staffSettingsView(token) {
 
 async function settingsView(token) {
   if (account.role !== 'owner') return staffSettingsView(token);
+  getSettings.clear(); // fresh staff limit and switches
   const [s, staff, tables, rooms] = await Promise.all([
     getSettings(),
     q(sb.from('staff').select('*').order('created_at')),
@@ -1986,7 +1987,14 @@ async function settingsView(token) {
             </div>`;
           })}
           </div>
-          ${isOwner ? html`<button type="button" class="wide" id="add-staff" style="margin-top:12px">＋ Add Staff Login</button>` : ''}
+          ${isOwner ? (() => {
+            const used = staff.filter((m) => m.role !== 'owner').length;
+            const limit = s.staff_limit ?? 2;
+            return html`<p class="staff-quota ${used >= limit ? 'full' : ''}">${limit === 0 ? 'Your plan is for the owner login only.' : `${used} of ${limit} staff login${limit === 1 ? '' : 's'} used`}</p>
+              ${used >= limit
+                ? html`<p class="small" style="margin:6px 0 0">Need more logins? Contact Techyverve to upgrade your plan.</p>`
+                : html`<button type="button" class="wide" id="add-staff" style="margin-top:10px">＋ Add Staff Login</button>`}`;
+          })() : ''}
         </div>
       </div>
     </div>`);
@@ -2793,7 +2801,7 @@ async function adminView(token) {
             <div><strong>${h.tables}</strong><span>Tables</span></div>
             <div><strong>${h.rooms}</strong><span>Rooms</span></div>
             <div><strong>${h.menu_items}</strong><span>Dishes</span></div>
-            <div><strong>${h.staff_count}</strong><span>Logins</span></div>
+            <div><strong>${h.staff_used ?? 0}/${h.staff_limit ?? 2}</strong><span>Staff logins</span></div>
           </div>
           <div class="feature-chips" aria-label="Features">
             ${FEATURES.map(([k, label]) => html`<span class="feature-chip ${h.features[k] ? 'on' : ''}">${h.features[k] ? '✓' : '✕'} ${label}</span>`)}
@@ -2905,6 +2913,9 @@ function hotelDialog(hotel, done) {
           <label class="feature-pick"><input type="checkbox" name="feat_${k}" ${f[k] ? new Raw('checked') : ''}>
             <span><strong>${label}</strong><span class="small">${desc}</span></span></label>`)}
       </fieldset>
+      <label>Staff logins (besides the owner)
+        <input name="staff_limit" type="number" inputmode="numeric" min="0" max="50" value="${hotel?.staff_limit ?? 2}">
+        <span class="small" style="font-weight:500">Starter plan: 0 (owner only) · Pro plan: 2${hotel ? ` · in use now: ${hotel.staff_used ?? 0}` : ''}</span></label>
       ${creating ? html`
         <div class="row">
           <label>Tables to start with <input name="tables" inputmode="numeric" value="10"></label>
@@ -2939,6 +2950,8 @@ function hotelDialog(hotel, done) {
     const qrOn = v.feat_qr_menu === 'on';
     if (!v.name.trim()) return fail('Enter the hotel name.');
     if (!flags.p_feat_tables && !flags.p_feat_rooms) return fail('Tick Tables & Orders, Rooms, or both.');
+    const staffLimit = Number(v.staff_limit);
+    if (!Number.isInteger(staffLimit) || staffLimit < 0 || staffLimit > 50) return fail('Staff logins must be a whole number from 0 to 50.');
     const btn = e.target.querySelector('button[type=submit]');
     btn.disabled = true;
     try {
@@ -2951,10 +2964,12 @@ function hotelDialog(hotel, done) {
           p_tables: flags.p_feat_tables ? count(v.tables) : 0, p_rooms: flags.p_feat_rooms ? count(v.rooms) : 0, ...flags,
         }));
         if (qrOn) await q(sb.rpc('sa_set_qr_menu', { p_id: id, p_on: true }));
+        await q(sb.rpc('sa_set_staff_limit', { p_id: id, p_limit: staffLimit }));
         toast(`${v.name.trim()} created · owner can sign in now`);
       } else {
         await q(sb.rpc('sa_update_hotel', { p_id: hotel.id, p_name: v.name, p_address: v.address, p_phone: v.phone, ...flags }));
         if (qrOn !== Boolean(hotel.features.qr_menu)) await q(sb.rpc('sa_set_qr_menu', { p_id: hotel.id, p_on: qrOn }));
+        if (staffLimit !== hotel.staff_limit) await q(sb.rpc('sa_set_staff_limit', { p_id: hotel.id, p_limit: staffLimit }));
         toast(`${v.name.trim()} saved`);
       }
       close();

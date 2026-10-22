@@ -1087,3 +1087,5 @@ button.kot-send { display: block; width: calc(100% - 36px); margin: 10px auto 4p
   .table-tile .pill::before { flex: none; }
   .order-line .qty button { width: 32px; }
 }
+.staff-quota { margin: 12px 0 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.staff-quota.full { color: var(--accent-strong); }
