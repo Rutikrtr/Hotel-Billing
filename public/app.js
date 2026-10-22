@@ -1400,101 +1400,236 @@ async function logView(token) {
       : html`<div class="card empty"><span class="emoji" aria-hidden="true">📝</span>No changes yet. Edited and deleted bills will appear here.</div>`}`);
 }
 
-// ---------- Trending: best-selling dishes ----------
+// ---------- Analytics: sales for any date range ----------
 
-const TREND_PERIODS = { today: { label: 'Today', days: 1, prev: 'yesterday' }, week: { label: '7 days', days: 7, prev: 'the 7 days before' }, month: { label: '30 days', days: 30, prev: 'the 30 days before' } };
-let trendPeriod = 'week';
-let trendSort = 'qty';
+const daysBetween = (from, to) => Math.round((new Date(`${to}T00:00:00`) - new Date(`${from}T00:00:00`)) / 86400000) + 1;
+/** Quick ranges: [label, () => [from, to]] with both days included. */
+const RANGES = {
+  today: ['Today', () => { const t = localDay(new Date()); return [t, t]; }],
+  yesterday: ['Yesterday', () => { const y = addDays(localDay(new Date()), -1); return [y, y]; }],
+  week: ['7 days', () => { const t = localDay(new Date()); return [addDays(t, -6), t]; }],
+  month: ['30 days', () => { const t = localDay(new Date()); return [addDays(t, -29), t]; }],
+  this_month: ['This month', () => { const n = new Date(); return [localDay(new Date(n.getFullYear(), n.getMonth(), 1)), localDay(n)]; }],
+  last_month: ['Last month', () => { const n = new Date(); return [localDay(new Date(n.getFullYear(), n.getMonth() - 1, 1)), localDay(new Date(n.getFullYear(), n.getMonth(), 0))]; }],
+};
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
+let analytics = { range: 'week', from: null, to: null, sort: 'qty', allDishes: false };
 
-async function trendingView(token) {
-  const period = TREND_PERIODS[trendPeriod];
-  // Current period and the one before it, so each dish can show whether it is rising or falling.
-  const now = new Date();
-  const start = new Date(now); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - (period.days - 1));
-  const prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - period.days);
-  const [sales, menu] = await Promise.all([
-    // Totals per dish are added up in the database: one small row per dish instead of every bill.
-    q(sb.rpc('dish_sales', { p_start: prevStart.toISOString(), p_split: start.toISOString() })),
+async function analyticsView(token) {
+  const a = analytics;
+  if (a.range !== 'custom') [a.from, a.to] = RANGES[a.range][1]();
+  const days = daysBetween(a.from, a.to);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+  const [report, menu] = await Promise.all([
+    // One small summary from the database instead of every bill in the range.
+    q(sb.rpc('sales_report', {
+      p_from: new Date(`${a.from}T00:00:00`).toISOString(), p_to: new Date(`${addDays(a.to, 1)}T00:00:00`).toISOString(), p_tz: tz,
+    })),
     getMenu(),
   ]);
   if (token !== renderToken) return;
 
+  const t = report.totals;
+  const prev = report.prev;
+  const money = (p) => rs(p).replace('.00', '');
+  const rangeName = a.range === 'custom' ? (days === 1 ? shortDate(a.from) : `${shortDate(a.from)} – ${shortDate(a.to)}`) : RANGES[a.range][0];
+  const prevName = days === 1 ? 'the day before' : `the ${days} days before`;
+  const change = (now, before) => {
+    if (!before) return now ? html`<span class="trend new">New</span>` : html`<span class="trend flat">—</span>`;
+    const pc = Math.round(((now - before) / before) * 100);
+    return pc === 0 ? html`<span class="trend flat">Same</span>` : html`<span class="trend ${pc > 0 ? 'up' : 'down'}">${pc > 0 ? '▲' : '▼'} ${Math.abs(pc)}%</span>`;
+  };
+
+  // Dishes and categories
   const menuById = new Map(menu.map((m) => [m.id, m]));
-  const sold = sales.map((x) => {
+  const sold = report.dishes.map((x) => {
     const m = menuById.get(x.menu_item_id);
     return { name: m?.name ?? x.name, category: m?.category ?? 'Other', is_veg: m?.is_veg ?? true, qty: Number(x.qty), revenue: Number(x.revenue), prevQty: Number(x.prev_qty) };
   }).filter((r) => r.qty > 0);
-  const metric = (r) => (trendSort === 'qty' ? r.qty : r.revenue);
-  sold.sort((a, b) => metric(b) - metric(a) || b.qty - a.qty || a.name.localeCompare(b.name));
-  const max = sold.length ? metric(sold[0]) : 0;
-  const totalQty = sold.reduce((n, r) => n + r.qty, 0);
-  const totalRevenue = sold.reduce((n, r) => n + r.revenue, 0);
+  const metric = (r) => (a.sort === 'qty' ? r.qty : r.revenue);
+  sold.sort((x, y) => metric(y) - metric(x) || y.qty - x.qty || x.name.localeCompare(y.name));
+  const dishMax = sold.length ? metric(sold[0]) : 0;
   const cats = new Map();
   sold.forEach((r) => { const c = cats.get(r.category) ?? { name: r.category, qty: 0, revenue: 0 }; c.qty += r.qty; c.revenue += r.revenue; cats.set(r.category, c); });
-  const catList = [...cats.values()].sort((a, b) => metric(b) - metric(a));
+  const catList = [...cats.values()].sort((x, y) => metric(y) - metric(x));
   const catMax = catList.length ? metric(catList[0]) : 0;
-  const money = (p) => rs(p).replace('.00', '');
-  const trend = (r) => {
+  const dishTrend = (r) => {
     if (!r.prevQty) return html`<span class="trend new">New</span>`;
     const d = r.qty - r.prevQty;
-    if (!d) return html`<span class="trend flat">Same as ${period.prev}</span>`;
-    return html`<span class="trend ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)} vs ${period.prev}</span>`;
+    return d ? html`<span class="trend ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}</span>` : html`<span class="trend flat">Same</span>`;
   };
-  const top = sold[0];
+  const shownDishes = a.allDishes ? sold : sold.slice(0, 10);
+
+  // Day by day (every day in the range, including days with no sales)
+  const byDay = new Map(report.days.map((d) => [d.day, d]));
+  const dayRows = Array.from({ length: Math.min(days, 92) }, (_, i) => {
+    const day = addDays(a.from, i);
+    return { day, bills: byDay.get(day)?.bills ?? 0, sales: Number(byDay.get(day)?.sales ?? 0) };
+  });
+  const dayMax = Math.max(...dayRows.map((d) => d.sales), 0);
+  const best = report.days.length ? report.days.reduce((x, y) => (Number(y.sales) > Number(x.sales) ? y : x)) : null;
+  // Hours: from the first to the last hour with a sale
+  const byHour = new Map(report.hours.map((h) => [h.hour, h]));
+  const hrs = report.hours.map((h) => h.hour);
+  const hourRows = hrs.length ? Array.from({ length: Math.max(...hrs) - Math.min(...hrs) + 1 }, (_, i) => {
+    const h = Math.min(...hrs) + i;
+    return { h, bills: byHour.get(h)?.bills ?? 0, sales: Number(byHour.get(h)?.sales ?? 0) };
+  }) : [];
+  const hourMax = Math.max(...hourRows.map((h) => h.sales), 0);
+  const peak = hourRows.length ? hourRows.reduce((x, y) => (y.sales > x.sales ? y : x)) : null;
+  const wk = [1, 2, 3, 4, 5, 6, 0].map((dow) => ({ dow, sales: Number(report.weekdays.find((w) => w.dow === dow)?.sales ?? 0), bills: report.weekdays.find((w) => w.dow === dow)?.bills ?? 0 }));
+  const wkMax = Math.max(...wk.map((w) => w.sales), 0);
+  const methodTotal = report.methods.reduce((n, m) => n + Number(m.sales), 0);
+  const mClass = (m) => `m-${String(m).toLowerCase().replace(/[^a-z]/g, '')}`;
+  const pct = (n, of) => (of ? Math.round((n / of) * 100) : 0);
+  const avgBill = t.bills ? Math.round(t.sales / t.bills / 100) * 100 : 0;
+  const showRooms = feat('rooms') && report.rooms?.bills > 0;
+
+  const col = (label, value, title, max, cls = '') => html`
+    <div class="col ${cls}" title="${title}"><span class="col-bar" style="height:${max ? Math.max(value ? 4 : 0, (value / max) * 100) : 0}%"></span><span class="col-label">${label}</span></div>`;
 
   const root = mount(html`
-    <div class="page-head"><div><p class="eyebrow">Best sellers</p><h1>Trending</h1></div></div>
-    <div class="trend-filters">
-      <div class="filter-tabs" role="toolbar" aria-label="Period">
-        ${Object.entries(TREND_PERIODS).map(([k, p]) => html`<button type="button" class="chip" data-period="${k}" aria-pressed="${k === trendPeriod}">${p.label}</button>`)}
-      </div>
-      <div class="filter-tabs" role="toolbar" aria-label="Rank by">
-        <button type="button" class="chip" data-sort="qty" aria-pressed="${trendSort === 'qty'}">By quantity</button>
-        <button type="button" class="chip" data-sort="revenue" aria-pressed="${trendSort === 'revenue'}">By sales ₹</button>
-      </div>
+    <div class="page-head"><div><p class="eyebrow">Sales report</p><h1>Analytics</h1></div>
+      ${t.bills ? html`<button type="button" class="secondary" id="an-export">⬇️ Export</button>` : ''}</div>
+    <div class="filter-tabs range-chips" role="toolbar" aria-label="Date range">
+      ${Object.entries(RANGES).map(([k, [label]]) => html`<button type="button" class="chip" data-range="${k}" aria-pressed="${k === a.range}">${label}</button>`)}
+      <button type="button" class="chip" data-range="custom" aria-pressed="${a.range === 'custom'}">📅 Pick dates</button>
     </div>
-    ${!sold.length ? html`<div class="card empty"><span class="emoji" aria-hidden="true">📈</span>No dishes sold ${trendPeriod === 'today' ? 'yet today' : `in the last ${period.label}`}.<br>Paid bills appear here as they come in.</div>` : html`
-      <section class="hero trend-hero" aria-label="Top dish">
-        <span class="label">#1 ${trendPeriod === 'today' ? 'today' : `in the last ${period.label}`}</span>
-        <span class="big trend-top">${top.name}</span>
-        <div class="facts">
-          <div class="fact"><strong>${top.qty}</strong><span>Sold</span></div>
-          <div class="fact"><strong>${money(top.revenue)}</strong><span>Sales</span></div>
-          <div class="fact"><strong>${Math.round((top.qty / totalQty) * 100)}%</strong><span>Of all dishes</span></div>
-        </div>
-      </section>
-      <div class="kpis">
-        <div class="kpi"><span>Dishes sold</span><strong>${totalQty}</strong></div>
-        <div class="kpi"><span>Sales (before discount)</span><strong>${money(totalRevenue)}</strong></div>
-        <div class="kpi"><span>Different dishes</span><strong>${sold.length}</strong></div>
+    <form class="range-form card" id="range-form" ${a.range === 'custom' ? '' : new Raw('hidden')}>
+      <label>From <input type="date" name="from" value="${a.from}" max="${localDay(new Date())}" required></label>
+      <label>To <input type="date" name="to" value="${a.to}" max="${localDay(new Date())}" required></label>
+      <button type="submit">Show</button>
+    </form>
+    <section class="hero an-hero" aria-label="Sales">
+      <span class="label">Sales · ${rangeName}</span>
+      <span class="big">${money(t.sales)}</span>
+      <span class="an-compare">${change(t.sales, prev.sales)} vs ${prevName} (${money(prev.sales)})</span>
+      <div class="facts">
+        <div class="fact"><strong>${t.bills}</strong><span>Bills</span></div>
+        <div class="fact"><strong>${money(avgBill)}</strong><span>Avg. bill</span></div>
+        <div class="fact"><strong>${t.items}</strong><span>Dishes sold</span></div>
       </div>
-      <h3>Top dishes · ${trendSort === 'qty' ? 'by quantity sold' : 'by sales'}</h3>
-      <ol class="rank-list">${sold.slice(0, 20).map((r, i) => html`
+    </section>
+    ${!t.bills ? html`<div class="card empty"><span class="emoji" aria-hidden="true">📊</span>No paid bills ${days === 1 ? 'on this day' : 'in these dates'}.<br>Pick another range above.</div>` : html`
+      <div class="kpis an-kpis">
+        <div class="kpi"><span>Bills vs before</span><strong>${t.bills} ${change(t.bills, prev.bills)}</strong></div>
+        <div class="kpi"><span>Discount given</span><strong>${money(t.discount)}</strong></div>
+        ${t.tax ? html`<div class="kpi"><span>GST collected</span><strong>${money(t.tax)}</strong></div>` : ''}
+        <div class="kpi"><span>Parcels</span><strong>${t.parcels} <small>· ${money(t.parcel_sales)}</small></strong></div>
+        ${t.dine_in_minutes ? html`<div class="kpi"><span>Avg. time at table</span><strong>${t.dine_in_minutes} min</strong></div>` : ''}
+        ${peak ? html`<div class="kpi"><span>Busiest hour</span><strong>${hourLabel(peak.h)}</strong></div>` : ''}
+        ${days > 1 && best ? html`<div class="kpi"><span>Best day</span><strong>${shortDate(best.day)} <small>· ${money(best.sales)}</small></strong></div>` : ''}
+        ${showRooms ? html`<div class="kpi"><span>Room bills</span><strong>${report.rooms.bills} <small>· ${money(report.rooms.sales)}</small></strong></div>` : ''}
+      </div>
+
+      ${days > 1 ? html`
+        <h3>Sales by day</h3>
+        <div class="card chart-card">
+          <div class="cols ${dayRows.length > 14 ? 'dense' : ''}" role="img" aria-label="Sales by day">${dayRows.map((d, i) => col(
+            dayRows.length <= 14 || i % Math.ceil(dayRows.length / 10) === 0 ? (dayRows.length <= 7 ? WEEKDAYS[new Date(`${d.day}T00:00:00`).getDay()] : String(Number(d.day.slice(8)))) : '',
+            d.sales, `${shortDate(d.day)}: ${money(d.sales)} · ${d.bills} bill${d.bills === 1 ? '' : 's'}`, dayMax))}</div>
+          <p class="chart-note">Highest ${money(dayMax)} · ${days > 92 ? 'first 92 days shown' : `daily average ${money(Math.round(t.sales / days / 100) * 100)}`}</p>
+        </div>` : ''}
+
+      ${hourRows.length > 1 ? html`
+        <h3>Busy hours</h3>
+        <div class="card chart-card">
+          <div class="cols ${hourRows.length > 12 ? 'dense' : ''}" role="img" aria-label="Sales by hour of the day">${hourRows.map((h, i) => col(
+            hourRows.length <= 12 || i % 2 === 0 ? hourLabel(h.h) : '', h.sales, `${hourLabel(h.h)}–${hourLabel((h.h + 1) % 24)}: ${money(h.sales)} · ${h.bills} bill${h.bills === 1 ? '' : 's'}`, hourMax, peak && h.h === peak.h ? 'peak' : ''))}</div>
+        </div>` : ''}
+
+      <h3>Payments</h3>
+      <div class="card an-pay">
+        <div class="split-bar" aria-hidden="true">${report.methods.map((m) => html`<span class="${mClass(m.method)}" style="width:${pct(Number(m.sales), methodTotal)}%"></span>`)}</div>
+        <div class="split-legend">${report.methods.map((m) => html`
+          <div class="${mClass(m.method)}"><span class="k">${m.method} · ${pct(Number(m.sales), methodTotal)}%</span><strong>${money(m.sales)}</strong><span class="small">${m.bills} bill${m.bills === 1 ? '' : 's'}</span></div>`)}
+        </div>
+      </div>
+
+      ${days >= 7 ? html`
+        <h3>By weekday</h3>
+        <div class="card cat-bars">${wk.map((w) => html`
+          <div class="cat-row" title="${WEEKDAYS[w.dow]}: ${money(w.sales)} · ${w.bills} bills">
+            <span class="cat-name">${WEEKDAYS[w.dow]}</span>
+            <span class="bar-track" aria-hidden="true"><span class="bar" style="width:${wkMax ? Math.max(w.sales ? 3 : 0, (w.sales / wkMax) * 100) : 0}%"></span></span>
+            <span class="cat-value">${money(w.sales)}</span>
+          </div>`)}
+        </div>` : ''}
+
+      <div class="an-head"><h3>Top dishes</h3>
+        <div class="filter-tabs" role="toolbar" aria-label="Rank by">
+          <button type="button" class="chip" data-sort="qty" aria-pressed="${a.sort === 'qty'}">Quantity</button>
+          <button type="button" class="chip" data-sort="revenue" aria-pressed="${a.sort === 'revenue'}">Sales ₹</button>
+        </div></div>
+      <ol class="rank-list">${shownDishes.map((r, i) => html`
         <li class="rank-row" title="${r.name}: ${r.qty} sold · ${money(r.revenue)}">
           <span class="rank ${i < 3 ? 'podium' : ''}">${i + 1}</span>
           <div class="rank-body">
             <div class="rank-line"><span class="diet ${r.is_veg ? 'veg' : 'nonveg'}" aria-hidden="true"></span><strong class="rank-name">${r.name}</strong>
-              <span class="rank-value">${trendSort === 'qty' ? `${r.qty} sold` : money(r.revenue)}</span></div>
-            <div class="bar-track" aria-hidden="true"><span class="bar" style="width:${Math.max(3, (metric(r) / max) * 100)}%"></span></div>
-            <div class="rank-meta">${r.category} · ${trendSort === 'qty' ? money(r.revenue) : `${r.qty} sold`} · ${trend(r)}</div>
+              <span class="rank-value">${a.sort === 'qty' ? `${r.qty} sold` : money(r.revenue)}</span></div>
+            <div class="bar-track" aria-hidden="true"><span class="bar" style="width:${Math.max(3, (metric(r) / dishMax) * 100)}%"></span></div>
+            <div class="rank-meta">${r.category} · ${a.sort === 'qty' ? money(r.revenue) : `${r.qty} sold`} · ${dishTrend(r)}</div>
           </div>
         </li>`)}
       </ol>
-      ${sold.length > 20 ? html`<p class="small">Showing the top 20 of ${sold.length} dishes.</p>` : ''}
+      ${sold.length > 10 ? html`<button type="button" class="secondary wide an-more" id="an-all">${a.allDishes ? 'Show top 10' : `Show all ${sold.length} dishes`}</button>` : ''}
+
       ${catList.length > 1 ? html`
         <h3>By category</h3>
         <div class="card cat-bars">${catList.map((c) => html`
           <div class="cat-row" title="${c.name}: ${c.qty} sold · ${money(c.revenue)}">
             <span class="cat-name">${c.name}</span>
             <span class="bar-track" aria-hidden="true"><span class="bar" style="width:${Math.max(3, (metric(c) / catMax) * 100)}%"></span></span>
-            <span class="cat-value">${trendSort === 'qty' ? c.qty : money(c.revenue)}</span>
+            <span class="cat-value">${a.sort === 'qty' ? c.qty : money(c.revenue)}</span>
           </div>`)}
         </div>` : ''}`}`);
+
   root.addEventListener('click', (e) => {
-    const p = e.target.closest('[data-period]'); const so = e.target.closest('[data-sort]');
-    if (p) trendPeriod = p.dataset.period; else if (so) trendSort = so.dataset.sort; else return;
-    trendingView(renderToken);
+    const r = e.target.closest('[data-range]');
+    const so = e.target.closest('[data-sort]');
+    if (r) {
+      if (r.dataset.range === 'custom') {
+        a.range = 'custom';
+        root.querySelectorAll('[data-range]').forEach((x) => x.setAttribute('aria-pressed', String(x === r)));
+        root.querySelector('#range-form').hidden = false;
+        return;
+      }
+      a.range = r.dataset.range;
+    } else if (so) a.sort = so.dataset.sort;
+    else if (e.target.closest('#an-all')) a.allDishes = !a.allDishes;
+    else if (e.target.closest('#an-export')) { exportReport(report, sold, dayRows, rangeName); return; }
+    else return;
+    analyticsView(renderToken);
   });
+  root.querySelector('#range-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    if (f.from > f.to) return toast('“From” must be on or before “To”.', 'error');
+    Object.assign(a, { range: 'custom', from: f.from, to: f.to });
+    analyticsView(renderToken);
+  });
+}
+
+/** Spreadsheet (CSV) of the report: summary, day by day and every dish. */
+function exportReport(report, sold, dayRows, rangeName) {
+  const rupees = (p) => (Number(p) / 100).toFixed(2);
+  const cell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+  const rows = [
+    ['Sales report', rangeName, `${analytics.from} to ${analytics.to}`],
+    [],
+    ['Total sales', rupees(report.totals.sales)], ['Bills', report.totals.bills], ['Dishes sold', report.totals.items],
+    ['Discount', rupees(report.totals.discount)], ['GST', rupees(report.totals.tax)], ['Parcels', report.totals.parcels],
+    ...report.methods.map((m) => [`${m.method}`, rupees(m.sales), `${m.bills} bills`]),
+    [],
+    ['Date', 'Bills', 'Sales'], ...dayRows.map((d) => [d.day, d.bills, rupees(d.sales)]),
+    [],
+    ['Dish', 'Category', 'Quantity', 'Sales'], ...sold.map((r) => [r.name, r.category, r.qty, rupees(r.revenue)]),
+  ];
+  const blob = new Blob([`﻿${rows.map((r) => r.map(cell).join(',')).join('\n')}`], { type: 'text/csv' });
+  const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `sales-${analytics.from}-to-${analytics.to}.csv` });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 2000);
 }
 
 // ---------- Menu ----------
@@ -2373,7 +2508,7 @@ function checkOut(stay, total) {
 const FEATURES = [
   ['tables', 'Tables & Orders', 'Table-wise orders, menu and food bills'],
   ['rooms', 'Rooms', 'Room check-in, extra charges and room bills'],
-  ['trending', 'Trending', 'Best-selling dishes report'],
+  ['trending', 'Analytics', 'Sales for any dates, busy hours, best-selling dishes'],
   ['bill_edit', 'Edit Bills', 'Owner can edit or delete paid bills, with a change log'],
   ['qr_menu', 'QR Menu', 'Customers scan a QR code to see the menu on their phone'],
 ];
@@ -2746,7 +2881,7 @@ const routes = [
   [/^\/stay\/(\d+)(\/print)?$/, stayView, 'rooms', 'rooms', 'bill'],
   [/^\/bills\/log$/, logView, 'bills', 'bill_edit', 'owner'],
   [/^\/bills(?:\/(\d{4}-\d{2}-\d{2}))?$/, billsView, 'bills', null, 'bill'],
-  [/^\/trending$/, trendingView, 'trending', 'trending', 'bill'],
+  [/^\/(?:analytics|trending)$/, analyticsView, 'trending', 'trending', 'bill'],
   [/^\/menu$/, menuView, 'menu', 'tables', 'owner'],
   [/^\/settings(\?qr)?$/, settingsView, 'settings', null, 'owner'],
 ];
