@@ -1,6 +1,6 @@
 {
-  "name": "Hotel Billing",
-  "short_name": "Billing",
+  "name": "Master Bill",
+  "short_name": "Master Bill",
   "description": "Table orders, parcels, rooms and billing for hotels and restaurants.",
   "id": "./",
   "start_url": "./",

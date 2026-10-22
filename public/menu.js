@@ -44,7 +44,7 @@ function render(menu) {
       </div>
     </div>
     <main id="list"></main>
-    <footer>Ask the staff for today’s specials.<br>Menu by Hotel Billing · Techyverve</footer>`;
+    <footer>Ask the staff for today’s specials.<br>Menu by Master Bill · Techyverve</footer>`;
   const $list = document.getElementById('list');
 
   const draw = () => {

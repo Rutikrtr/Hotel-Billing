@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Hotel Billing</string>
+    <string name="app_name">Master Bill</string>
     <!-- The web app this Android app opens. -->
     <string name="launch_url">https://hotel-billing-v1.pages.dev/</string>
     <string name="provider_authority">in.techyverve.hotelbilling.fileprovider</string>

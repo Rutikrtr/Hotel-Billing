@@ -2118,7 +2118,7 @@ async function settingsView(token) {
           <button type="button" class="wide" id="share-cred">Share / Copy</button>
           <button type="button" class="secondary wide" data-done>Done</button>
         </div>`);
-      const text = `Hotel Billing login\nApp: ${link}\nLogin ID: ${loginName(data)}\nPassword: ${f.password}`;
+      const text = `Master Bill login\nApp: ${link}\nLogin ID: ${loginName(data)}\nPassword: ${f.password}`;
       dialog.querySelector('#share-cred').addEventListener('click', async () => {
         try {
           if (navigator.share) await navigator.share({ text });
@@ -3341,7 +3341,7 @@ async function adminBillView(token, id) {
         <span class="inv-stamp ${bill.status}">${bill.status === 'paid' ? `PAID · ${shortDay(bill.paid_on)}${bill.method ? ` · ${bill.method}` : ''}` : 'UNPAID'}</span>
         ${bill.status === 'unpaid' && profile.upi_id ? html`<span>Pay by UPI: <strong>${profile.upi_id}</strong></span>` : ''}
       </div>
-      <p class="inv-thanks">Thank you for choosing Hotel Billing by ${profile.business_name}.</p>
+      <p class="inv-thanks">Thank you for choosing Master Bill by ${profile.business_name}.</p>
     </article>`);
 
   const reload = () => adminBillView(renderToken, id);
@@ -3643,7 +3643,7 @@ function showInstall() {
   document.querySelectorAll('[data-install]').forEach((b) => { b.hidden = isInstalled() || (!installPrompt && !isIOS()); });
 }
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; showInstall(); });
-window.addEventListener('appinstalled', () => { installPrompt = null; showInstall(); toast('Installed. Open “Billing” from your home screen.'); });
+window.addEventListener('appinstalled', () => { installPrompt = null; showInstall(); toast('Installed. Open “Master Bill” from your home screen.'); });
 document.addEventListener('click', async (e) => {
   if (!e.target.closest('[data-install]')) return;
   if (installPrompt) {
