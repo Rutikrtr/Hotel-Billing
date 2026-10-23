@@ -712,7 +712,7 @@ async function tableView(token, tableId, sectionArg, parcelId) {
 
   const render = () => { renderMenu(); renderOrder(); };
 
-  /** Queue server writes so rapid taps apply in order. Each write sends the latest local quantity. */
+  /** Queue server writes so rapid taps apply in order. */
   function enqueue(fn) {
     queue = queue.then(fn).catch(async (err) => {
       toast(friendly(err), 'error');
@@ -727,7 +727,13 @@ async function tableView(token, tableId, sectionArg, parcelId) {
 
   async function ensureOrder() {
     if (state.order) return state.order;
-    state.order = await q(sb.from('orders').insert(parcel ? { is_parcel: true } : { table_id: table.id, section }).select().single());
+    try {
+      state.order = await q(sb.from('orders').insert(parcel ? { is_parcel: true } : { table_id: table.id, section }).select().single());
+    } catch (err) {
+      // Another phone opened this table a moment ago: use that order.
+      if (parcel) throw err;
+      state.order = await q(sb.from('orders').select('*').eq('table_id', table.id).eq('section', section).eq('status', 'open').single());
+    }
     // Keep the parcel's own address so a refresh comes back to it.
     if (parcel) history.replaceState(null, '', `#/parcel/${state.order.id}`);
     return state.order;
@@ -740,18 +746,26 @@ async function tableView(token, tableId, sectionArg, parcelId) {
       if (kotOn && sentQty(item)) state.cancelled.push({ menu_item_id: item.menu_item_id, name: item.name, quantity: sentQty(item) });
     }
     render();
+    // Send +1 / -1 (not the total) so taps from two phones on the same table both count.
+    item.pending = (item.pending || 0) + 1;
     enqueue(async () => {
-      const order = await ensureOrder();
-      if (item.quantity <= 0) {
-        if (item.id > 0) await q(sb.from('order_items').delete().eq('id', item.id));
-      } else if (item.id > 0) {
-        await q(sb.from('order_items').update({ quantity: item.quantity }).eq('id', item.id));
-      } else {
-        const row = await q(sb.from('order_items').insert({
-          order_id: order.id, menu_item_id: item.menu_item_id, name: item.name, unit_price: item.unit_price, quantity: item.quantity, kot_qty: sentQty(item),
-        }).select().single());
-        item.id = row.id;
-        if (item.quantity !== row.quantity) await q(sb.from('order_items').update({ quantity: item.quantity }).eq('id', item.id));
+      const r = await q(sb.rpc('order_item_change', {
+        p_order_id: state.order?.id ?? null, p_table_id: parcel ? null : table.id, p_section: section, p_parcel: parcel,
+        p_menu_item_id: item.menu_item_id, p_delta: delta, p_kot_qty: sentQty(item),
+      }));
+      item.pending -= 1;
+      if (!state.order) {
+        state.order = await q(sb.from('orders').select('*').eq('id', r.order_id).single());
+        // Keep the parcel's own address so a refresh comes back to it.
+        if (parcel) history.replaceState(null, '', `#/parcel/${state.order.id}`);
+      }
+      if (r.item_id) item.id = r.item_id;
+      // Another phone changed this dish too: show the real number once our own taps are done.
+      if (!item.pending && r.quantity !== Math.max(item.quantity, 0)) {
+        item.quantity = r.quantity;
+        if (r.quantity <= 0) state.items = state.items.filter((i) => i !== item);
+        else if (!state.items.includes(item)) state.items.push(item);
+        render();
       }
     });
   }
@@ -3479,6 +3493,7 @@ function setTabs(a) {
 // List screens draw from memory at once and refresh behind; screens where people edit (an order, a form) always load fresh.
 const scrollMemo = new Map();      // each list screen keeps its scroll position, like app tabs do
 let shownPath = '';                // the screen currently on display
+let shownInstant = false;          // is it a list screen (safe to redraw quietly)?
 let silentTimer = 0;
 
 async function route(opts) {
@@ -3519,6 +3534,7 @@ async function route(opts) {
   setTabs(account);
   // Reconnect remembered Bluetooth printers in the background, once per app open.
   if (account.can_bill && !route.printersTried) { route.printersTried = true; reconnectSaved().catch(() => {}); }
+  startLive();
   const hotel = account.staff && account.active;
   let path = location.hash.replace(/^#/, '') || '/';
   // Coming back from the Menu screen: use the dishes just edited.
@@ -3569,6 +3585,7 @@ async function route(opts) {
           }
         }
         shownPath = path;
+        shownInstant = instant;
       }
     } catch (err) {
       readMode = 'network';
@@ -3598,17 +3615,30 @@ onFresherData = () => {
     const busy = document.querySelector('dialog[open]') || document.body.classList.contains('sheet-open')
       || document.activeElement?.matches('input, textarea, select') || document.visibilityState !== 'visible';
     const path = location.hash.replace(/^#/, '') || '/';
-    if (!busy && path === shownPath && session && account) route({ silent: true });
+    if (!busy && shownInstant && path === shownPath && session && account) route({ silent: true });
   }, 80);
 };
-// The Tables screen keeps itself up to date while it is open (other phones take orders too).
+// Live updates: when any phone in the hotel opens, bills or closes an order, the open list screen updates within
+// a second. Only a tiny message arrives per change (Supabase Realtime), so many phones stay within the free plan.
+let liveChannel = null;
+function startLive() {
+  if (liveChannel || !account?.staff) return;
+  liveChannel = sb.channel('orders-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+      for (const e of readStore.values()) e.stale = true;
+      onFresherData();
+    })
+    .subscribe();
+}
+function stopLive() {
+  if (liveChannel) { sb.removeChannel(liveChannel); liveChannel = null; }
+}
+// Safety net if the live connection drops: refresh the open list screen every 5 minutes.
 setInterval(() => {
   if (document.visibilityState !== 'visible' || !session || !account?.staff) return;
-  const path = location.hash.replace(/^#/, '') || '/';
-  if (path !== '/' || path !== shownPath) return;
   for (const e of readStore.values()) e.stale = true;
   onFresherData();
-}, 30000);
+}, 5 * 60 * 1000);
 // Tapping the tab you're already on scrolls back to the top.
 document.querySelector('.tabbar').addEventListener('click', (e) => {
   const tab = e.target.closest('a.tab[aria-current="page"]');
@@ -3719,7 +3749,7 @@ window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange((event, s) => {
   const changed = (s?.user.id) !== (session?.user.id);
   session = s;
-  if (changed) { accountCheck = null; account = null; getSettings.clear(); getMenu.clear(); readStore.clear(); shownPath = ''; scrollMemo.clear(); }
+  if (changed) { stopLive(); accountCheck = null; account = null; getSettings.clear(); getMenu.clear(); readStore.clear(); shownPath = ''; scrollMemo.clear(); }
   if (event === 'PASSWORD_RECOVERY') { recoveringPassword = true; setTimeout(route, 0); return; }
   if (event === 'SIGNED_OUT') { recoveringPassword = false; lastEmail = ''; }
   // Defer: calling Supabase from inside this callback can deadlock the auth client.
