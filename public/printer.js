@@ -125,6 +125,8 @@ async function findWritable(server) {
 }
 
 const pause = (ms) => new Promise((r) => { setTimeout(r, ms); });
+/** Bluetooth calls can stall when a printer is switched off or out of range: give up instead of freezing the button. */
+const within = (promise, ms, message) => Promise.race([promise, new Promise((_, reject) => { setTimeout(() => reject(new Error(message)), ms); })]);
 
 /** A remembered printer may need to be seen advertising before Chrome can connect to it again. */
 async function gattConnect(device) {
@@ -162,7 +164,7 @@ async function connect(slot, pick) {
     setPrinter({ [slot]: { ...saved, id: c.device.id, name: c.device.name || 'Printer' } });
   }
   c.device.addEventListener('gattserverdisconnected', () => { c.char = null; }, { once: true });
-  c.char = await findWritable(await gattConnect(c.device));
+  c.char = await within(gattConnect(c.device).then(findWritable), 15000, `${LABEL[slot]} didn’t answer. Check it is on and nearby, then try again.`);
   return c.device.name || 'Printer';
 }
 
@@ -202,8 +204,8 @@ async function sendBluetooth(slot, data, pick) {
   // Small pieces with short pauses: cheap printers have tiny buffers.
   for (let i = 0; i < data.length; i += 100) {
     const piece = data.slice(i, i + 100);
-    if (c.properties.writeWithoutResponse && c.writeValueWithoutResponse) await c.writeValueWithoutResponse(piece);
-    else await c.writeValue(piece);
+    const write = c.properties.writeWithoutResponse && c.writeValueWithoutResponse ? c.writeValueWithoutResponse(piece) : c.writeValue(piece);
+    await within(write, 8000, `${LABEL[slot]} stopped answering while printing. Check it is on, then try again.`);
     await pause(25);
   }
 }
@@ -235,7 +237,7 @@ export async function printSlips(slips, { pick = false } = {}) {
   let mayPick = pick;
   for (const slot of ['bill', 'kitchen'].filter((x) => groups[x])) {
     const wasConnected = isConnected(slot);
-    try { await sendBluetooth(slot, join(groups[slot]), mayPick); } catch (err) { failed.push({ slot, error: err }); }
+    try { await sendBluetooth(slot, join(groups[slot]), mayPick); } catch (err) { conn[slot].char = null; failed.push({ slot, error: err }); }
     if (!wasConnected) mayPick = false;
   }
   if (failed.length === Object.keys(groups).length) throw failed[0].error;

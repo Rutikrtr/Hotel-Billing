@@ -15,13 +15,22 @@ const FRESH_MS = 1500;          // the same read within 1.5 s (quick tab taps) i
 let readMode = 'network';       // 'cache' while a list screen is drawing
 let onFresherData = () => {};   // set below: quietly redraws the screen when a background read brought changes
 const INSTANT_VIEWS = new Set();  // list screens that draw from memory (filled where the routes are defined)
+/** Every request gives up after 20 s (weak Wi-Fi, network switch) instead of waiting forever and blocking later taps. */
+function fetchWithTimeout(input, init = {}, ms = 20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  init.signal?.addEventListener('abort', () => ctrl.abort());
+  return fetch(input, { ...init, signal: ctrl.signal })
+    .catch((err) => { throw ctrl.signal.aborted && !init.signal?.aborted ? new Error('The internet is slow right now. Please try again.') : err; })
+    .finally(() => clearTimeout(timer));
+}
 async function storeFetch(input, init = {}) {
   const url = typeof input === 'string' ? input : input.url;
   const method = (init.method || 'GET').toUpperCase();
   const rest = url.includes('/rest/v1/');
   const rpc = url.match(/\/rest\/v1\/rpc\/(\w+)/)?.[1];
   if (!rest || !(method === 'GET' || (method === 'POST' && READ_RPCS.has(rpc)))) {
-    const res = await fetch(input, init);
+    const res = await fetchWithTimeout(input, init);
     if (rest) for (const e of readStore.values()) e.stale = true;   // something changed: re-check before showing
     return res;
   }
@@ -30,7 +39,7 @@ async function storeFetch(input, init = {}) {
   const hit = readStore.get(key);
   const answer = (e) => new Response(e.body, { status: 200, headers: e.headers });
   const load = async () => {
-    const res = await fetch(input, init);
+    const res = await fetchWithTimeout(input, init);
     if (res.status !== 200) return { res, changed: false };
     const body = await res.text();
     const before = readStore.get(key);
@@ -51,7 +60,17 @@ async function storeFetch(input, init = {}) {
     throw err;
   }
 }
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { global: { fetch: storeFetch } });
+// Fix for the app freezing after it was in the background: Supabase's login code guards the session with a browser
+// lock (navigator.locks) that Android sometimes never releases, so every request waited forever. A simple lock
+// inside this page does the same job and cannot get stuck.
+const lockChains = new Map();
+function pageLock(name, _timeout, fn) {
+  const prev = lockChains.get(name) ?? Promise.resolve();
+  const run = prev.catch(() => {}).then(fn);
+  lockChains.set(name, run.catch(() => {}));
+  return run;
+}
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { global: { fetch: storeFetch }, auth: { lock: pageLock } });
 const METHODS = ['Cash', 'UPI', 'Card'];
 const $view = document.getElementById('view');
 let session = null;
@@ -112,7 +131,7 @@ function toast(message, kind = '') {
 }
 
 function friendly(error) {
-  const msg = error?.message || String(error);
+  const msg = (error?.message || String(error)).replace(/^(Type)?Error: /, '');
   if (/orders_one_open_per_table_section/.test(msg)) return 'This section already has a running order. Refresh to see it.';
   if (/orders_one_open_per_table/.test(msg)) return 'Sections need one last database step. Ask your admin to finish the setup.';
   if (/menu_items_restaurant_name_key|menu_items_name_key/.test(msg)) return 'Another dish already has this exact name. Add a word to tell them apart, like “Icecream (Mango)”.';
