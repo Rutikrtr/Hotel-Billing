@@ -1,0 +1,260 @@
+10-24 18:39:09.661 W/FileUtils(  492): android.system.ErrnoException: chmod failed: ENOENT (No such file or directory)
+10-24 18:39:10.381 W/PackageParsing(  492): Ignoring duplicate uses-permissions/uses-permissions-sdk-m: android.permission.ACCESS_FINE_LOCATION in package: in.techyverve.masterbill at: Binary XML file line #18
+10-24 18:39:10.516 W/PackageParsing(  492): Ignoring duplicate uses-permissions/uses-permissions-sdk-m: android.permission.ACCESS_FINE_LOCATION in package: in.techyverve.masterbill at: Binary XML file line #18
+10-24 18:39:10.874 W/Auth    ( 1141): java.io.IOException: Couldn't create ClientAuthInfo
+10-24 18:39:12.087 I/MediaProvider( 1614): Invalidating LocalCallingIdentity cache for package in.techyverve.masterbill. Reason: op android:read_external_storage
+10-24 18:39:12.088 I/MediaProvider( 1614): Invalidating LocalCallingIdentity cache for package in.techyverve.masterbill. Reason: op android:read_external_storage
+10-24 18:39:12.134 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:12.269 E/BugleRcsEngine( 2566): [63] xdj.a: File not found.: java.io.FileNotFoundException: /data/user/0/com.google.android.apps.messaging/files/httpft_pending: open failed: ENOENT (No such file or directory)
+10-24 18:39:12.269 E/BugleRcsEngine( 2566): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-24 18:39:12.324 V/BackupManagerService(  492): [UserID:0] restoreAtInstall pkg=in.techyverve.masterbill token=1 restoreSet=0
+10-24 18:39:12.425 E/BackupHelper(  719): java.io.FileNotFoundException: /data/user_de/0/com.google.android.permissioncontroller/files/delayed_restore_permissions.xml: open failed: ENOENT (No such file or directory)
+10-24 18:39:12.425 E/BackupHelper(  719): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-24 18:39:12.615 I/MediaProvider( 1614): Invalidating LocalCallingIdentity cache for package in.techyverve.masterbill. Reason: package android.intent.action.PACKAGE_ADDED
+10-24 18:39:12.616 I/GsaVoiceInteractionSrv( 1454): O received Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) }
+10-24 18:39:12.635 D/AvrcpMediaPlayerList(  690): Name of package changed: in.techyverve.masterbill
+10-24 18:39:12.765 W/Auth    ( 1141): java.io.IOException: Couldn't create ClientAuthInfo
+10-24 18:39:12.866 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3e30af1
+10-24 18:39:12.866 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@a40e044
+10-24 18:39:12.866 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@268fa62
+10-24 18:39:12.866 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@d8dbcb0
+10-24 18:39:12.866 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@de05aae
+10-24 18:39:12.866 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@989f3dc
+10-24 18:39:12.867 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@35b73ba
+10-24 18:39:12.867 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@7b071c8
+10-24 18:39:12.867 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3d1186
+10-24 18:39:12.867 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@c3ee274
+10-24 18:39:12.903 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:13.180 W/WellbeingSettingsProvid( 1292): java.util.concurrent.TimeoutException: Waited 5000 milliseconds (plus 215770 nanoseconds delay) for nit@6b73e3[status=PENDING, info=[inputFuture=[njl@fa1b1e0[status=PENDING, info=[inputFuture=[njl@f4b2c99[status=PENDING, info=[inputFuture=[nkv@1eecb5e[status=PENDING, info=[futures=[njl@d576b3f[status=PENDING, info=[inputFuture=[njl@2a00c0c[status=PENDING, info=[inputFuture=[nlt@f18f955[status=PENDING, info=[delegate=[nmy@6583f6a[status=PENDING, setFuture=[njl@ce17c5b[status=PENDING, info=[inputFuture=[njk@947dcf8[status=PENDING, info=[inputFuture=[nlt@8bcd5d1[status=PENDING, info=[delegate=[nmy@232e836[status=PENDING, setFuture=[njk@2318337[status=PENDING, setFuture=[njl@899d0a4[status=PENDING, info=[inputFuture=[njl@9e7fe0d[status=PENDING, info=[inputFuture=[njk@23d51c2[status=PENDING, setFuture=[njl@1111bd3[status=PENDING, info=[inputFuture=[njk@2f55310[status=PENDING, info=[inputFuture=[njk@236e09[status=PENDING, setFuture=[nma@e92c80e]]], function=[propagating=[cjc@647a22f]]]]], function=[propagating=[Functions.constant(AppSyncDelta{appConfigsToAdd=[# bzd@b9fe03c5, # bzd@c8a42906, # bzd@934ae4fc, # bzd@85987d30, # bzd@73946824, # bzd@d357b5ec, # bzd@35f3a752, # bzd@693c69ae, # bzd@a8a4ad84, # bzd@92c1c3f6, # bzd@abf96ddf, # bzd@35d73408, # bzd@8aa9455e, # bzd@4d5efce8, # bzd@4136ec7b, # bzd@db4715b5, # bzd@11b3b6af, # bzd@3ecd5c0c, # bzd@b89141ef, # bzd@9616bcf6, # bzd@ff2c9fd1, # bzd@134015d3, # bzd@ce3c3602, # bzd@89385631, # bzd@61525bd1, # bzd@95683896, # bzd@8896aa0b, # bzd@75612e39, # bzd@1ca952c0, # bzd@38a335b5, # bzd@7c3acaf0, # bzd@44bfe1f, # bzd@2fc4ad48, # bzd@e29c8aa0, # bzd@82cc4419, # bzd@dd097b5a, # bzd@12673bd2, # bzd@6f570fab, # bzd@d39f05c5, # bzd@dedff1d, # bzd@5c71b5b2, # bzd@1a1fd16b, # bzd@60f833f1, # bzd@cf995c8e, # bzd@6a9479d3, # bzd@dc24785e, # bzd@12d70930, # bzd@f037dfeb, # bzd@ffc98a48, # bzd@be5a62ea, # bzd@8c911a25, # bzd@97978960, # bzd@5391c1e9, # bzd@48b98cf4, # bzd@62b5767c, # bzd@faf152ea, # bzd@c1139db1, # bzd@d799a54f, # bzd@d3be0ab1, # bzd@bfe96703, # bzd@daf71a3b, # bzd@bc78809f, # bzd@ae35af01, # bzd@ee56af7a, # bzd@51ec3550, # bzd@3bd3a4a4, # bzd@e9dd5a0e, # bzd@49809bb8, # bzd@86a61fa4, # bzd@2dbb4c9d, # bzd@c1bd00d0, # bzd@35d86976, # bzd@e7823c44, # bzd@dd018b25, # bzd@dd79f156, # bzd@ddf25787, # bzd@6bcea923, # bzd@6d8377b4, # bzd@46e25ddd, # bzd@60393d7e, # bzd@8249f3a0, # bzd@2ac1f39d, # bzd@cfe093d1, # bzd@7a5a14ae, # bzd@a1f04e52, # bzd@2a278244, # bzd@701e9cd0, # bzd@c27d5381, # bzd@168c56c4, # bzd@45673288, # bzd@bd930370, # bzd@be0b69a1, # bzd@92a1aea0, # bzd@6b6c0bc4, # bzd@57b48b4d, # bzd@750baf90, # bzd@de70d2c, # bzd@8cc4c974, # bzd@5a6f4f07, # bzd@3cef971, # bzd@6a8b5d74, # bzd@56ddc0a4, # bzd@c1535037, # bzd@ccab1483, # bzd@2609e74a, # bzd@4cbafb5d, # bzd@92b7efc8, # bzd@c4655e40, # bzd@81bdabf7, # bzd@40d845d2, # bzd@b7439c7c, # bzd@c18283c6, # bzd@2d546df9, # bzd@db99d179, # bzd@a5d5b2b1, # bzd@e3a6e96b, # bzd@6f508938, # bzd@c0ad9855, # bzd@f73fc51a, # bzd@ae4a44f5, # bzd@c8f22dfe, # bzd@c8725dc2, # bzd@1a6c15ae, # bzd@d605f32e, # bzd@c921692e, # bzd@c8578f36, # bzd@654f6770, # bzd@3f7acadc, # bzd@508e98ef, # bzd@33cd23fc, # bzd@8a9993fe, # bzd@187f0d40, # bzd@d29a7185, # bzd@e7697e7a, # bzd@d8f2cdcb, # bzd@41612aa4, # bzd@fa4314, # bzd@812be47e, # bzd@4f1c8e4a, # bzd@fa1499b6, # bzd@22b13e35, # bzd@6aee6192, # bzd@53878913, # bzd@6b8e3e55, # bzd@df06dc97, # bzd@9f7f9652, # bzd@8ac209a1, # bzd@c7fe4448, # bzd@d1d87f4f, # bzd@7bc5fc81, # bzd@cd44b324, # bzd@8c9148ef, # bzd@f646f3d2, # bzd@13778f1c, # bzd@98c19579, # bzd@53bdb5a8, # bzd@eb9d5d7, # bzd@1d8b7050, # bzd@ca54c150, # bzd@f674ac95, # bzd@641f30c0, # bzd@bb0559f5, # bzd@38073b4c, # bzd@cfa85cbe, # bzd@a20174b0, # bzd@b095d49f, # bzd@db65b917, # bzd@12feefa5, # bzd@c68f7195, # bzd@6b33d4b1, # bzd@fa99fc25, # bzd@7dbab76f, # bzd@7fc74454, # bzd@abd4d576, # bzd@f1eddc2d, # bzd@7caaf44a, # bzd@5bdb3edf, # bzd@1edcfdd0, # bzd@6bd67dfb, # bzd@5e7d3b07, # bzd@4b58e761, # bzd@f30096a8, # bzd@ef908641, # bzd@90ec95b1, # bz
+10-24 18:39:13.232 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3e30af1
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@a40e044
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@268fa62
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@d8dbcb0
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@de05aae
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@989f3dc
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@35b73ba
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@7b071c8
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3d1186
+10-24 18:39:13.233 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@c3ee274
+10-24 18:39:13.390 I/ActivityTaskManager(  492): START u0 {flg=0x10000000 cmp=in.techyverve.masterbill/.MainActivity} from uid 2000
+10-24 18:39:13.460 I/ActivityManager(  492): Start proc 3189:in.techyverve.masterbill/u0a167 for pre-top-activity {in.techyverve.masterbill/in.techyverve.masterbill.MainActivity}
+10-24 18:39:13.669 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.176 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.223 W/SoLoader( 3189): Recording new base apk path: /data/app/~~3Q5oGd7H99DUZcH2oUEYBw==/in.techyverve.masterbill-Vc2wKjJAnC8724fVH_Wqlw==/base.apk
+10-24 18:39:14.224 I/SoLoader( 3189): Preparing SO source: DirectApkSoSource[root = [/data/app/~~3Q5oGd7H99DUZcH2oUEYBw==/in.techyverve.masterbill-Vc2wKjJAnC8724fVH_Wqlw==/base.apk!/lib/x86_64]]
+10-24 18:39:14.226 I/SoLoader( 3189): Preparing SO source: ApplicationSoSource[DirectorySoSource[root = /data/app/~~3Q5oGd7H99DUZcH2oUEYBw==/in.techyverve.masterbill-Vc2wKjJAnC8724fVH_Wqlw==/lib/x86_64 flags = 0]]
+10-24 18:39:14.287 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.348 E/NearbyDiscovery( 1141): java.util.concurrent.TimeoutException: Timed out waiting for Task
+10-24 18:39:14.360 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:14.512 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3e30af1
+10-24 18:39:14.512 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@a40e044
+10-24 18:39:14.512 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@268fa62
+10-24 18:39:14.512 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@d8dbcb0
+10-24 18:39:14.512 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@de05aae
+10-24 18:39:14.512 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@989f3dc
+10-24 18:39:14.515 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@35b73ba
+10-24 18:39:14.515 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@7b071c8
+10-24 18:39:14.515 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3d1186
+10-24 18:39:14.515 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@c3ee274
+10-24 18:39:14.575 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.660 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:14.694 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.697 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.773 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.784 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:14.811 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:15.564 I/ReactNativeJS( 3189): Running "main"
+10-24 18:39:15.722 E/constellation( 1717): java.io.IOException: AUTHENTICATION_FAILED
+10-24 18:39:15.925 E/NearbyDiscovery( 1141): java.util.concurrent.TimeoutException: Timed out waiting for Task
+10-24 18:39:16.386 W/unknown:ReactNative( 3189): Attempt to set local data for view with unknown tag: -1
+10-24 18:39:16.387 W/unknown:ReactNative( 3189): Attempt to set local data for view with unknown tag: -1
+10-24 18:39:16.412 W/unknown:ReactNative( 3189): Attempt to set local data for view with unknown tag: -1
+10-24 18:39:16.413 W/unknown:ReactNative( 3189): Attempt to set local data for view with unknown tag: -1
+10-24 18:39:17.047 W/UnsafeUtil(  690): platform method missing - proto runtime falling back to safer methods: java.lang.NoSuchMethodException: sun.misc.Unsafe.copyMemory [class java.lang.Object, long, class java.lang.Object, long, long]
+10-24 18:39:17.289 W/GCM     ( 1141): Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+10-24 18:39:17.328 W/GCM     ( 1141): Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+10-24 18:39:17.334 W/MDM     ( 1717): java.lang.reflect.InvocationTargetException
+10-24 18:39:17.334 W/MDM     ( 1717): Caused by: java.lang.SecurityException: Neither user 10122 nor current process has android.permission.MANAGE_DEVICE_ADMINS.
+10-24 18:39:17.334 W/MDM     ( 1717): 	at android.os.Parcel.createExceptionOrNull(Parcel.java:2373)
+10-24 18:39:17.334 W/MDM     ( 1717): 	at android.os.Parcel.createException(Parcel.java:2357)
+10-24 18:39:17.334 W/MDM     ( 1717): 	at android.os.Parcel.readException(Parcel.java:2340)
+10-24 18:39:17.334 W/MDM     ( 1717): 	at android.os.Parcel.readException(Parcel.java:2282)
+10-24 18:39:17.334 W/MDM     ( 1717): Caused by: android.os.RemoteException: Remote stack trace:
+10-24 18:39:17.355 I/ChromeSync( 1717): [Sync,SyncIntentOperation] Handling the intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 cmp=com.google.android.gms/.chimera.GmsIntentOperationService (has extras) }.
+10-24 18:39:17.363 I/ChromeSync( 1717): [Persistence,AffiliationManager] One of affiliation or grouping data for android://WCz-SImUXhaCyOXO89qkui-OJQfxUTrkgTxkyDufnc4-VE3dxwZHkekkDMTy5PkuR9uY8Wg6ohTLItEgf_MrzQ==@in.techyverve.masterbill/ was not found. Marking affiliation data as stale...
+10-24 18:39:17.378 W/Bugle   ( 2566): java.io.IOException: AUTHENTICATION_FAILED
+10-24 18:39:17.379 W/Bugle   ( 2566): java.io.IOException: AUTHENTICATION_FAILED
+10-24 18:39:17.391 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:17.416 W/ModernMediaScanner( 1614): Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-24 18:39:17.528 W/ModernMediaScanner( 1614): Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-24 18:39:17.917 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:18.737 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:18.845 W/GCM-GMS ( 1717): Failed to get registration: java.io.IOException: AUTHENTICATION_FAILED
+10-24 18:39:18.846 W/GCM-GMS ( 1717): Failed to get direct boot token: java.io.IOException: AUTHENTICATION_FAILED
+10-24 18:39:18.850 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:18.933 E/bqkh    ( 1141): RuntimeException while executing runnable bqkt{jax@4deced0} with executor MoreExecutors.directExecutor()
+10-24 18:39:18.933 E/bqkh    ( 1141): java.lang.NullPointerException: Attempt to get length of null array
+10-24 18:39:19.567 E/PhenotypeFlagCommitter( 2670): java.util.concurrent.TimeoutException: Timed out waiting for Task
+10-24 18:39:19.570 W/GrowthKit( 2670): java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+10-24 18:39:19.570 W/Notifications( 2670): java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+10-24 18:39:19.739 D/StrictMode( 1742): 	at android.os.Parcel.readExceptionCode(Parcel.java:2318)
+10-24 18:39:19.739 D/StrictMode( 1742): 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+10-24 18:39:19.818 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:19.864 D/ArtManagerInternalImpl(  492): /data/misc/iorapd/in.techyverve.masterbill/1/in.techyverve.masterbill.MainActivity/compiled_traces/compiled_trace.pb doesn't exist
+10-24 18:39:19.871 I/ActivityTaskManager(  492): Displayed in.techyverve.masterbill/.MainActivity: +2s372ms
+10-24 18:39:19.957 D/ProfileInstaller( 3189): Installing profile for in.techyverve.masterbill
+10-24 18:39:19.980 W/BroadcastQueue(  492): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) } to com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver
+10-24 18:39:19.980 W/BroadcastQueue(  492): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) } to com.google.android.gms/.games.chimera.GamesSystemBroadcastReceiverProxy
+10-24 18:39:19.980 W/BroadcastQueue(  492): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) } to com.google.android.gms/.gass.chimera.PackageChangeBroadcastReceiver
+10-24 18:39:19.980 W/BroadcastQueue(  492): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+10-24 18:39:19.981 W/BroadcastQueue(  492): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+10-24 18:39:19.981 W/BroadcastQueue(  492): Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:in.techyverve.masterbill flg=0x4000010 (has extras) } to com.google.android.ims/.receivers.RcsAutoStartReceiver
+10-24 18:39:20.375 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3e30af1
+10-24 18:39:20.375 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@a40e044
+10-24 18:39:20.375 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@268fa62
+10-24 18:39:20.376 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@d8dbcb0
+10-24 18:39:20.376 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@de05aae
+10-24 18:39:20.376 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@989f3dc
+10-24 18:39:20.376 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@35b73ba
+10-24 18:39:20.376 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@7b071c8
+10-24 18:39:20.376 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3d1186
+10-24 18:39:20.377 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@c3ee274
+10-24 18:39:20.547 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:20.632 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:20.703 I/iorapd  (  422): Perfetto TraceBuffer saved to file: /data/misc/iorapd/in.techyverve.masterbill/1/in.techyverve.masterbill.MainActivity/raw_traces/1792867160571070531.perfetto_trace.pb
+10-24 18:39:20.742 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:20.760 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:20.766 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:20.885 E/BugleRcsEngine( 2566): [47] xdj.a: File not found.: java.io.FileNotFoundException: /data/user/0/com.google.android.apps.messaging/files/httpft_pending: open failed: ENOENT (No such file or directory)
+10-24 18:39:20.885 E/BugleRcsEngine( 2566): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-24 18:39:20.893 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3e30af1
+10-24 18:39:20.893 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@a40e044
+10-24 18:39:20.894 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@268fa62
+10-24 18:39:20.894 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@d8dbcb0
+10-24 18:39:20.894 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@de05aae
+10-24 18:39:20.894 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@989f3dc
+10-24 18:39:20.895 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@35b73ba
+10-24 18:39:20.895 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@7b071c8
+10-24 18:39:20.895 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3d1186
+10-24 18:39:20.895 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@c3ee274
+10-24 18:39:21.050 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.050 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.073 W/GCM-GMS ( 1717): Failed to get registration: java.io.IOException: AUTHENTICATION_FAILED
+10-24 18:39:21.113 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.114 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.115 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.262 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.307 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.369 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.398 E/AsyncOperation( 1141): OperationException[Status{statusCode=Empty (package not registered?) or malformed snapshot token: , resolution=null}]
+10-24 18:39:21.696 E/GelStubAppWatcher( 1742): Error: unable to setComponentEnabledSetting.
+10-24 18:39:22.167 W/FontsContentProvider( 1717): java.util.concurrent.TimeoutException: Waited 10000 milliseconds (plus 4 milliseconds, 148808 nanoseconds delay) for bqmb@dac053c[status=PENDING]
+10-24 18:39:22.172 W/Bugle   ( 2566): java.lang.RuntimeException: fetchFonts result is not OK. (2)
+10-24 18:39:22.209 W/FileUtils( 1742): Failed to chmod(/data/user/0/com.google.android.googlequicksearchbox/files/current_configuration.bin.tmp): android.system.ErrnoException: chmod failed: ENOENT (No such file or directory)
+10-24 18:39:22.597 W/CorpusConfigHelper( 1742): android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-24 18:39:22.597 W/CorpusConfigHelper( 1742): 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-24 18:39:22.599 W/CorpusConfigHelper( 1742): android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-24 18:39:22.599 W/CorpusConfigHelper( 1742): 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-24 18:39:22.837 W/ConnectionTracker( 1921): Exception thrown while unbinding
+10-24 18:39:22.837 W/ConnectionTracker( 1921): java.lang.IllegalArgumentException: Service not registered: tel@6ab0aa0
+10-24 18:39:22.915 W/ConnectionTracker( 1873): Exception thrown while unbinding
+10-24 18:39:22.915 W/ConnectionTracker( 1873): java.lang.IllegalArgumentException: Service not registered: lbw@fe5082a
+10-24 18:39:23.190 D/ModelWriter(  901): java.lang.Exception
+10-24 18:39:24.004 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:24.062 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:24.091 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:24.183 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:25.270 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:25.275 W/ModernMediaScanner( 1614): android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+10-24 18:39:25.404 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:27.957 E/AwarenessRouterSyncMgr( 4154): Exception while syncing fences
+10-24 18:39:27.957 E/AwarenessRouterSyncMgr( 4154): java.util.concurrent.ExecutionException: java.lang.IllegalStateException: Account associated with identity was null
+10-24 18:39:27.957 E/AwarenessRouterSyncMgr( 4154): Caused by: java.lang.IllegalStateException: Account associated with identity was null
+10-24 18:39:28.090 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:28.109 W/GrowthKit( 2670): java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+10-24 18:39:28.109 W/Notifications( 2670): java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+10-24 18:39:28.115 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:28.142 W/InputMethodEntryManager( 1304): java.util.concurrent.CancellationException: Task was cancelled.
+10-24 18:39:28.798 W/Auth    ( 1141): java.io.IOException: Couldn't create ClientAuthInfo
+10-24 18:39:28.801 W/Auth    ( 1141): java.io.IOException: Couldn't create ClientAuthInfo
+10-24 18:39:28.822 E/GelStubAppWatcher( 1742): Error: unable to setComponentEnabledSetting.
+10-24 18:39:29.239 W/ModernMediaScanner( 1614): android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+10-24 18:39:29.405 E/BugleRcsEngine( 2566): [63] xdj.a: File not found.: java.io.FileNotFoundException: /data/user/0/com.google.android.apps.messaging/files/httpft_pending: open failed: ENOENT (No such file or directory)
+10-24 18:39:29.405 E/BugleRcsEngine( 2566): Caused by: android.system.ErrnoException: open failed: ENOENT (No such file or directory)
+10-24 18:39:29.408 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3e30af1
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@a40e044
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@268fa62
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@d8dbcb0
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@de05aae
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@989f3dc
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@35b73ba
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@7b071c8
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@3d1186
+10-24 18:39:29.410 W/RcsClientLib( 2566): java.lang.IllegalArgumentException: Service not registered: aeed@c3ee274
+10-24 18:39:29.463 W/GH.CarClientManager( 4546): java.lang.RuntimeException: Current stack
+10-24 18:39:30.007 W/MDM     ( 1717): java.lang.reflect.InvocationTargetException
+10-24 18:39:30.007 W/MDM     ( 1717): Caused by: java.lang.SecurityException: Neither user 10122 nor current process has android.permission.MANAGE_DEVICE_ADMINS.
+10-24 18:39:30.007 W/MDM     ( 1717): 	at android.os.Parcel.createExceptionOrNull(Parcel.java:2373)
+10-24 18:39:30.007 W/MDM     ( 1717): 	at android.os.Parcel.createException(Parcel.java:2357)
+10-24 18:39:30.007 W/MDM     ( 1717): 	at android.os.Parcel.readException(Parcel.java:2340)
+10-24 18:39:30.007 W/MDM     ( 1717): 	at android.os.Parcel.readException(Parcel.java:2282)
+10-24 18:39:30.007 W/MDM     ( 1717): Caused by: android.os.RemoteException: Remote stack trace:
+10-24 18:39:31.026 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:31.052 W/Conscrypt( 1717): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:31.091 W/ModernMediaScanner( 1614): android.database.sqlite.SQLiteConstraintException: UNIQUE constraint failed: files._data (code 2067 SQLITE_CONSTRAINT_UNIQUE)
+10-24 18:39:31.456 W/YouTubeMusic( 4154): rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:31.456 W/YouTubeMusic( 4154): Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:32.392 W/ModernMediaScanner( 1614): Failed to visit /data/data/com.android.providers.downloads/cache/hotword.data: java.nio.file.NoSuchFileException: /data/data/com.android.providers.downloads/cache/hotword.data
+10-24 18:39:33.110 D/ModelWriter(  901): java.lang.Exception
+10-24 18:39:33.806 W/MediaProvider( 1614): java.io.IOException: Failed to update quota type for /storage/emulated/0/Android
+10-24 18:39:33.810 W/MediaProvider( 1614): java.io.IOException: Failed to update quota type for /storage/emulated/0/Android/media
+10-24 18:39:33.852 W/ModernMediaScanner( 1614): Failed to visit /system/media: java.nio.file.NoSuchFileException: /system/media
+10-24 18:39:33.853 W/ModernMediaScanner( 1614): Failed to visit /oem/media: java.nio.file.NoSuchFileException: /oem/media
+10-24 18:39:34.701 W/YouTube ( 4791): abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:34.701 W/YouTube ( 4791): Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:35.293 W/CorpusConfigHelper( 1742): android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-24 18:39:35.293 W/CorpusConfigHelper( 1742): 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-24 18:39:35.551 W/GrowthKit( 5220): java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+10-24 18:39:35.552 W/Notifications( 5220): java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+10-24 18:39:35.718 E/AwarenessRouterSyncMgr( 5279): Exception while syncing fences
+10-24 18:39:35.718 E/AwarenessRouterSyncMgr( 5279): java.util.concurrent.ExecutionException: java.lang.IllegalStateException: Account associated with identity was null
+10-24 18:39:35.718 E/AwarenessRouterSyncMgr( 5279): Caused by: java.lang.IllegalStateException: Account associated with identity was null
+10-24 18:39:35.841 W/MDM     ( 1717): java.lang.reflect.InvocationTargetException
+10-24 18:39:35.841 W/MDM     ( 1717): Caused by: java.lang.SecurityException: Neither user 10122 nor current process has android.permission.MANAGE_DEVICE_ADMINS.
+10-24 18:39:35.841 W/MDM     ( 1717): 	at android.os.Parcel.createExceptionOrNull(Parcel.java:2373)
+10-24 18:39:35.841 W/MDM     ( 1717): 	at android.os.Parcel.createException(Parcel.java:2357)
+10-24 18:39:35.841 W/MDM     ( 1717): 	at android.os.Parcel.readException(Parcel.java:2340)
+10-24 18:39:35.841 W/MDM     ( 1717): 	at android.os.Parcel.readException(Parcel.java:2282)
+10-24 18:39:35.841 W/MDM     ( 1717): Caused by: android.os.RemoteException: Remote stack trace:
+10-24 18:39:36.125 W/CorpusConfigHelper( 1742): android.util.MalformedJsonException: Use JsonReader.setLenient(true) to accept malformed JSON at line 123 column 2
+10-24 18:39:36.125 W/CorpusConfigHelper( 1742): 	at android.util.JsonReader.syntaxError(JsonReader.java:1162)
+10-24 18:39:36.269 D/StrictMode( 1742): 	at android.os.Parcel.readExceptionCode(Parcel.java:2318)
+10-24 18:39:36.269 D/StrictMode( 1742): 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+10-24 18:39:36.570 W/YouTube ( 4791): abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:36.570 W/YouTube ( 4791): Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:36.622 W/ModernMediaScanner( 1614): Failed to visit /data/data/com.android.providers.downloads/cache/params_expdate_c45e5b7.dat: java.nio.file.NoSuchFileException: /data/data/com.android.providers.downloads/cache/params_expdate_c45e5b7.dat
+10-24 18:39:36.970 W/GrowthKit( 5220): java.lang.NullPointerException: Unable to get GrowthKit Component from host app: com.google.android.calendar
+10-24 18:39:36.971 W/Notifications( 5220): java.lang.IllegalStateException: Unable to get ChimeComponent from host app. Did you mean for your application to extend GeneratedComponentManager or HasComponent or to use jcga.libraries.notifications.injection.Chime#set(ChimeComponent)?
+10-24 18:39:38.051 W/ConnectionTracker( 4791): Exception thrown while unbinding
+10-24 18:39:38.051 W/ConnectionTracker( 4791): java.lang.IllegalArgumentException: Service not registered: tel@a49bd51
+10-24 18:39:39.075 W/YouTubeMusic( 5279): rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:39.075 W/YouTubeMusic( 5279): Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:39.141 W/ConnectionTracker( 5070): Exception thrown while unbinding
+10-24 18:39:39.141 W/ConnectionTracker( 5070): java.lang.IllegalArgumentException: Service not registered: lm@9dd6b76
+10-24 18:39:39.479 W/GLSUser ( 1141): java.io.IOException: Invalid scope
+10-24 18:39:39.525 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:40.033 W/Conscrypt( 1141): Could not set socket write timeout: java.net.SocketException: Socket closed
+10-24 18:39:40.097 W/GLSUser ( 1141): [AppCertManager] IOException while requesting key: 
+10-24 18:39:40.097 W/GLSUser ( 1141): java.io.IOException: Invalid device key response.
+10-24 18:39:40.279 W/YouTube ( 4791): abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:40.279 W/YouTube ( 4791): Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:40.643 W/YouTubeMusic( 5279): rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:40.643 W/YouTubeMusic( 5279): Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:41.724 W/ConnectionTracker( 5279): Exception thrown while unbinding
+10-24 18:39:41.724 W/ConnectionTracker( 5279): java.lang.IllegalArgumentException: Service not registered: lbw@116c5dc
+10-24 18:39:43.735 W/YouTubeMusic( 5279): rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:43.735 W/YouTubeMusic( 5279): Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:47.962 W/YouTube ( 4791): abwi: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:47.962 W/YouTube ( 4791): Caused by: java.util.concurrent.ExecutionException: aacl: Precondition check failed.
+10-24 18:39:51.763 W/YouTubeMusic( 5279): rff: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
+10-24 18:39:51.763 W/YouTubeMusic( 5279): Caused by: java.util.concurrent.ExecutionException: qjl: Precondition check failed.
