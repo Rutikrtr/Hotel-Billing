@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Master Bill capacity report</title>
+<style>
+@page{size:A4;margin:12mm}
+*{box-sizing:border-box}body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#1F1611;font-size:9.6pt;line-height:1.35;margin:0}
+h1{font-size:17pt;margin:0;letter-spacing:-.3px}h2{font-size:10.8pt;margin:10px 0 4px;color:#C2410C}
+.top{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #D9480F;padding-bottom:6px}
+.muted{color:#6F635B}.small{font-size:8.2pt}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #E8DCD2;padding:3px 6px;text-align:left;vertical-align:top}
+th{background:#FFF0E6;font-weight:700}td.n{text-align:right;white-space:nowrap}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.box{border:1px solid #E8DCD2;border-radius:8px;padding:7px 9px}
+.big{font-size:15pt;font-weight:800;color:#C2410C}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+.kpi{background:#FFF6EF;border-radius:8px;padding:6px 8px}.kpi b{display:block;font-size:13pt}
+ul{margin:3px 0 0 16px;padding:0}li{margin:1px 0}
+.ok{color:#15803D;font-weight:700}.warn{color:#B45309;font-weight:700}.bad{color:#B91C1C;font-weight:700}
+</style></head><body>
+<div class="top"><div><h1>Master Bill — how many hotels can our servers handle?</h1>
+<div class="muted">Internal report for Techyverve Solution Limited · web app 1.0, phone app 2.0 · 25 Oct 2026</div></div>
+<div class="muted small">Supabase project: ftzhystkinhxxgddnqgp<br>Current plan: <b>Free</b></div></div>
+
+<div class="kpis">
+ <div class="kpi"><span class="muted small">Hotels today</span><b>4</b></div>
+ <div class="kpi"><span class="muted small">Logins</span><b>9</b></div>
+ <div class="kpi"><span class="muted small">Database size</span><b>14 MB</b></div>
+ <div class="kpi"><span class="muted small">Bills per hotel / day</span><b>17 avg · 85 max</b></div>
+</div>
+
+<h2>1. What one hotel uses (3 apps per hotel: owner, manager, waiter)</h2>
+<table>
+<tr><th>Item</th><th>Normal hotel (40 bills/day)</th><th>Busy hotel (150 bills/day)</th><th>How it is counted</th></tr>
+<tr><td>Phones online</td><td class="n">3</td><td class="n">3–4</td><td>Owner, manager, waiter; each keeps one live connection</td></tr>
+<tr><td>Requests per day</td><td class="n">≈ 800</td><td class="n">≈ 3,000</td><td>Save, kitchen ticket and bill = 1 each; open app = 4; other phones refresh once per change</td></tr>
+<tr><td>Live update messages / month</td><td class="n">≈ 15,000</td><td class="n">≈ 55,000</td><td>Every order change is sent to every phone of that hotel</td></tr>
+<tr><td>Data downloaded / month</td><td class="n">≈ 80 MB</td><td class="n">≈ 300 MB</td><td>Menu and tables come from the phone's saved copy; open orders ≈ 5 KB</td></tr>
+<tr><td>Database growth / year</td><td class="n">≈ 22 MB</td><td class="n">≈ 80 MB</td><td>≈ 1.5 KB per bill with its items (measured)</td></tr>
+</table>
+
+<h2>2. Capacity by Supabase plan (the first limit reached decides)</h2>
+<table>
+<tr><th>Limit</th><th>Free plan</th><th>Hotels (normal / busy)</th><th>Pro plan ($25 ≈ ₹2,100 / month)</th><th>Hotels (normal / busy)</th></tr>
+<tr><td>Live connections</td><td class="n">200</td><td class="n">≈ 65 / 50</td><td class="n">500 (more can be bought)</td><td class="n">≈ 165 / 125</td></tr>
+<tr><td>Live messages / month</td><td class="n">2 million</td><td class="n">≈ 130 / 35</td><td class="n">5 million (+$2.50 per extra million)</td><td class="n">≈ 330 / 90 *</td></tr>
+<tr><td>Data downloaded / month</td><td class="n">5 GB</td><td class="n">≈ 60 / 15</td><td class="n">250 GB</td><td class="n">≈ 3,000 / 800</td></tr>
+<tr><td>Database size</td><td class="n">500 MB</td><td class="n">≈ 22 / 6 for a year</td><td class="n">8 GB (+$0.125 per GB)</td><td class="n">≈ 360 / 100 for a year</td></tr>
+<tr><td>Backups</td><td class="bad">None</td><td>—</td><td class="ok">Daily, 7 days kept</td><td>—</td></tr>
+</table>
+<div class="small muted">* Paid add-ons raise this cheaply. Limits are Supabase's published plan limits as we know them; check supabase.com/pricing before deciding. The web app (Cloudflare Pages) and the phone app's download link have no practical limit here.</div>
+
+<div class="grid" style="margin-top:8px">
+<div class="box"><div class="muted small">Safe today on the Free plan</div><div class="big">≈ 15 busy or 40 normal hotels</div>
+<div class="small">Data downloaded (5 GB) runs out first. There are <b class="bad">no backups</b> on Free, so a mistake cannot be undone.</div></div>
+<div class="box"><div class="muted small">On the Pro plan (recommended now)</div><div class="big">≈ 100 busy or 150 normal hotels</div>
+<div class="small">Live connections (500) run out first; buy more for ≈ 300 hotels. Daily backups included. Cost ≈ ₹25,000 a year, covered by 5 Pro customers (₹5,999 each).</div></div>
+</div>
+
+<h2>3. Recommendation</h2>
+<ul>
+<li><b>Move to Supabase Pro before the 10th paying hotel</b> (or now), mainly for daily backups and room to grow.</li>
+<li>Keep one project for all hotels: every hotel's data is already kept apart by database rules.</li>
+<li>Check the Supabase usage page once a month; act at 70 % of any limit.</li>
+</ul>
+
+<h2>4. Future goals (in order)</h2>
+<table>
+<tr><th>#</th><th>Goal</th><th>Why</th><th>Effect on capacity</th></tr>
+<tr><td>1</td><td>Small live messages: send only the changed order to phones instead of each phone re-reading all open orders</td><td>Fewer requests, faster phones</td><td class="ok">≈ 3× more hotels per plan</td></tr>
+<tr><td>2</td><td>Offline orders: waiters keep taking orders without Wi-Fi; they send when it is back</td><td>No lost orders in weak-signal hotels</td><td>None</td></tr>
+<tr><td>3</td><td>Google Play Store listing and iPhone (TestFlight / App Store)</td><td>Easy installs and automatic updates</td><td>None</td></tr>
+<tr><td>4</td><td>Monthly archive of old bills to file storage, owner export to Excel/PDF</td><td>Keep the database small</td><td class="ok">Database lasts years longer</td></tr>
+<tr><td>5</td><td>Kitchen display screen (tablet) as an alternative to KOT printing</td><td>No paper, clear queue</td><td>+1 connection per hotel</td></tr>
+<tr><td>6</td><td>WhatsApp bill sharing, GST reports, stock of ingredients, multi-branch owners</td><td>Features hotels ask for</td><td>Small</td></tr>
+</table>
+<div class="small muted" style="margin-top:6px">Estimates assume 3 phones per hotel, lunch and dinner rush, and the app's current request pattern (saved menu, one request per save). Real use should be checked on the Supabase usage page each month.</div>
+</body></html>

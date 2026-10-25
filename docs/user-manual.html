@@ -1,0 +1,182 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Master Bill 2.0 user manual</title>
+<style>
+@page{size:A4;margin:14mm 14mm 14mm 14mm}
+*{box-sizing:border-box}body{font-family:Inter,Segoe UI,Arial,sans-serif;color:#1F1611;font-size:10.5pt;line-height:1.45;margin:0}
+h1{font-size:24pt;margin:0;letter-spacing:-.5px}h2{font-size:15pt;margin:0 0 6px;color:#C2410C;border-bottom:2px solid #F3D5C2;padding-bottom:3px}
+h3{font-size:11.5pt;margin:10px 0 3px}
+.page{page-break-after:always}.page:last-child{page-break-after:auto}
+.cover{height:265mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;background:linear-gradient(180deg,#FFE3D1,#FAF6F2 55%)}
+.cover img{width:120px;height:120px}.muted{color:#6F635B}
+.row{display:flex;gap:16px;align-items:flex-start;margin:6px 0 12px}.row img{width:200px;border-radius:14px;border:1px solid #E8DCD2;box-shadow:0 4px 14px rgba(124,45,18,.12)}
+.row .txt{flex:1}
+ol,ul{margin:4px 0 4px 18px;padding:0}li{margin:2px 0}
+.tip{background:#FFF6EF;border-left:4px solid #D9480F;border-radius:6px;padding:6px 10px;margin:8px 0;font-size:10pt}
+table{border-collapse:collapse;width:100%;font-size:10pt}th,td{border:1px solid #E8DCD2;padding:4px 7px;text-align:left;vertical-align:top}th{background:#FFF0E6}
+.pill{display:inline-block;border-radius:999px;padding:0 8px;font-size:9pt;font-weight:700}
+.o{background:#FFF0E6;color:#C2410C}.m{background:#F2ECFF;color:#6D28D9}.w{background:#E7F7EC;color:#15803D}
+.toc li{margin:4px 0}
+</style></head><body>
+
+<div class="page cover">
+  <img src="manual-img/app-logo.png" alt="">
+  <h1 style="margin-top:18px">Master Bill 2.0</h1>
+  <div style="font-size:14pt;margin-top:4px">User manual for hotels and restaurants</div>
+  <div class="muted" style="margin-top:28px">Phone app for owners, managers and waiters<br>by Techyverve Solution Limited · www.techyverve.in<br>Support: 91725 23881 · 72761 56939</div>
+</div>
+
+<div class="page">
+<h2>Contents</h2>
+<ol class="toc">
+<li>Install and sign in</li><li>Who can do what</li><li>Tables and taking an order (waiters)</li>
+<li>Sections: two groups at one table</li><li>Voice search</li><li>Print the bill and take payment (managers)</li>
+<li>Parcels and kitchen tickets</li><li>Bills: see, reprint, edit, delete (owner)</li><li>Analytics</li>
+<li>Menu</li><li>Settings: printers, tables, staff logins</li><li>Rooms (lodge plan)</li><li>Questions and fixes</li>
+</ol>
+<h2 style="margin-top:18px">1. Install and sign in</h2>
+<div class="row"><img src="manual-img/01-start.png" alt=""><div class="txt">
+<ol><li>Scan the Master Bill QR code with the phone camera and open the link.</li>
+<li>Download <b>master-bill.apk</b> and tap it. If Android asks, allow “Install unknown apps” for the browser.</li>
+<li>Open <b>Master Bill</b>. The Techyverve start screen shows for a moment.</li>
+<li>Type your <b>Login ID</b> (for example <i>ramesh</i>) or the owner’s email, and the password the owner gave you. Tap <b>Sign In</b>.</li></ol>
+<div class="tip">You stay signed in until you tap <b>Sign Out</b> (Settings, at the bottom). Closing the app, restarting the phone or losing internet does not sign you out.</div>
+<div class="tip">New versions use the same QR code. Installing over the old app keeps everyone signed in.</div>
+</div></div>
+</div>
+
+<div class="page">
+<h2>2. Who can do what</h2>
+<table>
+<tr><th>Task</th><th><span class="pill w">Waiter</span></th><th><span class="pill m">Manager</span></th><th><span class="pill o">Owner</span></th></tr>
+<tr><td>Take table orders, sections, voice search, send to kitchen</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td>Parcels, print bill, take payment (Cash/UPI/Card/Split)</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td>Bills and Analytics (in Settings), rooms</td><td></td><td>✓</td><td>✓</td></tr>
+<tr><td>Edit or delete a paid bill</td><td></td><td></td><td>✓</td></tr>
+<tr><td>Menu, tables, GST, staff logins, bill details</td><td></td><td></td><td>✓</td></tr>
+</table>
+<p class="muted">The bottom bar shows only what each person can use: waiters see <b>Tables</b> and <b>Settings</b>; owners also see <b>Menu</b>. Lodge hotels also see <b>Rooms</b>.</p>
+
+<h2 style="margin-top:14px">3. Tables and taking an order</h2>
+<div class="row"><img src="manual-img/02-tables.png" alt=""><div class="txt">
+<p>The orange card shows money on tables now, and how many tables are running, free, and parcels.</p>
+<ul><li><b>Free</b> (white): tap to start an order.</li><li><b>Eating</b> (orange): order running, with amount and time.</li><li><b>Billed</b> (purple): bill printed, waiting for payment.</li></ul>
+<p>Pull the screen down to refresh. Orders from other phones appear by themselves.</p>
+</div></div>
+<div class="row"><img src="manual-img/03-order.png" alt=""><div class="txt">
+<ol><li>Tap <b>ADD</b> on a dish; use <b>−</b> and <b>+</b> to change the quantity.</li>
+<li>Use the category chips or the search box to find dishes. ★ dishes show first.</li>
+<li>The dark bar at the bottom shows items and total. Tap <b>View Order</b>.</li>
+<li>Tap <b>Save Order</b>. Taps are kept on the phone until saved, so nothing is lost if the internet drops.</li></ol>
+<div class="tip">Leaving the screen saves the order automatically.</div>
+</div></div>
+</div>
+
+<div class="page">
+<h2>4. Sections: two groups at one table</h2>
+<div class="row"><img src="manual-img/07-section.png" alt=""><div class="txt">
+<p>When two different groups sit at the same table, each can have its own bill.</p>
+<ol><li>Open the table (it must already have dishes) and tap <b>＋ Section</b> at the top right.</li>
+<li>Section B opens. Take the second group’s order.</li>
+<li>Switch with the <b>Section A / Section B</b> tabs, each showing its total. Each section is billed separately.</li></ol>
+</div></div>
+<h2>5. Voice search</h2>
+<div class="row"><img src="manual-img/04-voice.png" alt=""><div class="txt">
+<ol><li>Tap the <b>mic</b> next to the search box.</li><li>Say the dish, for example “chicken biryani” or “puneri misal”.</li>
+<li>The best matching dishes appear. Tap <b>ADD</b>.</li></ol>
+<p>It understands short or Indian spellings: “chin biryani” finds Chicken Biryani, “pav baji” finds Pav Bhaji. Turn it on or off in <b>Settings → Printer &amp; this phone → Voice search</b>.</p>
+</div></div>
+</div>
+
+<div class="page">
+<h2>6. Print the bill and take payment</h2>
+<div class="row"><img src="manual-img/05-sheet.png" alt=""><div class="txt">
+<ol><li>Open the order and tap <b>View Order</b>.</li><li>Enter a discount if needed.</li>
+<li>Under the total, choose how the customer pays: <b>Cash</b>, <b>UPI</b>, <b>Card</b> or <b>Split</b>.</li>
+<li>Tap <b>Print Bill</b>. The bill prints with the payment and the table becomes free.</li></ol>
+<div class="tip">If the owner turned off “Print Bill clears the table”, the table waits as <b>Billed</b>. Open it and tap <b>Receive Payment</b> when the customer pays.</div>
+</div></div>
+<div class="row"><img src="manual-img/06-split.png" alt=""><div class="txt">
+<h3>Split payment</h3>
+<ol><li>Tap <b>Split</b>.</li><li>Type the first amount, for example Cash 400.</li><li>Tap the next box: the rest fills in by itself (UPI 272).</li>
+<li>When it says <b>✓ Adds up to the total</b>, tap <b>Print Bill</b>. Each part is printed under the total.</li></ol>
+</div></div>
+</div>
+
+<div class="page">
+<h2>7. Parcels and kitchen tickets</h2>
+<h3>Parcels</h3>
+<ol><li>On Tables, tap <b>Parcel</b> (bag icon), add dishes and tap <b>Print Bill</b>.</li>
+<li><b>With a kitchen printer</b> set up: the kitchen copy prints there by itself.</li>
+<li><b>Without one</b>: the customer’s bill prints first; tear it off, then tap <b>Print</b> for the kitchen copy on the same printer (or <b>Skip</b>).</li></ol>
+<h3>Kitchen tickets (KOT) for tables</h3>
+<p>Only when the owner turns on <b>Kitchen tickets (KOT) for tables</b> in Settings. Then the order sheet shows <b>Send to Kitchen</b>: it prints only the dishes added or cancelled since the last ticket, with the table in big letters. Without this setting there is no kitchen ticket for tables.</p>
+
+<h2 style="margin-top:14px">8. Bills (Settings → Bills)</h2>
+<div class="row"><img src="manual-img/11-bills.png" alt=""><div class="txt">
+<ul><li>The card shows the day’s sales and the Cash / UPI / Card split. Tap <b>Today</b> to pick another date.</li>
+<li><b>Waiting for payment</b>: bills printed but not paid.</li>
+<li>Tap a bill to see it and <b>Print</b> it again.</li></ul>
+<h3>Owner only</h3>
+<ul><li><b>Edit Bill</b>: change quantities, add a dish, discount or payment. Saved in the change log.</li>
+<li><b>Delete</b>: type the confirmation word that Techyverve gave the owner, then tap <b>Delete Bill</b>. Keep this word private.</li></ul>
+</div></div>
+</div>
+
+<div class="page">
+<h2>9. Analytics (Settings → Analytics)</h2>
+<div class="row"><img src="manual-img/13-analytics.png" alt=""><div class="txt">
+<ul><li>Choose Today, Yesterday, 7 days, 30 days, This month or Last month.</li>
+<li>See total sales and the change from the period before, bills, average bill, dishes sold, discount, GST, parcels, average time at table, busiest hour and best day.</li>
+<li>Charts: sales by day, busy hours, payments, weekdays; then top dishes and categories.</li>
+<li>Tap the <b>download</b> button on the orange card to share a spreadsheet (WhatsApp, email, Drive).</li></ul>
+<div class="tip">Analytics loads only when you open it or change the dates. Pull down to refresh.</div>
+</div></div>
+<h2>10. Menu (owner)</h2>
+<div class="row"><img src="manual-img/08-menu.png" alt=""><div class="txt">
+<ul><li>The switch marks a dish <b>sold out</b> for today; tap it again when it is back.</li>
+<li>Tap ★ to show a dish first when taking orders.</li>
+<li>Tap a dish to edit its name, price, category or veg/non-veg, or to delete it.</li>
+<li>Tap <b>＋ Add Item</b> for a new dish. Choose a category or tap <b>＋ New</b>.</li></ul>
+<p class="muted">Tables already running keep the old price; new orders use the new one. Other phones get menu changes when they next open the app.</p>
+</div></div>
+</div>
+
+<div class="page">
+<h2>11. Settings</h2>
+<div class="row"><img src="manual-img/10-settings.png" alt=""><div class="txt">
+<ul><li><b>Printer &amp; this phone</b>: Printer Setup and Voice search.</li><li>Your profile and the hotel’s details.</li><li><b>Bills</b> and <b>Analytics</b>.</li>
+<li>Owner: bill details (phone, GST, “Print Bill clears the table”, kitchen tickets), tables, rooms and staff logins.</li><li><b>Sign Out</b> at the bottom.</li></ul>
+</div></div>
+<div class="row"><img src="manual-img/14-printer.png" alt=""><div class="txt">
+<h3>Printer Setup</h3>
+<ul><li><b>Bill printer</b>: tap <b>Bluetooth</b> and tap your printer in the list, or tap <b>Wi-Fi</b> and type its IP address (on the printer’s self-test slip), then <b>Test &amp; Save</b>.</li>
+<li><b>Separate kitchen printer</b>: switch on and choose it the same way (Bluetooth or Wi-Fi).</li>
+<li>Choose paper <b>58 mm</b> or <b>80 mm</b> and the blank space after each slip, then <b>Print Test</b>.</li></ul>
+</div></div>
+</div>
+
+<div class="page">
+<div class="row"><img src="manual-img/16-staff.png" alt=""><div class="txt">
+<h3>Staff logins (owner)</h3>
+<ul><li><b>＋ Add Staff Login</b>: name, password and role (Waiter or Manager). Share the Login ID and password shown.</li>
+<li><b>To Manager / To Waiter</b> changes the role. <b>Password</b> sets a new one. <b>Remove</b> stops that person signing in.</li>
+<li>The number of logins depends on your plan. Contact Techyverve for more.</li></ul>
+<h3>Tables (owner)</h3>
+<p>Tap a table to rename it, long-press to remove it, <b>＋ Add Table</b> for a new one.</p>
+</div></div>
+<h2>12. Rooms (lodge plan)</h2>
+<ul><li><b>Rooms</b> tab: tap a free room to <b>Check In</b> (guest, phone, guests, dates, rate).</li>
+<li>Open a room to change dates, rate or discount, add extra charges (breakfast, laundry), <b>Print</b> the room bill, <b>Check Out</b> with Cash/UPI/Card, or cancel the check-in.</li>
+<li>The owner adds rooms in Settings → Rooms.</li></ul>
+<h2 style="margin-top:12px">13. Questions and fixes</h2>
+<table>
+<tr><th>Problem</th><th>What to do</th></tr>
+<tr><td>“No internet” message</td><td>Keep taking orders: they stay on the phone and save when the internet is back.</td></tr>
+<tr><td>Printer does not print</td><td>Check it is on, has paper and is near the phone. Settings → Printer Setup → Print Test. For Wi-Fi, the phone must be on the same Wi-Fi.</td></tr>
+<tr><td>Bill prints cut or broken</td><td>Print Test again; if still wrong, send a photo of the slip to Techyverve.</td></tr>
+<tr><td>Voice search does not hear</td><td>Allow the microphone for Master Bill in phone settings; speak close to the phone.</td></tr>
+<tr><td>“No access yet”</td><td>Ask the owner to add you in Settings → Staff Logins.</td></tr>
+<tr><td>“Service paused”</td><td>Contact Techyverve. Your bills and menu are safe.</td></tr>
+</table>
+<p class="muted" style="margin-top:10px">Techyverve Solution Limited · 91725 23881 · 72761 56939 · www.techyverve.in</p>
+</div>
+</body></html>
