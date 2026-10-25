@@ -99,13 +99,14 @@ export default function Root() {
     if (status === 'signedOut') dispatch(resetData());
   }, [hotel, status]);
 
-  if (status === 'starting') return <Centered><Logo size={88} /><T w="heavy" style={{ fontSize: 22 }}>Master Bill</T></Centered>;
+  // Same picture and place as the phone's start screen, so the hand-over is seamless.
+  if (status === 'starting') return <Centered><Logo size={160} /></Centered>;
   if (status === 'signedOut') return <LoginScreen />;
   if (account && !account.staff) {
     return (
       <Centered>
-        <T w="heavy" style={{ fontSize: 20, textAlign: 'center' }}>{account.super_admin ? 'Super admin' : 'No access yet'}</T>
-        <T style={{ textAlign: 'center', color: C.muted }}>{account.super_admin ? 'The super admin console is in the Master Bill web app.' : 'Ask your hotel owner to add you in Settings → Staff Logins.'}</T>
+        <T w="heavy" style={{ fontSize: 20, textAlign: 'center' }}>No access yet</T>
+        <T style={{ textAlign: 'center', color: C.muted }}>Ask your hotel owner to add you in Settings → Staff Logins.</T>
         <Button kind="secondary" title="Sign Out" onPress={() => dispatch(signOut())} />
       </Centered>
     );

@@ -14,10 +14,11 @@
     },
     "android": {
       "package": "in.techyverve.masterbill",
-      "versionCode": 10,
+      "versionCode": 11,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#C2410C"
+        "backgroundImage": "./assets/adaptive-bg.png",
+        "backgroundColor": "#F86A06"
       },
       "permissions": [
         "android.permission.BLUETOOTH",

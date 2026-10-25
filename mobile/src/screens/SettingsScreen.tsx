@@ -59,6 +59,12 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
       <Header eyebrow="My account" title="Settings" />
+      <Card style={{ gap: 8 }}>
+        <T w="heavy" style={{ fontSize: 15 }}>Printer & this phone</T>
+        <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : 'No printer set up on this phone'}</T>
+        {account?.can_bill || settings?.kot_tables ? <Button title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
+        <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
+      </Card>
       <Card style={{ gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={[st.avatar, { backgroundColor: ROLE_COLOR[role][1] }]}><T w="heavy" style={{ color: ROLE_COLOR[role][0], fontSize: 15 }}>{initials(myName) || '?'}</T></View>
@@ -98,13 +104,7 @@ export default function SettingsScreen() {
         </Card>
       ) : null}
 
-      <Card style={{ gap: 8 }}>
-        <T w="heavy" style={{ fontSize: 15 }}>This phone</T>
-        <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : 'No printer set up on this phone'}</T>
-        <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
-        {account?.can_bill || settings?.kot_tables ? <Button kind="secondary" title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
-        <Button kind="danger" title="Sign Out" onPress={out} />
-      </Card>
+      <Button kind="danger" title="Sign Out" onPress={out} />
       <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill 2.0 · Techyverve Solution Limited</T>
     </ScrollView>
   );

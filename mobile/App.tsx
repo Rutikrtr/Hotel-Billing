@@ -27,20 +27,26 @@ class Guard extends React.Component<{ children: React.ReactNode }, { error: Erro
   }
 }
 
+// Keep the start screen (logo) until the app has drawn its first screen, then fade it out smoothly.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({ fade: true, duration: 350 });
+
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({ Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [fontWait, setFontWait] = useState(true);
   const [ready, setReady] = useState(false);
   useEffect(() => {
-    // Never keep the splash screen up: our own loading screen takes over at once.
-    SplashScreen.hideAsync().catch(() => {});
     // Never wait more than 3 s for the font: fall back to the phone's font.
     const t = setTimeout(() => setFontWait(false), 3000);
+    // Safety net: the start screen never stays longer than 4 s, whatever happens.
+    const s = setTimeout(() => { SplashScreen.hideAsync().catch(() => {}); }, 4000);
     // Unsaved orders and printer choices first, then the login.
     restoreFromPhone().catch(() => {}).finally(() => { store.dispatch(start()); setReady(true); });
-    return () => clearTimeout(t);
+    return () => { clearTimeout(t); clearTimeout(s); };
   }, []);
   const fontsReady = fontsLoaded || !!fontError || !fontWait;
+  // Fade the start screen out once the first screen is drawn (no blank flash in between).
+  useEffect(() => { if (fontsReady && ready) SplashScreen.hideAsync().catch(() => {}); }, [fontsReady, ready]);
   return (
     <Guard>
       <Provider store={store}>
