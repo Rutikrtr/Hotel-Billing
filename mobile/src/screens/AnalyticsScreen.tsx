@@ -5,7 +5,7 @@ import { addDays, daysBetween, hourLabel, localDay, shortDate, startOf, WEEKDAYS
 import { rsShort } from '../money';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
-import { Card, Chip, Diet, Empty, Gradient, Header, SectionTitle, T } from '../ui/kit';
+import { Card, Chip, Diet, Empty, Header, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 
 interface Report {
@@ -173,17 +173,17 @@ export default function AnalyticsScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>
         {Object.entries(RANGES).map(([k, [label]]) => <Chip key={k} label={label} on={range === k} onPress={() => setRange(k)} />)}
       </ScrollView>
-      <View style={st.hero}>
-        <Gradient radius={18} />
-        <T w="semibold" style={{ color: '#FFFFFF', opacity: 0.92, fontSize: 12 }}>Sales · {days === 1 ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`}</T>
-        <T w="heavy" style={{ color: '#FFFFFF', fontSize: 28 }}>{t ? money(t.sales) : '…'}</T>
-        {t ? <T style={{ color: '#FFFFFF', fontSize: 12, opacity: 0.95, marginBottom: 10 }}>{tr!.text} vs {days === 1 ? 'the day before' : `the ${days} days before`} ({money(report!.prev.sales)})</T> : <View style={{ height: 10 }} />}
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[[t?.bills ?? '–', 'Bills'], [t?.bills ? money(Math.round(t.sales / t.bills / 100) * 100) : '–', 'Avg. bill'], [t?.items ?? '–', 'Dishes sold']].map(([n, l]) => (
-            <View key={String(l)} style={st.fact}><T w="heavy" style={{ color: '#FFFFFF', fontSize: 16 }}>{n}</T><T w="semibold" style={{ color: '#FFFFFF', fontSize: 11, opacity: 0.9 }}>{l}</T></View>
-          ))}
-        </View>
-      </View>
+      <SummaryCard
+        label={`Sales · ${days === 1 ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`}`}
+        value={t ? money(t.sales) : '…'}
+        note={t ? `${tr!.text} vs ${days === 1 ? 'the day before' : `the ${days} days before`} (${money(report!.prev.sales)})` : undefined}
+        noteColor={tr?.color}
+        stats={[
+          { value: t?.bills ?? '–', label: 'Bills', color: C.accentStrong, bg: C.accentSoft },
+          { value: t?.bills ? money(Math.round(t.sales / t.bills / 100) * 100) : '–', label: 'Avg. bill', color: C.billed, bg: C.billedSoft },
+          { value: t?.items ?? '–', label: 'Dishes sold', color: C.free, bg: C.freeSoft },
+        ]}
+      />
       {error ? <T style={{ color: C.danger, marginBottom: 8 }}>{error}</T> : null}
       {body()}
     </ScrollView>
@@ -198,7 +198,7 @@ function Columns({ rows, peak, every = 1 }: { rows: { label: string; sales: numb
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: rows.length > 20 ? 2 : 4 }}>
         {rows.map((r, i) => (
           <View key={i} style={{ flex: 1, height: '100%', justifyContent: 'flex-end' }}>
-            <View style={{ height: `${max ? Math.max(r.sales ? 3 : 0, (r.sales / max) * 100) : 0}%`, backgroundColor: r.label === peak ? C.brand2 : C.brand1, borderTopLeftRadius: 4, borderTopRightRadius: 4, opacity: r.label === peak || !peak ? 1 : 0.75 }} />
+            <View style={{ alignSelf: 'center', width: rows.length > 20 ? '80%' : '64%', height: `${max ? Math.max(r.sales ? 3 : 0, (r.sales / max) * 100) : 0}%`, backgroundColor: r.label === peak ? C.brand2 : C.brand1, borderTopLeftRadius: 4, borderTopRightRadius: 4, opacity: r.label === peak || !peak ? 1 : 0.75 }} />
           </View>
         ))}
       </View>

@@ -3,7 +3,6 @@ import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { warmUp } from './printing/ble';
 import AnalyticsScreen from './screens/AnalyticsScreen';
 import BillsScreen from './screens/BillsScreen';
@@ -20,6 +19,7 @@ import { sb } from './supabase';
 import { Button, T } from './ui/kit';
 import { Icon } from './ui/icons';
 import { Logo } from './ui/Logo';
+import TabBar from './ui/TabBar';
 import { C, F } from './ui/theme';
 
 export type Stack = {
@@ -34,17 +34,11 @@ const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: C
 
 function Tabs() {
   const account = useAppSelector((s) => s.auth.account);
-  const insets = useSafeAreaInsets();
   const feat = (k: string) => account?.features?.[k] === true;
   const bill = account?.can_bill === true;
   const owner = account?.role === 'owner';
   return (
-    <Tab.Navigator screenOptions={{
-      headerShown: false, tabBarActiveTintColor: C.accent, tabBarInactiveTintColor: C.muted, tabBarHideOnKeyboard: true,
-      tabBarLabelStyle: { fontFamily: F.bold, fontSize: 11, lineHeight: 15, marginTop: 2 },
-      // The phone's own buttons / gesture bar sit under the tabs, so the bar grows by that much.
-      tabBarStyle: { height: 64 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 6, backgroundColor: C.surface, borderTopColor: C.line },
-    }}>
+    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Tables" component={TablesScreen} options={{ tabBarIcon: Icon.tables }} />
       {bill ? <Tab.Screen name="Bills" component={BillsScreen} options={{ tabBarIcon: Icon.bills }} /> : null}
       {bill && feat('trending') ? <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: Icon.analytics }} /> : null}

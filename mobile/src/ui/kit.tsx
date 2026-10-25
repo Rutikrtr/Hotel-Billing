@@ -4,7 +4,7 @@ import {
   type StyleProp, type TextInputProps, type TextStyle, type ViewStyle,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { C, F } from './theme';
+import { C, F, shadow } from './theme';
 
 /** Brand gradient fill behind any box (rounded to the box's own corners). */
 let gradientIds = 0;
@@ -24,8 +24,8 @@ export function Gradient({ radius = 14 }: { radius?: number }) {
   );
 }
 
-export function T({ style, children, w = 'regular', numberOfLines }: { style?: StyleProp<TextStyle>; children: React.ReactNode; w?: keyof typeof F; numberOfLines?: number }) {
-  return <Text numberOfLines={numberOfLines} style={[{ fontFamily: F[w], color: C.text, fontSize: 14 }, style]}>{children}</Text>;
+export function T({ style, children, w = 'regular', numberOfLines, adjustsFontSizeToFit }: { style?: StyleProp<TextStyle>; children: React.ReactNode; w?: keyof typeof F; numberOfLines?: number; adjustsFontSizeToFit?: boolean }) {
+  return <Text numberOfLines={numberOfLines} adjustsFontSizeToFit={adjustsFontSizeToFit} style={[{ fontFamily: F[w], color: C.text, fontSize: 14 }, style]}>{children}</Text>;
 }
 
 type Kind = 'primary' | 'secondary' | 'dark' | 'danger';
@@ -46,7 +46,6 @@ export function Button({ title, onPress, kind = 'primary', busy, disabled, style
         { opacity: off ? 0.55 : 1, transform: [{ scale: pressed && !off ? 0.97 : 1 }] }, style,
       ]}
     >
-      {kind === 'primary' ? <Gradient radius={small ? 10 : 13} /> : null}
       {busy ? <ActivityIndicator color={fg} /> : <T w="bold" style={{ color: fg, fontSize: small ? 13 : 15 }}>{title}</T>}
     </Pressable>
   );
@@ -77,11 +76,14 @@ export const s = StyleSheet.create({
   btnSmall: { minHeight: 36, borderRadius: 10, paddingHorizontal: 12 },
   btnSecondary: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   btnDanger: { backgroundColor: C.surface, borderWidth: 1, borderColor: '#E9B4B4' },
-  card: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14 },
+  card: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 14 },
   chip: { height: 34, paddingHorizontal: 13, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: 'center', marginRight: 6 },
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
   input: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 15, color: C.text },
   sheet: { backgroundColor: C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
+  summary: { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 16 },
+  big: { fontSize: 32, letterSpacing: -0.8, color: C.text, fontVariant: ['tabular-nums'], marginTop: 2 },
+  stat: { flex: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
   diet: { width: 13, height: 13, borderWidth: 1.5, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
 });
 
@@ -157,4 +159,35 @@ export const initials = (name: string) => name.split(/[\s@._-]+/).filter(Boolean
 
 export function Pill({ label, color, bg }: { label: string; color: string; bg: string }) {
   return <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}><T w="bold" style={{ color, fontSize: 11 }}>{label}</T></View>;
+}
+
+export interface Stat { value: string | number; label: string; color: string; bg: string }
+
+/**
+ * The summary at the top of Tables, Bills and Analytics: one big number, then small coloured tiles.
+ * Values are always larger and darker than their labels, and digits keep a fixed width so totals don't jump.
+ */
+export function SummaryCard({ label, value, note, noteColor, stats, right }: {
+  label: string; value: string; note?: string; noteColor?: string; stats: Stat[]; right?: React.ReactNode;
+}) {
+  return (
+    <View style={[s.summary, shadow]}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+        <View style={{ flex: 1 }}>
+          <T w="semibold" style={{ color: C.muted, fontSize: 13 }}>{label}</T>
+          <T w="heavy" numberOfLines={1} adjustsFontSizeToFit style={s.big}>{value}</T>
+          {note ? <T w="semibold" style={{ fontSize: 12.5, color: noteColor ?? C.muted }}>{note}</T> : null}
+        </View>
+        {right}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+        {stats.map((x) => (
+          <View key={x.label} style={[s.stat, { backgroundColor: x.bg }]}>
+            <T w="heavy" numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 18, color: x.color, fontVariant: ['tabular-nums'] }}>{x.value}</T>
+            <T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{x.label}</T>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
 }

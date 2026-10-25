@@ -8,7 +8,7 @@ import { tokenNo } from '../printing/escpos';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import { Icon } from '../ui/icons';
-import { Empty, Gradient, Header, SectionTitle, T } from '../ui/kit';
+import { Empty, Header, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import type { Stack } from '../Root';
 
@@ -57,23 +57,18 @@ export default function BillsScreen() {
             </Pressable>
             <Pressable hitSlop={8} style={[st.navBtn, isToday && { opacity: 0.3 }]} disabled={isToday} onPress={() => setDay(addDays(day, 1))} accessibilityLabel="Next day"><Icon.chevR color={C.text} size={20} /></Pressable>
           </View>
-          <View style={st.hero}>
-            <Gradient radius={18} />
-            <T w="semibold" style={{ color: '#FFFFFF', fontSize: 12, opacity: 0.92 }}>{isToday ? 'Today’s sales' : 'Sales'} · {rows.length} bill{rows.length === 1 ? '' : 's'}</T>
-            <T w="heavy" style={{ color: '#FFFFFF', fontSize: 28, marginBottom: 8 }}>{rs(total)}</T>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {METHODS.map((m) => (
-                <View key={m} style={st.fact}><T w="heavy" style={{ color: '#FFFFFF' }}>{rsShort(by(m))}</T><T style={{ color: '#FFFFFF', fontSize: 11 }}>{m}</T></View>
-              ))}
-            </View>
-          </View>
+          <SummaryCard
+            label={`${isToday ? 'Today’s sales' : 'Sales'} · ${rows.length} bill${rows.length === 1 ? '' : 's'}`}
+            value={rsShort(total)}
+            stats={METHODS.map((m) => ({ value: rsShort(by(m)), label: m, color: METHOD_COLOR[m], bg: `${METHOD_COLOR[m]}14` }))}
+          />
           {error ? <T style={{ color: C.danger, marginBottom: 8 }}>{error}</T> : null}
           {isToday && waiting.length ? (
             <>
               <SectionTitle>Waiting for payment · {waiting.length}</SectionTitle>
               {waiting.map((o) => (
                 <Pressable key={o.id} style={st.row} onPress={() => nav.navigate('Order', o.is_parcel ? { parcelId: o.id } : { tableId: o.table_id ?? undefined, section: o.section })}>
-                  <View style={[st.badge, { backgroundColor: '#FEF3C7' }]}><T>⏳</T></View>
+                  <View style={[st.badge, { backgroundColor: '#FEF3C7' }]}><T w="heavy" style={{ color: '#B45309' }}>!</T></View>
                   <View style={{ flex: 1 }}>
                     <T w="bold">{o.is_parcel ? `Parcel #${tokenNo(o.bill_no)}` : `${tableName(o.table_id)}${o.section !== 'A' ? `-${o.section}` : ''}`} · {o.bill_no}</T>
                     <T style={{ color: C.muted, fontSize: 12 }}>Printed {new Date(o.billed_at!).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · not paid yet</T>

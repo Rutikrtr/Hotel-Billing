@@ -8,7 +8,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
 import { tableKey, type Order } from '../types';
-import { Button, Gradient, T } from '../ui/kit';
+import { Button, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import type { Stack } from '../Root';
 
@@ -42,23 +42,22 @@ export default function TablesScreen() {
         </View>
         {canBill ? <Button title="＋ Parcel" small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null}
       </View>
-      <View style={st.hero}>
-        <Gradient radius={18} />
-        <T w="semibold" style={{ color: '#FFFFFF', opacity: 0.92, fontSize: 12 }}>On tables now</T>
-        <T w="heavy" style={{ color: '#FFFFFF', fontSize: 26, marginBottom: 8 }}>{rsShort(onTables)}</T>
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          {[[running, 'Running'], [tables.length - running, 'Free'], [parcels.length, 'Parcels']].map(([n, l]) => (
-            <View key={String(l)} style={st.fact}><T w="heavy" style={st.factN}>{n}</T><T w="semibold" style={st.factL}>{l}</T></View>
-          ))}
-        </View>
-      </View>
+      <SummaryCard
+        label="On tables now"
+        value={rsShort(onTables)}
+        stats={[
+          { value: running, label: 'Running', color: C.accentStrong, bg: C.accentSoft },
+          { value: tables.length - running, label: 'Free', color: C.free, bg: C.freeSoft },
+          { value: parcels.length, label: 'Parcels', color: C.billed, bg: C.billedSoft },
+        ]}
+      />
       {error ? <T style={{ color: C.danger, marginBottom: 8 }}>{error}</T> : null}
       {parcels.length ? (
         <View style={{ marginBottom: 12 }}>
           <T w="heavy" style={st.section}>PARCELS · {parcels.length}</T>
           {parcels.map((o) => (
             <Pressable key={o.id} style={st.parcel} onPress={() => nav.navigate('Order', { parcelId: o.id })}>
-              <T w="bold" style={{ flex: 1 }}>🛍 Parcel{o.bill_no ? ` #${tokenNo(o.bill_no)}` : ''} · {o.items.reduce((n, i) => n + i.quantity, 0)} items</T>
+              <T w="bold" style={{ flex: 1 }}>Parcel{o.bill_no ? ` #${tokenNo(o.bill_no)}` : ''} · {o.items.reduce((n, i) => n + i.quantity, 0)} items</T>
               <T w="heavy">{rsShort(totalOf(o))}</T>
             </Pressable>
           ))}

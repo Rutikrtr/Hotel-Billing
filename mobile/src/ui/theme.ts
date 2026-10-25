@@ -21,9 +21,13 @@ export const C = {
   nonveg: '#B91C1C',
 };
 
+// Inter: the font most phone apps use for numbers and small labels (clear digits, tabular figures).
 export const F = {
-  regular: 'PlusJakartaSans_500Medium',
-  semibold: 'PlusJakartaSans_600SemiBold',
-  bold: 'PlusJakartaSans_700Bold',
-  heavy: 'PlusJakartaSans_800ExtraBold',
+  regular: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
+  heavy: 'Inter_800ExtraBold',
 };
+
+/** Soft shadow tinted with the brand colour (never plain grey). */
+export const shadow = { shadowColor: '#7C2D12', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 3 };
