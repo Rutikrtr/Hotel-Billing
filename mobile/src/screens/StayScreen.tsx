@@ -127,10 +127,10 @@ export default function StayScreen() {
       </>) : null}
 
       <View style={st.paper}>
-        <View style={{ alignItems: 'center' }}>
-          <M style={{ fontSize: 17, fontWeight: '700' }}>{settings.hotel_name}</M>
-          {settings.hotel_address ? <M style={{ textAlign: 'center' }}>{settings.hotel_address}</M> : null}
-          {settings.hotel_phone ? <M>Ph {settings.hotel_phone}</M> : null}
+        <View style={{ alignItems: 'center', gap: 3 }}>
+          <T w="heavy" style={{ fontSize: 18, letterSpacing: 2, textAlign: 'center' }}>{settings.hotel_name.toUpperCase()}</T>
+          {settings.hotel_address ? <T style={{ fontSize: 12.5, color: '#5B4F48', textAlign: 'center' }}>{settings.hotel_address}</T> : null}
+          {settings.hotel_phone ? <T style={{ fontSize: 12.5, color: '#5B4F48' }}>Ph: {settings.hotel_phone}</T> : null}
         </View>
         <View style={st.rule} />
         <KV k={stay.bill_no ? `Bill: ${stay.bill_no}` : 'Room bill'} v={`Room: ${stay.lodging_rooms?.number ?? ''}`} />

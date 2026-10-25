@@ -21,6 +21,8 @@ export class Slip {
   align(where: 'left' | 'center' | 'right') { return this.raw(ESC, 0x61, { left: 0, center: 1, right: 2 }[where]); }
   bold(on: boolean) { return this.raw(ESC, 0x45, on ? 1 : 0); }
   size(w = 1, h = 1) { return this.raw(GS, 0x21, ((w - 1) << 4) | (h - 1)); }
+  /** Extra space between letters (ESC SP n), for headings. */
+  spacing(n = 0) { return this.raw(ESC, 0x20, n); }
   text(s: string) { for (const ch of ascii(s)) this.out.push(ch.charCodeAt(0)); return this; }
   line(s = '') { return this.text(s).raw(0x0a); }
   wrap(s: string, width = this.width) {
@@ -66,6 +68,19 @@ export function kotSlip(p: Paper, label: string, changes: { name: string; quanti
   return s.cut();
 }
 
+/** Bill heading: the hotel name large and spaced out, then address and phone on their own lines. */
+function header(s: Slip, settings: Settings, rate: number) {
+  const name = ascii(settings.hotel_name).toUpperCase();
+  s.align('center').bold(true);
+  if (name.length * 2 <= s.width) s.size(2, 2).spacing(0).wrap(name, Math.floor(s.width / 2)).size(1, 1);
+  else s.size(1, 2).spacing(1).wrap(name, Math.floor(s.width / 2)).spacing(0).size(1, 1);
+  s.bold(false);
+  if (settings.hotel_address) s.wrap(settings.hotel_address);
+  if (settings.hotel_phone) s.line(`Ph: ${settings.hotel_phone}`);
+  if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
+  return s.align('left').rule();
+}
+
 /** Extra details for reprinting a paid bill: its own GST rate, time and payment. */
 export interface BillMeta { rate?: number; at?: string; method?: string | null }
 
@@ -75,12 +90,7 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   const b = computeBill(order.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), order.discount, rate);
   const s = new Slip(p.width, 'bill', p.feed);
   const W = s.width;
-  s.align('center').bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
-  const phone = settings.hotel_phone ? `Ph ${settings.hotel_phone}` : '';
-  const both = [settings.hotel_address, phone].filter(Boolean).join(', ');
-  if (both.length <= W) { if (both) s.line(both); } else { if (settings.hotel_address) s.wrap(settings.hotel_address); if (phone) s.line(phone); }
-  if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
-  s.align('left').rule();
+  header(s, settings, rate);
   if (order.is_parcel) s.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(billNo)}`).size(1, 1).bold(false).align('left');
   s.bold(true).cols(`Bill: ${billNo}`, order.is_parcel ? 'Parcel' : `Table: ${label}`).bold(false);
   s.cols(stamp(meta.at ?? new Date().toISOString()), meta.method ?? method ?? '').rule();
@@ -137,12 +147,7 @@ export function staySlip(p: Paper, stay: Stay, settings: Settings, rate: number)
   ];
   const b = computeBill(lines, stay.discount, rate);
   const s = new Slip(p.width, 'bill', p.feed);
-  s.align('center').bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
-  const phone = settings.hotel_phone ? `Ph ${settings.hotel_phone}` : '';
-  const both = [settings.hotel_address, phone].filter(Boolean).join(', ');
-  if (both.length <= s.width) { if (both) s.line(both); } else { if (settings.hotel_address) s.wrap(settings.hotel_address); if (phone) s.line(phone); }
-  if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
-  s.align('left').rule();
+  header(s, settings, rate);
   s.bold(true).cols(`Bill: ${stay.bill_no ?? '-'}`, `Room: ${stay.lodging_rooms?.number ?? ''}`).bold(false);
   s.cols(stay.guest_name, stay.guest_phone || '');
   s.cols(`${stay.check_in} to ${stay.check_out}`, stay.payment_method ?? '').rule();

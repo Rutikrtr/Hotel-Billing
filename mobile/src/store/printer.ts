@@ -8,6 +8,7 @@ export interface PrinterState {
   separateKitchen: boolean;
   paper: 58 | 80;
   feed: number;               // blank lines after each slip (1-4)
+  voice?: boolean;            // mic button in dish search (on unless switched off)
 }
 
 export const initialPrinter: PrinterState = { bill: null, kitchen: null, separateKitchen: false, paper: 58, feed: 2 };

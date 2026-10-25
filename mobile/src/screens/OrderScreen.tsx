@@ -12,6 +12,8 @@ import { change, hasPending, mergeLines, setDiscount, type Line } from '../store
 import { parcelKey, tableKey, type Order } from '../types';
 import { Button, Chip, Diet, T } from '../ui/kit';
 import { C, F } from '../ui/theme';
+import { MicButton } from '../ui/Mic';
+import { findDishes } from '../match';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
 
@@ -64,8 +66,9 @@ export default function OrderScreen() {
 
   const categories = useMemo(() => ['All', ...new Set(menu.map((m) => m.category))], [menu]);
   const shown = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const list = menu.filter((m) => (term ? m.name.toLowerCase().includes(term) : filter === 'All' || m.category === filter));
+    // Search finds dishes by sound too ("chin biryani" → Chicken Biryani), best match first.
+    if (search.trim()) return findDishes(search, menu);
+    const list = menu.filter((m) => filter === 'All' || m.category === filter);
     return [...list].sort((a, b) => Number(b.is_favorite) - Number(a.is_favorite));
   }, [menu, filter, search]);
 
@@ -149,7 +152,10 @@ export default function OrderScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={st.tools}>
-        <TextInput value={search} onChangeText={setSearch} placeholder="Search dishes" placeholderTextColor="#A39589" style={st.search} accessibilityLabel="Search dishes" />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TextInput value={search} onChangeText={setSearch} placeholder="Search or tap the mic and say a dish" placeholderTextColor="#A39589" style={[st.search, { flex: 1 }]} accessibilityLabel="Search dishes" />
+          <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} keyboardShouldPersistTaps="handled">
           {categories.map((c) => <Chip key={c} label={c} on={!search && filter === c} onPress={() => { setSearch(''); setFilter(c); }} />)}
         </ScrollView>

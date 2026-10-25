@@ -17,7 +17,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import TablesScreen from './screens/TablesScreen';
 import { store, useAppDispatch, useAppSelector } from './store';
 import { recheck, signOut } from './store/auth';
-import { loadAll, refreshOrders, resetData } from './store/data';
+import { loadAll, refreshOrders, resetData, syncIfChanged } from './store/data';
 import { sb } from './supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, T } from './ui/kit';
@@ -77,7 +77,7 @@ function useLive(enabled: boolean) {
     const later = () => { clearTimeout(timer.current); timer.current = setTimeout(() => dispatch(refreshOrders()), 300); };
     const channel = sb.channel('orders-live').on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, later).subscribe();
     const sub = AppState.addEventListener('change', (st) => {
-      if (st === 'active') { dispatch(recheck()); later(); }
+      if (st === 'active') { dispatch(recheck()); dispatch(syncIfChanged()); later(); }
     });
     return () => { clearTimeout(timer.current); sub.remove(); sb.removeChannel(channel); };
   }, [enabled]);

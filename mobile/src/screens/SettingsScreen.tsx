@@ -7,6 +7,7 @@ import { rs, toPaise } from '../money';
 import { useAppDispatch, useAppSelector } from '../store';
 import { loginName, signOut, STAFF_DOMAIN } from '../store/auth';
 import { hasPending } from '../store/cart';
+import { setPrinter } from '../store/printer';
 import { reloadSettings, reloadTables } from '../store/data';
 import { q, sb } from '../supabase';
 import type { Room, Table } from '../types';
@@ -93,6 +94,7 @@ export default function SettingsScreen() {
       <Card style={{ gap: 8 }}>
         <T w="heavy" style={{ fontSize: 15 }}>This phone</T>
         <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : 'No printer set up on this phone'}</T>
+        <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
         {account?.can_bill || settings?.kot_tables ? <Button kind="secondary" title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
         <Button kind="danger" title="Sign Out" onPress={out} />
       </Card>

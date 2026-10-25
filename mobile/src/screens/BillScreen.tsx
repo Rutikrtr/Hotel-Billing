@@ -76,11 +76,11 @@ export default function BillScreen() {
         {order.status === 'paid' ? `Paid by ${order.payment_method ?? '—'} · ${dateTime(at)}` : 'Not paid yet'}{order.edit_count ? ` · Edited ${order.edit_count}×` : ''}
       </T>
       <View style={st.paper}>
-        <View style={{ alignItems: 'center', gap: 2 }}>
-          <M b style={{ fontSize: 20 }}>{settings.hotel_name}</M>
-          {settings.hotel_address ? <M style={{ textAlign: 'center' }}>{settings.hotel_address}</M> : null}
-          {settings.hotel_phone ? <M>Ph: {settings.hotel_phone}</M> : null}
-          {settings.hotel_gstin && rate > 0 ? <M>GSTIN: {settings.hotel_gstin}</M> : null}
+        <View style={{ alignItems: 'center', gap: 3, paddingTop: 2 }}>
+          <T w="heavy" style={st.shop}>{settings.hotel_name.toUpperCase()}</T>
+          {settings.hotel_address ? <T style={st.addr}>{settings.hotel_address}</T> : null}
+          {settings.hotel_phone ? <T style={st.addr}>Ph: {settings.hotel_phone}</T> : null}
+          {settings.hotel_gstin && rate > 0 ? <T style={st.addr}>GSTIN: {settings.hotel_gstin}</T> : null}
         </View>
         <View style={st.rule} />
         {order.is_parcel && order.bill_no ? (<><View style={{ alignItems: 'center' }}><M>PARCEL · Bill No.</M><M b style={{ fontSize: 30 }}>{tokenNo(order.bill_no)}</M></View><View style={st.rule} /></>) : null}
@@ -112,6 +112,8 @@ export default function BillScreen() {
 
 const st = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: C.bg },
+  shop: { fontSize: 19, letterSpacing: 2.2, textAlign: 'center', lineHeight: 26 },
+  addr: { fontSize: 12.5, color: '#5B4F48', letterSpacing: 0.3, textAlign: 'center', lineHeight: 17 },
   paper: { backgroundColor: '#FFFFFF', borderRadius: 6, padding: 18, borderWidth: 1, borderColor: C.line },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#8A7F78', marginVertical: 10 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },

@@ -5,7 +5,7 @@ import { q, sb } from '../supabase';
 import { keyOf, type Order, type OrderKey } from '../types';
 import auth from './auth';
 import cart, { restoreCart, saved, type Cart } from './cart';
-import data, { orderClosed, orderSaved } from './data';
+import data, { orderClosed, orderSaved, readCache, restoreData } from './data';
 import printer, { restorePrinter } from './printer';
 
 export const store = configureStore({ reducer: { auth, data, cart, printer } });
@@ -21,6 +21,8 @@ export async function restoreFromPhone() {
     const [c, p] = await Promise.all([AsyncStorage.getItem(KEYS.cart), AsyncStorage.getItem(KEYS.printer)]);
     if (c) store.dispatch(restoreCart(JSON.parse(c)));
     if (p) store.dispatch(restorePrinter(JSON.parse(p)));
+    const d = await readCache();
+    if (d) store.dispatch(restoreData(d));
   } catch { /* first run or storage cleared */ }
 }
 let lastCart: unknown; let lastPrinter: unknown;

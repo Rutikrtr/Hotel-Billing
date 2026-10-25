@@ -9,6 +9,8 @@ import { Icon } from '../ui/icons';
 import { Button, Chip, Diet, Empty, Field, Header, Sheet, T, ToggleRow } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { toast } from '../ui/toast';
+import { MicButton } from '../ui/Mic';
+import { findDishes } from '../match';
 
 const DEFAULT_CATEGORIES = ['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', 'Others'];
 type Draft = { id?: number; name: string; category: string; newCategory: string; price: string; is_veg: boolean; available: boolean; is_favorite: boolean };
@@ -25,8 +27,8 @@ export default function MenuScreen() {
   const categories = useMemo(() => [...new Set(menu.map((m) => m.category))], [menu]);
   const choices = [...new Set([...categories, ...DEFAULT_CATEGORIES])];
   const sections = useMemo(() => {
-    const s = search.trim().toLowerCase();
-    return categories.map((c) => ({ title: c, data: menu.filter((m) => m.category === c && (!s || m.name.toLowerCase().includes(s))) })).filter((x) => x.data.length);
+    const found = new Set(findDishes(search, menu).map((m) => m.id));
+    return categories.map((c) => ({ title: c, data: menu.filter((m) => m.category === c && found.has(m.id)) })).filter((x) => x.data.length);
   }, [menu, categories, search]);
 
   const refresh = async () => { setRefreshing(true); await dispatch(reloadMenu()); setRefreshing(false); };
@@ -79,7 +81,10 @@ export default function MenuScreen() {
         ListHeaderComponent={
           <View>
             <Header eyebrow={`${menu.length} item${menu.length === 1 ? '' : 's'}`} title="Menu" />
-            <TextInput value={search} onChangeText={setSearch} placeholder="Search dishes" placeholderTextColor="#A89A90" style={st.search} />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TextInput value={search} onChangeText={setSearch} placeholder="Search or tap the mic" placeholderTextColor="#A89A90" style={[st.search, { flex: 1 }]} />
+              <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
+            </View>
             <T style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>Tap ★ to show a dish first when taking orders. Switch off a dish when it is sold out.</T>
           </View>
         }

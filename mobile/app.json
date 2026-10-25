@@ -64,7 +64,14 @@
         }
       ],
       "expo-asset",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Master Bill uses the microphone for voice search of dish names.",
+          "speechRecognitionPermission": "Master Bill turns your voice into dish names for search."
+        }
+      ]
     ],
     "androidStatusBar": {
       "translucent": true,

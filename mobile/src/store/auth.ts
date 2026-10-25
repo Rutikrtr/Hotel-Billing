@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { q, sb } from '../supabase';
 import type { Account } from '../types';
+import { clearCache } from './data';
 
 export const STAFF_DOMAIN = '@staff.login';
 export const loginEmail = (v: string) => { const t = v.trim().toLowerCase(); return t.includes('@') ? t : t + STAFF_DOMAIN; };
@@ -34,7 +35,7 @@ export const signIn = createAsyncThunk('auth/signIn', async (p: { login: string;
 /** Re-read access (paused hotel, role change) when the app comes back to the front. */
 export const recheck = createAsyncThunk('auth/recheck', loadAccount);
 
-export const signOut = createAsyncThunk('auth/signOut', async () => { await sb.auth.signOut(); });
+export const signOut = createAsyncThunk('auth/signOut', async () => { await clearCache(); await sb.auth.signOut(); });
 
 const auth = createSlice({
   name: 'auth',
