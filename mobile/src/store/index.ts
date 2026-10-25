@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { configureStore, createAsyncThunk } from '@reduxjs/toolkit';
+import { configureStore, createAsyncThunk, type UnknownAction } from '@reduxjs/toolkit';
 import { useDispatch, useSelector, type TypedUseSelectorHook } from 'react-redux';
 import { q, sb } from '../supabase';
 import { keyOf, type Order, type OrderKey } from '../types';
@@ -34,9 +34,27 @@ store.subscribe(() => {
 
 export interface Where { key: OrderKey; tableId: number | null; section: string; parcel: boolean }
 
+// Saves of the same order run one after another: a second save (e.g. leaving the screen while Save is still
+// running) waits for the first and then sends only what is still unsaved, so dishes are never sent twice.
+const saving = new Map<OrderKey, Promise<unknown>>();
+
 /** Save the order: every unsaved tap in one request. Returns the server's copy of the order (or null if empty). */
 export const saveOrder = createAsyncThunk<Order | null, Where, { state: RootState }>('orders/save', async (w, api) => {
-  const { cart: carts, data: d } = api.getState();
+  const before = saving.get(w.key);
+  let release!: () => void;
+  const mine = new Promise<void>((r) => { release = r; });
+  saving.set(w.key, mine);
+  try {
+    if (before) await before.catch(() => {});
+    return await saveNow(w, api.getState, api.dispatch);
+  } finally {
+    release();
+    if (saving.get(w.key) === mine) saving.delete(w.key);
+  }
+});
+
+async function saveNow(w: Where, getState: () => RootState, dispatch: (a: UnknownAction) => unknown): Promise<Order | null> {
+  const { cart: carts, data: d } = getState();
   const existing = d.orders[w.key];
   const c: Cart | undefined = carts[w.key];
   if (!c || (!Object.keys(c.changes).length && c.discount === null)) return existing ?? null;
@@ -46,10 +64,10 @@ export const saveOrder = createAsyncThunk<Order | null, Where, { state: RootStat
     p_changes: Object.entries(sent.changes).map(([menu_item_id, delta]) => ({ menu_item_id: Number(menu_item_id), delta })),
     p_discount: sent.discount,
   }));
-  if (order) api.dispatch(orderSaved(order));
-  api.dispatch(saved({ key: w.key, newKey: order ? keyOf(order) : w.key, sent }));
+  if (order) dispatch(orderSaved(order));
+  dispatch(saved({ key: w.key, newKey: order ? keyOf(order) : w.key, sent }));
   return order;
-});
+}
 
 /** After the kitchen ticket printed: mark everything as sent (1 request). */
 export const markKot = createAsyncThunk('orders/markKot', async (orderId: number, api) => {

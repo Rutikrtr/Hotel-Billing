@@ -1,7 +1,6 @@
-import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { addDays, daysBetween, hourLabel, localDay, shortDate, startOf, WEEKDAYS } from '../dates';
 import { rsShort } from '../money';
@@ -9,7 +8,7 @@ import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import { toast } from '../ui/toast';
 import { Icon } from '../ui/icons';
-import { Card, Chip, Diet, Empty, Header, SectionTitle, SummaryCard, T } from '../ui/kit';
+import { Card, Chip, Diet, Empty, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 
 interface Report {
@@ -54,7 +53,8 @@ export default function AnalyticsScreen() {
       setError(null);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, [range]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // One request when the screen opens or the range changes; pull down to refresh. Nothing on tab taps.
+  useEffect(() => { load(); }, [load]);
 
   const change = (now: number, before: number) => {
     if (!before) return now ? { text: 'New', color: C.free } : { text: '—', color: C.muted };
@@ -197,7 +197,6 @@ export default function AnalyticsScreen() {
   return (
     <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
       refreshControl={<RefreshControl refreshing={loading && !!report} onRefresh={load} colors={[C.brand1]} />}>
-      <Header eyebrow="Sales report" title="Analytics" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>
         {Object.entries(RANGES).map(([k, [label]]) => <Chip key={k} label={label} on={range === k} onPress={() => setRange(k)} />)}
       </ScrollView>

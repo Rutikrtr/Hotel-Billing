@@ -33,6 +33,8 @@ export type Stack = {
   Printer: undefined;
   Bill: { orderId: number };
   Stay: { stayId: number };
+  Bills: undefined;
+  Analytics: undefined;
 };
 const S = createNativeStackNavigator<Stack>();
 const Tab = createBottomTabNavigator();
@@ -45,7 +47,7 @@ const glow = (Screen: React.ComponentType) => function Glowing() {
   const insets = useSafeAreaInsets();
   return <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}><TopGlow /><Screen /></View>;
 };
-const G = { Rooms: glow(RoomsScreen), Tables: glow(TablesScreen), Bills: glow(BillsScreen), Analytics: glow(AnalyticsScreen), Menu: glow(MenuScreen), Settings: glow(SettingsScreen) };
+const G = { Rooms: glow(RoomsScreen), Tables: glow(TablesScreen), Menu: glow(MenuScreen), Settings: glow(SettingsScreen) };
 
 function Tabs() {
   const account = useAppSelector((s) => s.auth.account);
@@ -56,8 +58,6 @@ function Tabs() {
     <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } }}>
       {feat('tables') || !feat('rooms') ? <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} /> : null}
       {bill && feat('rooms') ? <Tab.Screen name="Rooms" component={G.Rooms} options={{ tabBarIcon: Icon.tables }} /> : null}
-      {bill ? <Tab.Screen name="Bills" component={G.Bills} options={{ tabBarIcon: Icon.bills }} /> : null}
-      {bill && feat('trending') ? <Tab.Screen name="Analytics" component={G.Analytics} options={{ tabBarIcon: Icon.analytics }} /> : null}
       {owner ? <Tab.Screen name="Menu" component={G.Menu} options={{ tabBarIcon: Icon.menu }} /> : null}
       <Tab.Screen name="Settings" component={G.Settings} options={{ tabBarIcon: Icon.settings }} />
     </Tab.Navigator>
@@ -139,6 +139,8 @@ export default function Root() {
         <S.Screen name="Order" component={OrderScreen} options={{ title: '' }} />
         <S.Screen name="Bill" component={BillScreen} options={{ title: 'Bill' }} />
         <S.Screen name="Stay" component={StayScreen} options={{ title: 'Room' }} />
+        <S.Screen name="Bills" component={BillsScreen} options={{ title: 'Bills' }} />
+        <S.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
         <S.Screen name="Printer" component={PrinterScreen} options={{ title: 'Printer Setup' }} />
       </S.Navigator>
     </NavigationContainer>

@@ -7,6 +7,7 @@ import type { OrderItem } from '../types';
 import { Button, Chip, Field, Sheet, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
+import { billsChanged } from './BillsScreen';
 
 type Line = { menu_item_id: number | null; name: string; unit_price: number; quantity: number };
 const METHODS = ['Cash', 'UPI', 'Card'];
@@ -44,6 +45,7 @@ export function EditBillSheet({ open, onClose, onSaved, order, rate }: {
     setBusy(true);
     try {
       await q(sb.rpc('edit_paid_bill', { p_order_id: order.id, p_items: items, p_discount: d, p_method: method, p_reason: reason.trim() }));
+      billsChanged.current = true;
       toast(`Bill ${order.bill_no} updated · saved in the change log`);
       onSaved();
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
@@ -92,6 +94,7 @@ export function DeleteBillSheet({ open, onClose, onDeleted, orderId, billNo, tot
     setBusy(true);
     try {
       await q(sb.rpc('delete_paid_bill', { p_order_id: orderId, p_reason: reason.trim() }));
+      billsChanged.current = true;
       toast(`Bill ${billNo} deleted · saved in the change log`);
       onDeleted();
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }

@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { addDays, localDay, startOf } from '../dates';
@@ -9,13 +9,16 @@ import { tokenNo } from '../printing/escpos';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import { Icon } from '../ui/icons';
-import { Empty, Header, SectionTitle, SummaryCard, T } from '../ui/kit';
+import { Empty, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import type { Stack } from '../Root';
 
 interface Row { id: number; kind: string; bill_no: string; label: string; method: string; total: number; closed_at: string; edit_count?: number }
 const METHODS = ['Cash', 'UPI', 'Card'];
 const METHOD_COLOR: Record<string, string> = { Cash: '#15803D', UPI: '#6D28D9', Card: '#0E7490' };
+
+/** Set when a bill is edited or deleted, so the list reads again when you come back. */
+export const billsChanged = { current: false };
 
 /** Paid bills for one day (one small request), plus bills printed but not paid yet. */
 export default function BillsScreen() {
@@ -35,7 +38,13 @@ export default function BillsScreen() {
       setError(null);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, [day]);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const loadedAt = useRef(0);
+  useEffect(() => { load().then(() => { loadedAt.current = Date.now(); }); }, [load]);
+  // Back from a bill (it may have been edited): read again, but not more than once a minute.
+  useFocusEffect(useCallback(() => {
+    if (loadedAt.current && (billsChanged.current || Date.now() - loadedAt.current > 60000)) { billsChanged.current = false; } else return;
+    load().then(() => { loadedAt.current = Date.now(); });
+  }, [load]));
 
   const waiting = Object.values(orders).filter((o) => o.billed_at);
   const tableName = (id: number | null) => tables.find((t) => t.id === id)?.name ?? '';
@@ -53,8 +62,7 @@ export default function BillsScreen() {
   return (
     <View style={{ flex: 1 }}>
       {/* Title and sales card stay in place; only the list below scrolls. */}
-      <View style={{ paddingHorizontal: 12, paddingTop: 4 }}>
-        <Header title="Bills" />
+      <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
         <SummaryCard
           label={`${isToday ? 'Today’s sales' : `Sales on ${shortDay(day)}`} · ${rows.length} bill${rows.length === 1 ? '' : 's'}`}
           value={rsShort(total)}

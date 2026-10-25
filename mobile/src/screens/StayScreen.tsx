@@ -14,6 +14,7 @@ import { Button, Card, Chip, Field, Sheet, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
+import { roomsChanged } from './RoomsScreen';
 
 const MONO = Platform.select({ android: 'monospace', ios: 'Menlo', default: 'monospace' });
 const METHODS = ['Cash', 'UPI', 'Card'];
@@ -55,7 +56,7 @@ export default function StayScreen() {
 
   const run = async (key: string, fn: () => Promise<unknown>, done?: string) => {
     setBusy(key);
-    try { await fn(); if (done) toast(done); await load(); } catch (err) { toast((err as Error).message, true); } finally { setBusy(null); }
+    try { await fn(); roomsChanged.current = true; if (done) toast(done); await load(); } catch (err) { toast((err as Error).message, true); } finally { setBusy(null); }
   };
   const saveStay = () => run('stay', async () => {
     if (form.check_out < form.check_in) throw new Error('Check-out can’t be before check-in.');
@@ -76,7 +77,7 @@ export default function StayScreen() {
   const cancel = () => Alert.alert('Cancel check-in', `Cancel ${stay.guest_name}’s check-in? The room becomes free and nothing is billed.`, [
     { text: 'Keep' },
     { text: 'Cancel Check-in', style: 'destructive', onPress: async () => {
-      try { await q(sb.from('stays').delete().eq('id', stay.id)); toast('Check-in cancelled'); nav.goBack(); } catch (err) { toast((err as Error).message, true); }
+      try { await q(sb.from('stays').delete().eq('id', stay.id)); roomsChanged.current = true; toast('Check-in cancelled'); nav.goBack(); } catch (err) { toast((err as Error).message, true); }
     } },
   ]);
   const checkout = () => run('pay', async () => {

@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { addDays, localDay, shortDate } from '../dates';
 import { computeBill, fmt, nightsBetween, rs, rsShort, toPaise } from '../money';
@@ -11,6 +11,9 @@ import { Button, Empty, Field, Header, Sheet, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
+
+/** Set by the stay and check-in screens when something changed, so Rooms reads again when you come back. */
+export const roomsChanged = { current: false };
 
 export const stayTotal = (st: Stay, rate: number) => {
   const nights = nightsBetween(st.check_in, st.check_out);
@@ -39,7 +42,14 @@ export default function RoomsScreen() {
       setRooms(r); setOpen(o); setPaid(p);
     } catch (err) { toast((err as Error).message, true); } finally { setLoading(false); }
   }, []);
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // Read again when the screen comes back (after a check-in or check-out), but not on quick repeated tab taps.
+  const last = useRef(0);
+  useFocusEffect(useCallback(() => {
+    if (!roomsChanged.current && Date.now() - last.current < 8000) return;
+    roomsChanged.current = false;
+    last.current = Date.now();
+    load();
+  }, [load]));
 
   const today = localDay();
   const byRoom = new Map(open.map((st) => [st.room_id, st]));
@@ -101,6 +111,7 @@ function CheckInSheet({ room, onClose, onDone }: { room: Room; onClose: () => vo
         room_id: room.id, guest_name: f.guest_name.trim(), guest_phone: f.guest_phone.trim(), guests,
         check_in: f.check_in, check_out: f.check_out, rate: toPaise(f.rate),
       }).select('id').single());
+      roomsChanged.current = true;
       toast(`${f.guest_name.trim()} checked in to Room ${room.number}`);
       onDone(st.id);
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }

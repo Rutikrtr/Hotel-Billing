@@ -1,4 +1,4 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
@@ -12,6 +12,7 @@ import { reloadSettings, reloadTables } from '../store/data';
 import { q, sb } from '../supabase';
 import type { Room, Table } from '../types';
 import { Button, Card, Chip, Field, Header, initials, Pill, Sheet, T, ToggleRow } from '../ui/kit';
+import { Icon } from '../ui/icons';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -40,11 +41,11 @@ export default function SettingsScreen() {
   const loadStaff = useCallback(async () => {
     try { setStaff(await q<Member[]>(sb.from('staff').select('email, user_id, role, display_name').order('created_at'))); } catch { /* shown as empty */ }
   }, []);
-  useFocusEffect(useCallback(() => { if (owner) { loadStaff(); dispatch(reloadSettings()); } }, [owner]));
+  useEffect(() => { if (owner) loadStaff(); }, [owner]);
   useEffect(() => {
     if (!feat('qr_menu')) return;
     q<string | null>(sb.rpc('my_menu_token')).then((t) => setQr(t ? `${WEB}/menu.html?m=${encodeURIComponent(t)}` : null), () => {});
-  }, [account]);
+  }, [account?.features?.qr_menu]);
 
   const me = staff.find((m) => m.email === email);
   const myName = me?.display_name || loginName(email);
@@ -74,6 +75,12 @@ export default function SettingsScreen() {
         {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
       </Card>
 
+      {account?.can_bill ? (
+        <Card style={{ gap: 2, paddingVertical: 4 }}>
+          <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
+          {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
+        </Card>
+      ) : null}
       {owner && settings ? <BillDetails /> : null}
       {owner && feat('tables') ? <Tables tables={tables} /> : null}
       {owner && feat('rooms') ? <Rooms /> : null}
@@ -100,6 +107,16 @@ export default function SettingsScreen() {
       </Card>
       <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill 2.0 · Techyverve Solution Limited</T>
     </ScrollView>
+  );
+}
+
+/** A tappable row that opens another screen (only loads that screen's data when opened). */
+function Row({ title, sub, onPress }: { title: string; sub: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [st.row, pressed && { opacity: 0.6 }]} accessibilityRole="button">
+      <View style={{ flex: 1 }}><T w="bold" style={{ fontSize: 14.5 }}>{title}</T><T style={{ color: C.muted, fontSize: 11.5 }}>{sub}</T></View>
+      <Icon.chevR color={C.muted} size={18} />
+    </Pressable>
   );
 }
 
@@ -324,6 +341,8 @@ function StaffLogins({ staff, limit, reload }: { staff: Member[]; limit: number;
 }
 
 const st = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  sep: { height: 1, backgroundColor: C.line },
   avatar: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
   info: { borderTopWidth: 1, borderTopColor: C.line, paddingTop: 10, gap: 6 },
   locked: { backgroundColor: C.surface2, borderRadius: 12, padding: 10, gap: 2 },
