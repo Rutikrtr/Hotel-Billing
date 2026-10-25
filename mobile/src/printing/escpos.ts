@@ -1,6 +1,6 @@
 // Receipts as ESC/POS printer bytes. Same layout as the web app's slips (public/printer.js and app.js).
-import { computeBill, fmt } from '../money';
-import type { Order, Settings } from '../types';
+import { computeBill, fmt, nightsBetween } from '../money';
+import type { Order, Settings, Stay } from '../types';
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -69,42 +69,48 @@ export function kotSlip(p: Paper, label: string, changes: { name: string; quanti
 /** Extra details for reprinting a paid bill: its own GST rate, time and payment. */
 export interface BillMeta { rate?: number; at?: string; method?: string | null }
 
-/** The customer's bill, laid out like the web app's bill: Item / Qty / Amt columns, "@ rate" under each item. */
+/** The customer's bill, short: one "qty name amount" line per dish, then the total. */
 export function billSlip(p: Paper, order: Order, settings: Settings, label: string, billNo: string, method: string | null, meta: BillMeta = {}): Slip {
   const rate = meta.rate ?? settings.tax_rate_bp;
   const b = computeBill(order.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), order.discount, rate);
   const s = new Slip(p.width, 'bill', p.feed);
   const W = s.width;
   s.align('center').bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
-  if (settings.hotel_address) s.wrap(settings.hotel_address);
-  if (settings.hotel_phone) s.line(`Ph: ${settings.hotel_phone}`);
+  const phone = settings.hotel_phone ? `Ph ${settings.hotel_phone}` : '';
+  const both = [settings.hotel_address, phone].filter(Boolean).join(', ');
+  if (both.length <= W) { if (both) s.line(both); } else { if (settings.hotel_address) s.wrap(settings.hotel_address); if (phone) s.line(phone); }
   if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
   s.align('left').rule();
-  if (order.is_parcel) s.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(billNo)}`).size(1, 1).bold(false).align('left').rule();
+  if (order.is_parcel) s.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(billNo)}`).size(1, 1).bold(false).align('left');
   s.bold(true).cols(`Bill: ${billNo}`, order.is_parcel ? 'Parcel' : `Table: ${label}`).bold(false);
   s.cols(stamp(meta.at ?? new Date().toISOString()), meta.method ?? method ?? '').rule();
-  // Item | Qty | Amt
-  const qtyW = 4;
-  const amtW = W >= 48 ? 12 : 10;
-  const nameW = W - qtyW - amtW;
-  const row = (name: string, qty: string, amt: string) => s.line(name.padEnd(nameW).slice(0, nameW) + qty.padStart(qtyW) + amt.padStart(amtW));
-  row('Item', 'Qty', 'Amt');
-  s.rule();
+  // One line per dish: "2 Puneri Misal          180.00" (long names wrap, the amount stays on the last line).
+  const amtW = 10;
+  const nameW = W - amtW;
   for (const l of b.lines) {
-    const words = ascii(l.name);
-    const first = words.length <= nameW - 1 ? words : words.slice(0, words.lastIndexOf(' ', nameW - 1) > 0 ? words.lastIndexOf(' ', nameW - 1) : nameW - 1);
-    row(first, String(l.quantity), fmt(l.quantity * l.unitPrice));
-    const rest = words.slice(first.length).trim();
-    if (rest) s.wrap(rest, nameW);
-    s.line(`@ ${fmt(l.unitPrice)}`);
+    const left = ascii(`${l.quantity} ${l.name}`);
+    const amt = fmt(l.quantity * l.unitPrice);
+    if (left.length <= nameW - 1) s.cols(left, amt);
+    else {
+      let rest = left;
+      while (rest.length > nameW - 1) {
+        let cut = rest.lastIndexOf(' ', nameW - 1);
+        if (cut <= 0) cut = nameW - 1;
+        s.line(rest.slice(0, cut));
+        rest = '  ' + rest.slice(cut).trimStart();
+      }
+      s.cols(rest, amt);
+    }
   }
   s.rule();
-  s.cols(`Subtotal (${b.itemCount} items)`, fmt(b.subtotal));
-  if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
-  if (b.tax) s.cols(`CGST @ ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST @ ${pct(rate / 2)}`, fmt(b.sgst));
-  if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
-  s.rule();
-  s.bold(true).size(1, 2).cols('TOTAL', `Rs.${fmt(b.total)}`).size(1, 1).bold(false).rule();
+  // Subtotal only when something is added or taken off; otherwise straight to the total.
+  if (b.discount || b.tax || b.roundOff) {
+    s.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
+    if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
+    if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
+    if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
+  }
+  s.bold(true).size(1, 2).cols(`TOTAL (${b.itemCount})`, `Rs.${fmt(b.total)}`).size(1, 1).bold(false).rule();
   return s.align('center').line('Thank you! Visit again.').cut();
 }
 
@@ -120,4 +126,34 @@ export function parcelKitchenSlip(p: Paper, order: Order, billNo: string): Slip 
 export function testSlip(p: Paper, title: string): Slip {
   return new Slip(p.width, 'bill', p.feed).align('center').bold(true).size(2, 2).line(title).size(1, 1).bold(false)
     .line('Printer is working').line('Master Bill by Techyverve').cut();
+}
+
+/** A room bill: guest, dates and nights, then one line per charge, like the food bill. */
+export function staySlip(p: Paper, stay: Stay, settings: Settings, rate: number): Slip {
+  const nights = nightsBetween(stay.check_in, stay.check_out);
+  const lines = [
+    { name: `Room ${stay.lodging_rooms?.number ?? ''} x ${nights} night${nights === 1 ? '' : 's'}`, quantity: nights, unitPrice: stay.rate },
+    ...stay.stay_charges.map((c) => ({ name: c.description, quantity: c.quantity, unitPrice: c.unit_price })),
+  ];
+  const b = computeBill(lines, stay.discount, rate);
+  const s = new Slip(p.width, 'bill', p.feed);
+  s.align('center').bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
+  const phone = settings.hotel_phone ? `Ph ${settings.hotel_phone}` : '';
+  const both = [settings.hotel_address, phone].filter(Boolean).join(', ');
+  if (both.length <= s.width) { if (both) s.line(both); } else { if (settings.hotel_address) s.wrap(settings.hotel_address); if (phone) s.line(phone); }
+  if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
+  s.align('left').rule();
+  s.bold(true).cols(`Bill: ${stay.bill_no ?? '-'}`, `Room: ${stay.lodging_rooms?.number ?? ''}`).bold(false);
+  s.cols(stay.guest_name, stay.guest_phone || '');
+  s.cols(`${stay.check_in} to ${stay.check_out}`, stay.payment_method ?? '').rule();
+  for (const l of b.lines) s.cols(`${l.quantity} ${l.name}`, fmt(l.quantity * l.unitPrice));
+  s.rule();
+  if (b.discount || b.tax || b.roundOff) {
+    s.cols('Subtotal', fmt(b.subtotal));
+    if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
+    if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
+    if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
+  }
+  s.bold(true).size(1, 2).cols('TOTAL', `Rs.${fmt(b.total)}`).size(1, 1).bold(false).rule();
+  return s.align('center').line('Thank you for staying with us!').cut();
 }

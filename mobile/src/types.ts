@@ -61,3 +61,12 @@ export type OrderKey = string; // "t:<tableId>:<section>" | "p:<orderId>" | "p:n
 export const tableKey = (tableId: number, section = 'A'): OrderKey => `t:${tableId}:${section}`;
 export const parcelKey = (orderId?: number | null): OrderKey => (orderId ? `p:${orderId}` : 'p:new');
 export const keyOf = (o: Order): OrderKey => (o.is_parcel ? parcelKey(o.id) : tableKey(o.table_id as number, o.section));
+
+export interface Room { id: number; number: string; room_type: string; rate: number; sort: number }
+export interface StayCharge { id: number; description: string; quantity: number; unit_price: number }
+export interface Stay {
+  id: number; room_id: number; guest_name: string; guest_phone: string; guests: number;
+  check_in: string; check_out: string; rate: number; discount: number; status: 'open' | 'paid';
+  bill_no: string | null; payment_method: string | null; tax_rate_bp: number | null; closed_at: string | null;
+  lodging_rooms?: { number: string; room_type: string }; stay_charges: StayCharge[];
+}

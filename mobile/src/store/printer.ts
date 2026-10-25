@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-export interface Device { id: string; name: string }
+/** A printer: Bluetooth (id = its Bluetooth address) or Wi-Fi/LAN (wifi: true, id = "IP:port"). */
+export interface Device { id: string; name: string; wifi?: boolean }
 export interface PrinterState {
   bill: Device | null;
   kitchen: Device | null;     // null: kitchen tickets print on the bill printer

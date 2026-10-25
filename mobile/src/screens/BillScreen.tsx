@@ -9,6 +9,7 @@ import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import type { Order } from '../types';
 import { Button, T } from '../ui/kit';
+import { DeleteBillSheet, EditBillSheet } from './EditBill';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -27,13 +28,15 @@ export default function BillScreen() {
   const [order, setOrder] = useState<Paid | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
-
-  useEffect(() => {
-    q<Paid>(sb.from('orders')
+  const [sheet, setSheet] = useState<'edit' | 'delete' | null>(null);
+  const account = useAppSelector((s) => s.auth.account);
+  const canEdit = account?.role === 'owner' && account.features?.bill_edit === true;
+  const load = () => q<Paid>(sb.from('orders')
       .select('id, table_id, section, is_parcel, status, discount, bill_no, billed_at, opened_at, closed_at, payment_method, tax_rate_bp, edit_count, dining_tables(name), items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)')
       .eq('id', params.orderId).order('id', { referencedTable: 'order_items' }).single())
       .then(setOrder, (err: Error) => setError(err.message));
-  }, [params.orderId]);
+
+  useEffect(() => { load(); }, [params.orderId]);
 
   if (error) return <View style={st.center}><T style={{ color: C.danger, textAlign: 'center' }}>{error}</T></View>;
   if (!order || !settings) return <View style={st.center}><ActivityIndicator color={C.brand1} size="large" /></View>;
@@ -63,6 +66,12 @@ export default function BillScreen() {
         <Button kind="secondary" title="All Bills" style={{ flex: 1 }} onPress={() => nav.goBack()} />
         <Button title={printer.bill ? 'Print' : 'Set up Printer'} style={{ flex: 1.3 }} busy={printing} onPress={printer.bill ? print : () => nav.navigate('Printer')} />
       </View>
+      {canEdit && order.status === 'paid' ? (
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+          <Button kind="secondary" small title="Edit Bill" style={{ flex: 1 }} onPress={() => setSheet('edit')} />
+          <Button kind="danger" small title="Delete" style={{ flex: 1 }} onPress={() => setSheet('delete')} />
+        </View>
+      ) : null}
       <T w="semibold" style={{ color: C.muted, textAlign: 'center', marginBottom: 12 }}>
         {order.status === 'paid' ? `Paid by ${order.payment_method ?? '—'} · ${dateTime(at)}` : 'Not paid yet'}{order.edit_count ? ` · Edited ${order.edit_count}×` : ''}
       </T>
@@ -78,25 +87,25 @@ export default function BillScreen() {
         <KV k={`Bill: ${order.bill_no ?? '—'}`} v={order.is_parcel ? 'Parcel' : `Table: ${label}`} />
         <KV k={dateTime(at)} v={order.payment_method ?? ''} />
         <View style={st.rule} />
-        <View style={st.kv}><M style={{ flex: 1 }}>Item</M><M style={{ width: 40, textAlign: 'right' }}>Qty</M><M style={{ width: 86, textAlign: 'right' }}>Amt</M></View>
-        <View style={st.thin} />
         {order.items.map((i) => (
-          <View key={i.id} style={[st.kv, { marginBottom: 8 }]}>
-            <View style={{ flex: 1 }}><M>{i.name}</M><M style={{ fontSize: 11.5, color: C.muted }}>@ {fmt(i.unit_price)}</M></View>
-            <M style={{ width: 40, textAlign: 'right' }}>{i.quantity}</M>
-            <M style={{ width: 86, textAlign: 'right' }}>{fmt(i.unit_price * i.quantity)}</M>
+          <View key={i.id} style={[st.kv, { marginBottom: 4 }]}>
+            <M style={{ flex: 1 }}>{i.quantity} {i.name}</M>
+            <M>{fmt(i.unit_price * i.quantity)}</M>
           </View>
         ))}
         <View style={st.rule} />
-        <KV k={`Subtotal (${b.itemCount} items)`} v={fmt(b.subtotal)} />
-        {b.discount ? <KV k="Discount" v={`-${fmt(b.discount)}`} /> : null}
-        {b.tax ? (<><KV k={`CGST @ ${pct(rate / 2)}`} v={fmt(b.cgst)} /><KV k={`SGST @ ${pct(rate / 2)}`} v={fmt(b.sgst)} /></>) : null}
-        {b.roundOff ? <KV k="Round off" v={fmt(b.roundOff)} /> : null}
-        <View style={st.rule} />
-        <KV k="TOTAL" v={rs(b.total)} big />
+        {b.discount || b.tax || b.roundOff ? (<>
+          <KV k={`Subtotal (${b.itemCount})`} v={fmt(b.subtotal)} />
+          {b.discount ? <KV k="Discount" v={`-${fmt(b.discount)}`} /> : null}
+          {b.tax ? (<><KV k={`CGST ${pct(rate / 2)}`} v={fmt(b.cgst)} /><KV k={`SGST ${pct(rate / 2)}`} v={fmt(b.sgst)} /></>) : null}
+          {b.roundOff ? <KV k="Round off" v={fmt(b.roundOff)} /> : null}
+        </>) : null}
+        <KV k={`TOTAL (${b.itemCount})`} v={rs(b.total)} big />
         <View style={st.rule} />
         <M style={{ textAlign: 'center' }}>Thank you! Visit again.</M>
       </View>
+      {sheet === 'edit' ? <EditBillSheet open onClose={() => setSheet(null)} onSaved={() => { setSheet(null); load(); }} order={order} rate={rate} /> : null}
+      {sheet === 'delete' ? <DeleteBillSheet open onClose={() => setSheet(null)} onDeleted={() => { setSheet(null); nav.goBack(); }} orderId={order.id} billNo={order.bill_no} total={b.total} /> : null}
     </ScrollView>
   );
 }
@@ -105,6 +114,5 @@ const st = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: C.bg },
   paper: { backgroundColor: '#FFFFFF', borderRadius: 6, padding: 18, borderWidth: 1, borderColor: C.line },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#8A7F78', marginVertical: 10 },
-  thin: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#C9BFB8', marginTop: 4, marginBottom: 8 },
   kv: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 },
 });

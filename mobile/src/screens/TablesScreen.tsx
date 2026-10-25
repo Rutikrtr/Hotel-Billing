@@ -8,7 +8,8 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
 import { tableKey, type Order } from '../types';
-import { Button, SummaryCard, T } from '../ui/kit';
+import { Icon } from '../ui/icons';
+import { Button, HotelHeader, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import type { Stack } from '../Root';
 
@@ -35,13 +36,11 @@ export default function TablesScreen() {
 
   const header = (
     <View>
-      <View style={st.head}>
-        <View style={{ flex: 1 }}>
-          <T w="heavy" style={st.eyebrow}>{settings?.hotel_name ?? account?.hotel ?? ''}</T>
-          <T w="heavy" style={st.h1}>Tables</T>
-        </View>
-        {canBill ? <Button title="＋ Parcel" small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null}
-      </View>
+      <HotelHeader
+        name={settings?.hotel_name ?? account?.hotel ?? 'Master Bill'}
+        subtitle={`Tables · ${new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`}
+        right={canBill ? <Button title="Parcel" icon={Icon.bag} small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null}
+      />
       <SummaryCard
         label="On tables now"
         value={rsShort(onTables)}
@@ -89,17 +88,17 @@ export default function TablesScreen() {
             accessibilityLabel={`${table.name}, ${busy ? (billed ? 'billed' : 'eating') : 'free'}`}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <T w="heavy" style={{ fontSize: 16 }}>{table.name}</T>
+              <T w="heavy" style={{ fontSize: 14.5 }}>{table.name}</T>
               <View style={[st.pill, { backgroundColor: busy ? (billed ? C.billedSoft : C.accentSoft) : C.freeSoft }]}>
                 <T w="heavy" style={{ fontSize: 10.5, color: busy ? (billed ? C.billed : C.accentStrong) : C.free }}>{busy ? (billed ? 'Billed' : os.length > 1 ? `${os.length} groups` : 'Eating') : 'Free'}</T>
               </View>
             </View>
             {busy ? (
               <>
-                <T w="heavy" style={{ fontSize: 15.5, color: billed ? C.billed : C.accentStrong, marginTop: 6 }}>{rsShort(total)}</T>
+                <T w="heavy" style={{ fontSize: 14, color: billed ? C.billed : C.accentStrong, marginTop: 4 }}>{rsShort(total)}</T>
                 <T style={{ fontSize: 11.5, color: C.muted }} numberOfLines={1}>{since(o.opened_at)}</T>
               </>
-            ) : <T style={{ fontSize: 12, color: C.muted, marginTop: 14 }}>Tap to order</T>}
+            ) : <T style={{ fontSize: 11.5, color: C.muted, marginTop: 10 }}>Tap to order</T>}
             {unsaved ? <View style={st.unsavedDot} /> : null}
           </Pressable>
         );
@@ -118,7 +117,7 @@ const st = StyleSheet.create({
   factL: { color: '#FFFFFF', fontSize: 11 },
   section: { fontSize: 11.5, color: C.muted, letterSpacing: 0.8, marginBottom: 6 },
   parcel: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 12, marginBottom: 6 },
-  tile: { flex: 1, maxWidth: '32.2%', minHeight: 84, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 9, marginBottom: 8 },
+  tile: { flex: 1, maxWidth: '32.2%', minHeight: 72, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 9, marginBottom: 8 },
   tileBusy: { backgroundColor: '#FFF6EF', borderColor: '#F0C2A4' },
   tileBilled: { backgroundColor: '#F7F2FF', borderColor: '#D5C2FF' },
   pill: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },

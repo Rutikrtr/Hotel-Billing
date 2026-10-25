@@ -7,7 +7,7 @@ import { Gradient, T } from './kit';
 import { C, F } from './theme';
 
 const ICONS: Record<string, (p: { color: string; size?: number }) => React.ReactElement> = {
-  Tables: Icon.tables, Bills: Icon.bills, Analytics: Icon.analytics, Menu: Icon.dish, Settings: Icon.settings,
+  Tables: Icon.tables, Rooms: Icon.bed, Bills: Icon.bills, Analytics: Icon.analytics, Menu: Icon.dish, Settings: Icon.settings,
 };
 const PILL_W = 58;
 

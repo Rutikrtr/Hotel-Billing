@@ -18,9 +18,9 @@ for (const width of [32, 48]) {
     const out = lines(billSlip({ width, feed: 2 }, order, settings, 'A4', 'B00119', 'Cash', { at: '2026-10-25T06:51:00Z' }).bytes());
     for (const l of out) assert.ok(l.length <= width, `too wide (${l.length}): "${l}"`);
     const text = out.join('\n');
-    for (const s of ['Morya Misal', 'Bill: B00119', 'Table: A4', 'Item', 'Puneri Misal', '@ 90.00', '1,560.00', 'CGST @ 2.5%', 'TOTAL', 'Thank you! Visit again.']) {
+    for (const s of ['Morya Misal', 'Bill: B00119', 'Table: A4', '1 Puneri Misal', '1,560.00', 'CGST 2.5%', 'TOTAL', 'Thank you! Visit again.']) {
       assert.ok(text.includes(s), `missing "${s}"`);
     }
-    assert.match(text, /TOTAL\s+Rs\.1,733\.00/);
+    assert.match(text, /TOTAL \(13\)\s+Rs\.1,733\.00/);
   });
 }

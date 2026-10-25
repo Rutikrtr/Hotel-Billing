@@ -1,10 +1,14 @@
 import { useFocusEffect } from '@react-navigation/native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import React, { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { addDays, daysBetween, hourLabel, localDay, shortDate, startOf, WEEKDAYS } from '../dates';
 import { rsShort } from '../money';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
+import { toast } from '../ui/toast';
+import { Icon } from '../ui/icons';
 import { Card, Chip, Diet, Empty, Header, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 
@@ -107,7 +111,7 @@ export default function AnalyticsScreen() {
           {kpis.map(([k, v, tr]) => (
             <View key={k} style={st.kpi}>
               <T style={{ color: C.muted, fontSize: 11.5 }}>{k}</T>
-              <T w="heavy" style={{ fontSize: 15 }}>{v}{tr ? <T w="bold" style={{ fontSize: 12, color: billsTrend.color }}>{`  ${tr}`}</T> : null}</T>
+              <T w="heavy" style={{ fontSize: 14 }}>{v}{tr ? <T w="bold" style={{ fontSize: 12, color: billsTrend.color }}>{`  ${tr}`}</T> : null}</T>
             </View>
           ))}
         </View>
@@ -164,6 +168,30 @@ export default function AnalyticsScreen() {
     );
   };
 
+  /** Spreadsheet (CSV) of the report, shared to WhatsApp, Drive, email… (same columns as the web app's export). */
+  const download = async () => {
+    if (!report) return;
+    try {
+      const rupees = (p: number) => (Number(p) / 100).toFixed(2);
+      const cell = (v: unknown) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+      const menuById = new Map(menu.map((m) => [m.id, m]));
+      const byDay = new Map(report.days.map((d) => [d.day, d]));
+      const rows: unknown[][] = [
+        ['Sales report', RANGES[range][0], `${from} to ${to}`], [],
+        ['Total sales', rupees(report.totals.sales)], ['Bills', report.totals.bills], ['Dishes sold', report.totals.items],
+        ['Discount', rupees(report.totals.discount)], ['GST', rupees(report.totals.tax)], ['Parcels', report.totals.parcels],
+        ...report.methods.map((m) => [m.method, rupees(m.sales), `${m.bills} bills`]), [],
+        ['Date', 'Bills', 'Sales'],
+        ...Array.from({ length: Math.min(days, 366) }, (_, i) => { const d = addDays(from, i); return [d, byDay.get(d)?.bills ?? 0, rupees(byDay.get(d)?.sales ?? 0)]; }), [],
+        ['Dish', 'Category', 'Quantity', 'Sales'],
+        ...report.dishes.filter((x) => Number(x.qty) > 0).map((x) => { const m = x.menu_item_id != null ? menuById.get(x.menu_item_id) : undefined; return [m?.name ?? x.name, m?.category ?? 'Other', x.qty, rupees(x.revenue)]; }),
+      ];
+      const path = `${FileSystem.cacheDirectory}sales-${from}-to-${to}.csv`;
+      await FileSystem.writeAsStringAsync(path, `\ufeff${rows.map((r) => r.map(cell).join(',')).join('\n')}`);
+      await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Sales report', UTI: 'public.comma-separated-values-text' });
+    } catch (err) { toast((err as Error).message, true); }
+  };
+
   const t = report?.totals;
   const tr = t ? change(t.sales, report!.prev.sales) : null;
   return (
@@ -178,6 +206,11 @@ export default function AnalyticsScreen() {
         value={t ? money(t.sales) : '…'}
         note={t ? `${tr!.text} vs ${days === 1 ? 'the day before' : `the ${days} days before`} (${money(report!.prev.sales)})` : undefined}
         noteColor={tr?.color}
+        right={t?.bills ? (
+          <Pressable onPress={download} hitSlop={8} style={st.dl} accessibilityRole="button" accessibilityLabel="Download report as a spreadsheet">
+            <Icon.download color="#FFFFFF" size={18} />
+          </Pressable>
+        ) : undefined}
         stats={[
           { value: t?.bills ?? '–', label: 'Bills', color: C.accentStrong, bg: C.accentSoft },
           { value: t?.bills ? money(Math.round(t.sales / t.bills / 100) * 100) : '–', label: 'Avg. bill', color: C.billed, bg: C.billedSoft },
@@ -226,10 +259,11 @@ function Bars({ rows }: { rows: { name: string; value: number; text: string }[] 
 }
 
 const st = StyleSheet.create({
+  dl: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.22)', alignItems: 'center', justifyContent: 'center' },
   hero: { borderRadius: 18, padding: 14, overflow: 'hidden', marginBottom: 12 },
   fact: { flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 10, padding: 8 },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  kpi: { width: '48.6%', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 10, gap: 2 },
+  kpi: { width: '48.6%', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, gap: 1 },
   split: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 },
   rank: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },
   track: { height: 7, borderRadius: 4, backgroundColor: C.surface2, overflow: 'hidden' },

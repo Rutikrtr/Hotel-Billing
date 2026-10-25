@@ -5,6 +5,8 @@ import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { warmUp } from './printing/ble';
 import AnalyticsScreen from './screens/AnalyticsScreen';
+import RoomsScreen from './screens/RoomsScreen';
+import StayScreen from './screens/StayScreen';
 import BillScreen from './screens/BillScreen';
 import BillsScreen from './screens/BillsScreen';
 import LoginScreen from './screens/LoginScreen';
@@ -30,6 +32,7 @@ export type Stack = {
   Order: { tableId?: number; section?: string; parcelId?: number | null };
   Printer: undefined;
   Bill: { orderId: number };
+  Stay: { stayId: number };
 };
 const S = createNativeStackNavigator<Stack>();
 const Tab = createBottomTabNavigator();
@@ -42,7 +45,7 @@ const glow = (Screen: React.ComponentType) => function Glowing() {
   const insets = useSafeAreaInsets();
   return <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}><TopGlow /><Screen /></View>;
 };
-const G = { Tables: glow(TablesScreen), Bills: glow(BillsScreen), Analytics: glow(AnalyticsScreen), Menu: glow(MenuScreen), Settings: glow(SettingsScreen) };
+const G = { Rooms: glow(RoomsScreen), Tables: glow(TablesScreen), Bills: glow(BillsScreen), Analytics: glow(AnalyticsScreen), Menu: glow(MenuScreen), Settings: glow(SettingsScreen) };
 
 function Tabs() {
   const account = useAppSelector((s) => s.auth.account);
@@ -51,7 +54,8 @@ function Tabs() {
   const owner = account?.role === 'owner';
   return (
     <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } }}>
-      <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} />
+      {feat('tables') || !feat('rooms') ? <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} /> : null}
+      {bill && feat('rooms') ? <Tab.Screen name="Rooms" component={G.Rooms} options={{ tabBarIcon: Icon.tables }} /> : null}
       {bill ? <Tab.Screen name="Bills" component={G.Bills} options={{ tabBarIcon: Icon.bills }} /> : null}
       {bill && feat('trending') ? <Tab.Screen name="Analytics" component={G.Analytics} options={{ tabBarIcon: Icon.analytics }} /> : null}
       {owner ? <Tab.Screen name="Menu" component={G.Menu} options={{ tabBarIcon: Icon.menu }} /> : null}
@@ -90,7 +94,7 @@ export default function Root() {
     if (hotel) {
       dispatch(loadAll());
       const p = store.getState().printer;
-      warmUp([p.bill?.id, p.separateKitchen ? p.kitchen?.id : undefined]);
+      warmUp([p.bill?.wifi ? undefined : p.bill?.id, p.separateKitchen && !p.kitchen?.wifi ? p.kitchen?.id : undefined]);
     }
     if (status === 'signedOut') dispatch(resetData());
   }, [hotel, status]);
@@ -134,6 +138,7 @@ export default function Root() {
         <S.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
         <S.Screen name="Order" component={OrderScreen} options={{ title: '' }} />
         <S.Screen name="Bill" component={BillScreen} options={{ title: 'Bill' }} />
+        <S.Screen name="Stay" component={StayScreen} options={{ title: 'Room' }} />
         <S.Screen name="Printer" component={PrinterScreen} options={{ title: 'Printer Setup' }} />
       </S.Navigator>
     </NavigationContainer>

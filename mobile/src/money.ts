@@ -38,3 +38,9 @@ export function computeBill(lines: BillLine[], discount = 0, taxRateBp = 0): Bil
     itemCount: lines.reduce((s, l) => s + l.quantity, 0),
   };
 }
+
+/** Nights in a room stay (at least 1), same as the web app. */
+export function nightsBetween(checkIn: string, checkOut: string): number {
+  const days = Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000);
+  return Math.max(days, 1);
+}
