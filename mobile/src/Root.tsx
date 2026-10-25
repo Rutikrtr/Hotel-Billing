@@ -22,7 +22,7 @@ import { sb } from './supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, T } from './ui/kit';
 import { Icon } from './ui/icons';
-import { Logo } from './ui/Logo';
+import { TechyverveLogo } from './ui/TechyverveLogo';
 import TabBar from './ui/TabBar';
 import TopGlow from './ui/TopGlow';
 import { C, F } from './ui/theme';
@@ -31,7 +31,7 @@ export type Stack = {
   Main: undefined;
   Order: { tableId?: number; section?: string; parcelId?: number | null };
   Printer: undefined;
-  Bill: { orderId: number };
+  Bill: { orderId: number; parcel?: boolean };
   Stay: { stayId: number };
   Bills: undefined;
   Analytics: undefined;
@@ -99,8 +99,8 @@ export default function Root() {
     if (status === 'signedOut') dispatch(resetData());
   }, [hotel, status]);
 
-  // Same picture and place as the phone's start screen, so the hand-over is seamless.
-  if (status === 'starting') return <Centered><Logo size={160} /></Centered>;
+  // Only seen if the start screen's 3 s safety limit passes first: the same Techyverve logo in the same place.
+  if (status === 'starting') return <Centered><TechyverveLogo size={78} /></Centered>;
   if (status === 'signedOut') return <LoginScreen />;
   if (account && !account.staff) {
     return (

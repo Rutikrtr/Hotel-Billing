@@ -100,6 +100,7 @@ export const s = StyleSheet.create({
   note: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 6 },
   big: { fontSize: 25, letterSpacing: -0.6, color: '#FFFFFF', fontVariant: ['tabular-nums'], marginTop: 2 },
   stat: { flex: 1, borderRadius: 12, paddingVertical: 7, paddingHorizontal: 10, backgroundColor: '#FFFFFF' },
+  clear: { position: 'absolute', right: 10, width: 24, height: 24, borderRadius: 12, backgroundColor: '#A39589', alignItems: 'center', justifyContent: 'center' },
   diet: { width: 13, height: 13, borderWidth: 1.5, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
 });
 
@@ -222,6 +223,21 @@ export function HotelHeader({ name, subtitle, right }: { name: string; subtitle:
         <T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: C.muted }}>{subtitle}</T>
       </View>
       {right}
+    </View>
+  );
+}
+
+/** Search box with a ✕ to clear it (shown once there is text, typed or spoken). */
+export function SearchBox({ value, onChange, placeholder, style }: { value: string; onChange: (v: string) => void; placeholder: string; style?: StyleProp<TextStyle> }) {
+  return (
+    <View style={{ flex: 1, justifyContent: 'center' }}>
+      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#A39589"
+        style={[style, { paddingRight: 40 }]} accessibilityLabel="Search dishes" returnKeyType="search" />
+      {value ? (
+        <Pressable onPress={() => onChange('')} hitSlop={10} style={s.clear} accessibilityRole="button" accessibilityLabel="Clear search">
+          <T w="heavy" style={{ color: '#FFFFFF', fontSize: 12, lineHeight: 14 }}>✕</T>
+        </Pressable>
+      ) : null}
     </View>
   );
 }

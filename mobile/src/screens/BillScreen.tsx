@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { computeBill, fmt, rs } from '../money';
 import { paperOf, printSlips } from '../printing';
-import { billSlip, tokenNo } from '../printing/escpos';
+import { billSlip, parcelKitchenSlip, tokenNo } from '../printing/escpos';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import type { Order } from '../types';
@@ -37,6 +37,9 @@ export default function BillScreen() {
       .then(setOrder, (err: Error) => setError(err.message));
 
   useEffect(() => { load(); }, [params.orderId]);
+  const afterParcel = params.parcel === true;
+  useEffect(() => { if (afterParcel && order?.bill_no) nav.setOptions({ title: `Parcel #${tokenNo(order.bill_no)}` }); }, [afterParcel, order?.bill_no]);
+  const [kitchenDone, setKitchenDone] = useState(false);
 
   if (error) return <View style={st.center}><T style={{ color: C.danger, textAlign: 'center' }}>{error}</T></View>;
   if (!order || !settings) return <View style={st.center}><ActivityIndicator color={C.brand1} size="large" /></View>;
@@ -46,6 +49,14 @@ export default function BillScreen() {
   const label = order.dining_tables?.name ? `${order.dining_tables.name}${order.section !== 'A' ? `-${order.section}` : ''}` : 'Table';
   const at = order.closed_at ?? order.billed_at ?? new Date().toISOString();
 
+  const printKitchen = async () => {
+    setPrinting(true);
+    try {
+      await printSlips(printer, [parcelKitchenSlip(paperOf(printer), order, order.bill_no ?? '')]);
+      setKitchenDone(true);
+      toast('Kitchen copy printed');
+    } catch (err) { toast((err as Error).message, true); } finally { setPrinting(false); }
+  };
   const print = async () => {
     setPrinting(true);
     try {
@@ -62,11 +73,13 @@ export default function BillScreen() {
 
   return (
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+      {afterParcel ? (
+        <View style={st.done}><T w="bold" style={{ color: C.free }}>✓ Customer’s bill printed · tear it off first</T></View>
+      ) : <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
         <Button kind="secondary" title="All Bills" style={{ flex: 1 }} onPress={() => nav.goBack()} />
         <Button title={printer.bill ? 'Print' : 'Set up Printer'} style={{ flex: 1.3 }} busy={printing} onPress={printer.bill ? print : () => nav.navigate('Printer')} />
-      </View>
-      {canEdit && order.status === 'paid' ? (
+      </View>}
+      {canEdit && order.status === 'paid' && !afterParcel ? (
         <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
           <Button kind="secondary" small title="Edit Bill" style={{ flex: 1 }} onPress={() => setSheet('edit')} />
           <Button kind="danger" small title="Delete" style={{ flex: 1 }} onPress={() => setSheet('delete')} />
@@ -105,6 +118,12 @@ export default function BillScreen() {
         <View style={st.rule} />
         <M style={{ textAlign: 'center' }}>Thank you! Visit again.</M>
       </View>
+      {afterParcel ? (
+        <View style={{ gap: 10, marginTop: 14 }}>
+          <Button kind={kitchenDone ? 'secondary' : 'primary'} title={kitchenDone ? 'Print Kitchen Copy Again' : 'Print Kitchen Copy'} busy={printing} onPress={printKitchen} />
+          <Button kind={kitchenDone ? 'primary' : 'secondary'} title="Done" onPress={() => nav.goBack()} />
+        </View>
+      ) : null}
       {sheet === 'edit' ? <EditBillSheet open onClose={() => setSheet(null)} onSaved={() => { setSheet(null); load(); }} order={order} rate={rate} /> : null}
       {sheet === 'delete' ? <DeleteBillSheet open onClose={() => setSheet(null)} onDeleted={() => { setSheet(null); nav.goBack(); }} orderId={order.id} billNo={order.bill_no} total={b.total} /> : null}
     </ScrollView>
@@ -113,6 +132,7 @@ export default function BillScreen() {
 
 const st = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: C.bg },
+  done: { backgroundColor: C.freeSoft, borderRadius: 12, padding: 10, alignItems: 'center', marginBottom: 12 },
   shop: { fontSize: 19, letterSpacing: 2.2, textAlign: 'center', lineHeight: 26 },
   addr: { fontSize: 12.5, color: '#5B4F48', letterSpacing: 0.3, textAlign: 'center', lineHeight: 17 },
   paper: { backgroundColor: '#FFFFFF', borderRadius: 6, padding: 18, borderWidth: 1, borderColor: C.line },

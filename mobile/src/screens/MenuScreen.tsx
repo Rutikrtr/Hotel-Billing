@@ -6,7 +6,7 @@ import { patchMenuItem, reloadMenu } from '../store/data';
 import { q, sb } from '../supabase';
 import type { MenuItem } from '../types';
 import { Icon } from '../ui/icons';
-import { Button, Chip, Diet, Empty, Field, Header, Sheet, T, ToggleRow } from '../ui/kit';
+import { Button, Chip, Diet, Empty, Field, Header, SearchBox, Sheet, T, ToggleRow } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { toast } from '../ui/toast';
 import { MicButton } from '../ui/Mic';
@@ -82,7 +82,7 @@ export default function MenuScreen() {
           <View>
             <Header eyebrow={`${menu.length} item${menu.length === 1 ? '' : 's'}`} title="Menu" />
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TextInput value={search} onChangeText={setSearch} placeholder="Search or tap the mic" placeholderTextColor="#A89A90" style={[st.search, { flex: 1 }]} />
+              <SearchBox value={search} onChange={setSearch} placeholder="Search or tap the mic" style={st.search} />
               <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
             </View>
             <T style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>Tap ★ to show a dish first when taking orders. Switch off a dish when it is sold out.</T>

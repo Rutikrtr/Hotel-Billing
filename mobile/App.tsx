@@ -10,7 +10,6 @@ import { restoreFromPhone, store } from './src/store';
 import { start } from './src/store/auth';
 import { C } from './src/ui/theme';
 import { ToastHost } from './src/ui/toast';
-import { StartScreen } from './src/ui/StartScreen';
 
 /** If anything fails while drawing, show the error instead of a frozen screen (so it can be reported and fixed). */
 class Guard extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
@@ -30,7 +29,7 @@ class Guard extends React.Component<{ children: React.ReactNode }, { error: Erro
 
 // Keep the start screen (logo) until the app has drawn its first screen, then fade it out smoothly.
 SplashScreen.preventAutoHideAsync().catch(() => {});
-SplashScreen.setOptions({ fade: true, duration: 350 });
+SplashScreen.setOptions({ fade: true, duration: 250 });
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({ Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
@@ -39,19 +38,18 @@ export default function App() {
   useEffect(() => {
     // Never wait more than 3 s for the font: fall back to the phone's font.
     const t = setTimeout(() => setFontWait(false), 3000);
-    // Safety net: the start screen never stays longer than 4 s, whatever happens.
-    const s = setTimeout(() => { SplashScreen.hideAsync().catch(() => {}); }, 4000);
+    // Safety net: the start screen never stays longer than 3 s, whatever happens.
+    const s = setTimeout(() => { SplashScreen.hideAsync().catch(() => {}); }, 3000);
     // Unsaved orders and printer choices first, then the login.
     restoreFromPhone().catch(() => {}).finally(() => { store.dispatch(start()); setReady(true); });
     return () => { clearTimeout(t); clearTimeout(s); };
   }, []);
   const fontsReady = fontsLoaded || !!fontError || !fontWait;
-  // The phone's start screen hands over to our animated one at once (same logo, same place, no flash).
-  const [intro, setIntro] = useState(true);
-  useEffect(() => { SplashScreen.hideAsync().catch(() => {}); }, []);
-  // The first real screen (login or tables) is known once the saved login has been checked.
+  // Keep the phone's Techyverve start screen until the first real screen (login or tables) can be drawn,
+  // then fade it out once. Nothing else is shown in between, so there is no second screen or jump.
   const authKnown = useSyncExternalStore(store.subscribe, () => store.getState().auth.status !== 'starting');
   const appReady = fontsReady && ready && authKnown;
+  useEffect(() => { if (appReady) SplashScreen.hideAsync().catch(() => {}); }, [appReady]);
   return (
     <Guard>
       <Provider store={store}>
@@ -64,7 +62,6 @@ export default function App() {
                 <ToastHost />
               </View>
             ) : <View style={{ flex: 1 }} />}
-            {intro ? <StartScreen ready={appReady} onDone={() => setIntro(false)} /> : null}
           </View>
         </SafeAreaProvider>
       </Provider>

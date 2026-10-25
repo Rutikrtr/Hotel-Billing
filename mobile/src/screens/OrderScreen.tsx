@@ -10,7 +10,7 @@ import { generateBill, markKot, saveOrder, settle, store, useAppDispatch, useApp
 import { loginName } from '../store/auth';
 import { change, hasPending, mergeLines, setDiscount, type Line } from '../store/cart';
 import { parcelKey, tableKey, type Order } from '../types';
-import { Button, Chip, Diet, T } from '../ui/kit';
+import { Button, Chip, Diet, SearchBox, T } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { MicButton } from '../ui/Mic';
 import { findDishes } from '../match';
@@ -165,13 +165,19 @@ export default function OrderScreen() {
       const failed = await printSlips(printer, billSlips);
       if (failed.length) toast(failed[0], true);
     } catch (err) { toast(`Bill ${billNo} saved, but printing failed: ${(err as Error).message}`, true); return; }
-    // Parcel without a kitchen printer: customer's bill first, then offer the kitchen copy on the same printer.
-    if (o.is_parcel && !kitchenPrinter) {
-      await new Promise<void>((done) => Alert.alert('Kitchen copy', `Print the kitchen copy for Parcel #${tokenNo(billNo)} now? Tear off the customer's bill first.`, [
-        { text: 'Skip', style: 'cancel', onPress: () => done() },
-        { text: 'Print', onPress: () => { printSlips(printer, [parcelKitchenSlip(paper, o, billNo)]).catch((err) => toast((err as Error).message, true)).finally(done); } },
-      ], { cancelable: false }));
+  };
+
+  /**
+   * After the bill: a parcel without a kitchen printer opens its bill with "Print Kitchen Copy" and "Done"
+   * below it (the customer's bill has printed; the kitchen copy comes next on the same printer).
+   */
+  const finish = (o: Order, billNo: string) => {
+    if (o.is_parcel && printer.bill && !(printer.separateKitchen && printer.kitchen)) {
+      nav.replace('Bill', { orderId: o.id, parcel: true });
+      return;
     }
+    toast(o.is_parcel ? `Parcel #${tokenNo(billNo)} done` : `Bill ${billNo} done · ${label} is free`);
+    nav.goBack();
   };
 
   const onPrintBill = () => run('bill', async () => {
@@ -185,8 +191,7 @@ export default function OrderScreen() {
       const billNo = await dispatch(settle({ order: saved, ...pay })).unwrap();
       setSheet(false);
       await printBill(saved, billNo, pay);
-      toast(saved.is_parcel ? `Parcel #${tokenNo(billNo)} done` : `Bill ${billNo} done · ${label} is free`);
-      nav.goBack();
+      finish(saved, billNo);
     } else {
       const billNo = await dispatch(generateBill(saved)).unwrap();
       await printBill(saved, billNo, null);
@@ -204,7 +209,7 @@ export default function OrderScreen() {
     toast(`Paid by ${p.method === 'Split' ? Object.keys(p.split).join(' + ') : p.method} · bill ${billNo}`);
     setPayFor(null);
     setSheet(false);
-    nav.goBack();
+    finish(o, billNo);
   });
 
   const renderDish = ({ item: m }: { item: (typeof menu)[number] }) => {
@@ -244,7 +249,7 @@ export default function OrderScreen() {
           </ScrollView>
         ) : null}
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TextInput value={search} onChangeText={setSearch} placeholder="Search or tap the mic and say a dish" placeholderTextColor="#A39589" style={[st.search, { flex: 1 }]} accessibilityLabel="Search dishes" />
+          <SearchBox value={search} onChange={setSearch} placeholder="Search or tap the mic and say a dish" style={st.search} />
           <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} keyboardShouldPersistTaps="handled">
