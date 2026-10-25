@@ -68,7 +68,7 @@ export default function TablesScreen() {
 
   return (
     <FlatList
-      style={{ backgroundColor: C.bg }}
+      style={{ backgroundColor: 'transparent' }}
       contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
       data={tiles}
       numColumns={3}

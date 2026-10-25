@@ -3,7 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import Root from './src/Root';
 import { restoreFromPhone, store } from './src/store';
@@ -44,16 +44,16 @@ export default function App() {
   return (
     <Guard>
       <Provider store={store}>
-        <SafeAreaProvider>
-          <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
-            <StatusBar style="dark" />
+        <SafeAreaProvider style={{ backgroundColor: C.bg }}>
+          <View style={{ flex: 1 }}>
+            <StatusBar style="dark" translucent backgroundColor="transparent" />
             {fontsReady && ready ? (
               <View style={{ flex: 1 }}>
                 <Root />
                 <ToastHost />
               </View>
-            ) : <View style={{ flex: 1, backgroundColor: C.bg }} />}
-          </SafeAreaView>
+            ) : <View style={{ flex: 1 }} />}
+          </View>
         </SafeAreaProvider>
       </Provider>
     </Guard>

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, RefreshControl, SectionList, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { fmt, rs, toPaise } from '../money';
 import { useAppDispatch, useAppSelector } from '../store';
-import { reloadMenu } from '../store/data';
+import { patchMenuItem, reloadMenu } from '../store/data';
 import { q, sb } from '../supabase';
 import type { MenuItem } from '../types';
 import { Icon } from '../ui/icons';
@@ -34,6 +34,14 @@ export default function MenuScreen() {
     try { await fn(); await dispatch(reloadMenu()); if (done) toast(done); return true; } catch (err) { toast((err as Error).message, true); return false; }
   };
 
+  /** Switch or star: move on screen first, save behind; put it back if the save fails. */
+  const quick = async (m: MenuItem, change: Partial<MenuItem>, done?: string) => {
+    const before = Object.fromEntries(Object.keys(change).map((k) => [k, m[k as keyof MenuItem]]));
+    dispatch(patchMenuItem({ id: m.id, ...change }));
+    try { await q(sb.from('menu_items').update(change).eq('id', m.id)); if (done) toast(done); }
+    catch (err) { dispatch(patchMenuItem({ id: m.id, ...before })); toast((err as Error).message, true); }
+  };
+
   const openNew = () => setDraft({ name: '', category: categories[0] ?? 'Others', newCategory: '', price: '', is_veg: true, available: true, is_favorite: false });
   const openEdit = (m: MenuItem) => setDraft({ id: m.id, name: m.name, category: m.category, newCategory: '', price: fmt(m.price).replace(/,/g, '').replace(/\.00$/, ''), is_veg: m.is_veg, available: m.available, is_favorite: m.is_favorite });
 
@@ -61,7 +69,7 @@ export default function MenuScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+    <View style={{ flex: 1 }}>
       <SectionList
         sections={sections}
         keyExtractor={(m) => String(m.id)}
@@ -84,11 +92,11 @@ export default function MenuScreen() {
               <T w="bold" style={{ opacity: m.available ? 1 : 0.5 }}>{m.name}</T>
               <T style={{ color: C.muted, fontSize: 12.5 }}>{rs(m.price)}{m.available ? '' : ' · Sold out'}</T>
             </Pressable>
-            <Pressable hitSlop={10} onPress={() => run(() => q(sb.from('menu_items').update({ is_favorite: !m.is_favorite }).eq('id', m.id)), m.is_favorite ? `${m.name} removed from favourites` : `★ ${m.name} will show first`)}
+            <Pressable hitSlop={10} onPress={() => quick(m, { is_favorite: !m.is_favorite }, m.is_favorite ? `${m.name} removed from favourites` : `★ ${m.name} will show first`)}
               accessibilityRole="button" accessibilityLabel={m.is_favorite ? 'Remove from favourites' : 'Mark as favourite'}>
               {m.is_favorite ? <Icon.star color="#F59E0B" /> : <Icon.starOff color="#C9BBB0" />}
             </Pressable>
-            <Switch value={m.available} onValueChange={(v) => { run(() => q(sb.from('menu_items').update({ available: v }).eq('id', m.id))); }} trackColor={{ true: C.free, false: '#D6CCC4' }} thumbColor="#FFFFFF" />
+            <Switch value={m.available} onValueChange={(v) => { quick(m, { available: v }); }} trackColor={{ true: C.free, false: '#D6CCC4' }} thumbColor="#FFFFFF" />
           </View>
         )}
       />

@@ -43,7 +43,7 @@ export default function BillsScreen() {
 
   return (
     <FlatList
-      style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
+      style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
       data={rows} keyExtractor={(r) => `${r.kind}${r.id}`}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} colors={[C.brand1]} />}
       ListHeaderComponent={
@@ -83,7 +83,7 @@ export default function BillsScreen() {
       }
       ListEmptyComponent={loading ? null : <Empty icon="🧾" text={`No bills ${isToday ? 'yet today' : 'on this day'}. Paid bills appear here.`} />}
       renderItem={({ item: r }) => (
-        <View style={st.row}>
+        <Pressable style={st.row} disabled={r.kind === 'stay'} onPress={() => nav.navigate('Bill', { orderId: r.id })}>
           <View style={[st.badge, { backgroundColor: `${METHOD_COLOR[r.method] ?? C.muted}1A` }]}>
             <T w="heavy" style={{ color: METHOD_COLOR[r.method] ?? C.muted, fontSize: r.method === 'Cash' ? 15 : 10 }}>{r.method === 'Cash' ? '₹' : r.method}</T>
           </View>
@@ -92,7 +92,8 @@ export default function BillsScreen() {
             <T style={{ color: C.muted, fontSize: 12 }}>{new Date(r.closed_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · {r.method}{r.edit_count ? ' · Edited' : ''}</T>
           </View>
           <T w="heavy">{rs(Number(r.total))}</T>
-        </View>
+          {r.kind !== 'stay' ? <Icon.chevR color={C.muted} size={18} /> : null}
+        </Pressable>
       )}
     />
   );

@@ -55,7 +55,7 @@ export default function SettingsScreen() {
   const role = account?.role ?? 'staff';
 
   return (
-    <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
       <Header eyebrow="My account" title="Settings" />
       <Card style={{ gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

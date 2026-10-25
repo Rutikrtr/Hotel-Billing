@@ -5,6 +5,7 @@ import { signIn } from '../store/auth';
 import { Button, Card, T } from '../ui/kit';
 import { Logo } from '../ui/Logo';
 import { C, F } from '../ui/theme';
+import TopGlow from '../ui/TopGlow';
 
 export default function LoginScreen() {
   const dispatch = useAppDispatch();
@@ -16,6 +17,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TopGlow />
       <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: 'center', marginBottom: 22 }}>
           <Logo size={72} />

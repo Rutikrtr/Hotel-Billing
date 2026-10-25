@@ -2,7 +2,7 @@
   "expo": {
     "name": "Master Bill",
     "slug": "master-bill",
-    "version": "2.3.0",
+    "version": "2.4.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "in.techyverve.masterbill",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#C2410C"
@@ -64,6 +64,11 @@
         }
       ],
       "expo-asset"
-    ]
+    ],
+    "androidStatusBar": {
+      "translucent": true,
+      "backgroundColor": "#00000000",
+      "barStyle": "dark-content"
+    }
   }
 }

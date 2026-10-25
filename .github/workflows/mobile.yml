@@ -29,6 +29,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # Keeps Gradle's downloads and compiled native code between builds (the slowest part).
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
       - run: npm ci
       - name: Type check and logic tests
         run: npx tsc --noEmit && npx tsx --test tests/logic.test.ts
@@ -39,7 +43,8 @@ jobs:
         run: |
           # Release builds are signed later with the private key, not Expo's debug key.
           sed -i 's/signingConfig signingConfigs.debug//' app/build.gradle
-          ./gradlew assembleRelease --no-daemon
+          # Phones use ARM; x86_64 is only for the emulator test. 32-bit x86 is skipped to save build time.
+          ./gradlew assembleRelease --build-cache --parallel -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64
       - name: Publish to the mobile-apk-unsigned branch
         working-directory: mobile
         run: |

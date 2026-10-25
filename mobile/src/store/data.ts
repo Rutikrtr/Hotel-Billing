@@ -55,6 +55,11 @@ const data = createSlice({
     orderClosed(state, a: PayloadAction<OrderKey>) {
       delete state.orders[a.payload];
     },
+    /** Change a menu item on this phone at once (the switch moves instantly); the save happens behind. */
+    patchMenuItem(state, a: PayloadAction<Partial<MenuItem> & { id: number }>) {
+      const m = state.menu.find((x) => x.id === a.payload.id);
+      if (m) Object.assign(m, a.payload);
+    },
     reset: () => initialState,
   },
   extraReducers: (b) => {
@@ -70,5 +75,5 @@ const data = createSlice({
   },
 });
 
-export const { orderSaved, orderClosed, reset: resetData } = data.actions;
+export const { orderSaved, orderClosed, patchMenuItem, reset: resetData } = data.actions;
 export default data.reducer;

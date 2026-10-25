@@ -5,6 +5,7 @@ import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { warmUp } from './printing/ble';
 import AnalyticsScreen from './screens/AnalyticsScreen';
+import BillScreen from './screens/BillScreen';
 import BillsScreen from './screens/BillsScreen';
 import LoginScreen from './screens/LoginScreen';
 import MenuScreen from './screens/MenuScreen';
@@ -16,21 +17,32 @@ import { store, useAppDispatch, useAppSelector } from './store';
 import { recheck, signOut } from './store/auth';
 import { loadAll, refreshOrders, resetData } from './store/data';
 import { sb } from './supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, T } from './ui/kit';
 import { Icon } from './ui/icons';
 import { Logo } from './ui/Logo';
 import TabBar from './ui/TabBar';
+import TopGlow from './ui/TopGlow';
 import { C, F } from './ui/theme';
 
 export type Stack = {
   Main: undefined;
   Order: { tableId?: number; section?: string; parcelId?: number | null };
   Printer: undefined;
+  Bill: { orderId: number };
 };
 const S = createNativeStackNavigator<Stack>();
 const Tab = createBottomTabNavigator();
 
 const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: C.bg, primary: C.accent, card: C.surface, text: C.text, border: C.line } };
+
+/** Each tab draws on its own page background with the soft orange glow at the top. */
+// The glow also runs under the phone's status bar, so the top of the screen is one smooth colour.
+const glow = (Screen: React.ComponentType) => function Glowing() {
+  const insets = useSafeAreaInsets();
+  return <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}><TopGlow /><Screen /></View>;
+};
+const G = { Tables: glow(TablesScreen), Bills: glow(BillsScreen), Analytics: glow(AnalyticsScreen), Menu: glow(MenuScreen), Settings: glow(SettingsScreen) };
 
 function Tabs() {
   const account = useAppSelector((s) => s.auth.account);
@@ -38,12 +50,12 @@ function Tabs() {
   const bill = account?.can_bill === true;
   const owner = account?.role === 'owner';
   return (
-    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false }}>
-      <Tab.Screen name="Tables" component={TablesScreen} options={{ tabBarIcon: Icon.tables }} />
-      {bill ? <Tab.Screen name="Bills" component={BillsScreen} options={{ tabBarIcon: Icon.bills }} /> : null}
-      {bill && feat('trending') ? <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: Icon.analytics }} /> : null}
-      {owner ? <Tab.Screen name="Menu" component={MenuScreen} options={{ tabBarIcon: Icon.menu }} /> : null}
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: Icon.settings }} />
+    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } }}>
+      <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} />
+      {bill ? <Tab.Screen name="Bills" component={G.Bills} options={{ tabBarIcon: Icon.bills }} /> : null}
+      {bill && feat('trending') ? <Tab.Screen name="Analytics" component={G.Analytics} options={{ tabBarIcon: Icon.analytics }} /> : null}
+      {owner ? <Tab.Screen name="Menu" component={G.Menu} options={{ tabBarIcon: Icon.menu }} /> : null}
+      <Tab.Screen name="Settings" component={G.Settings} options={{ tabBarIcon: Icon.settings }} />
     </Tab.Navigator>
   );
 }
@@ -121,6 +133,7 @@ export default function Root() {
       <S.Navigator screenOptions={{ headerTitleStyle: { fontFamily: F.heavy }, headerShadowVisible: false, headerStyle: { backgroundColor: C.bg }, animation: 'slide_from_right' }}>
         <S.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
         <S.Screen name="Order" component={OrderScreen} options={{ title: '' }} />
+        <S.Screen name="Bill" component={BillScreen} options={{ title: 'Bill' }} />
         <S.Screen name="Printer" component={PrinterScreen} options={{ title: 'Printer Setup' }} />
       </S.Navigator>
     </NavigationContainer>

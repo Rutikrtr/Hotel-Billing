@@ -167,7 +167,7 @@ export default function AnalyticsScreen() {
   const t = report?.totals;
   const tr = t ? change(t.sales, report!.prev.sales) : null;
   return (
-    <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
       refreshControl={<RefreshControl refreshing={loading && !!report} onRefresh={load} colors={[C.brand1]} />}>
       <Header eyebrow="Sales report" title="Analytics" />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>
