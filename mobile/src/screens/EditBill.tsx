@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { computeBill, fmt, rs, toPaise } from '../money';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import type { OrderItem } from '../types';
 import { Button, Chip, Field, Sheet, T } from '../ui/kit';
-import { C } from '../ui/theme';
+import { C, F } from '../ui/theme';
 import { toast } from '../ui/toast';
 import { billsChanged } from './BillsScreen';
 
@@ -83,33 +83,35 @@ export function EditBillSheet({ open, onClose, onSaved, order, rate }: {
   );
 }
 
-/** Delete a paid bill with a reason (a full copy stays in the change log). */
+/** Delete a paid bill: the owner types the word "delete" to confirm (a full copy stays in the change log). */
 export function DeleteBillSheet({ open, onClose, onDeleted, orderId, billNo, total }: {
   open: boolean; onClose: () => void; onDeleted: () => void; orderId: number; billNo: string | null; total: number;
 }) {
-  const [reason, setReason] = useState('');
+  const [word, setWord] = useState('');
   const [busy, setBusy] = useState(false);
+  const ok = word.trim().toLowerCase() === 'delete';
   const del = async () => {
-    if (!reason.trim()) return toast('Write a short reason, so the log shows why this bill was deleted.', true);
+    if (!ok) return;
     setBusy(true);
     try {
-      await q(sb.rpc('delete_paid_bill', { p_order_id: orderId, p_reason: reason.trim() }));
+      await q(sb.rpc('delete_paid_bill', { p_order_id: orderId, p_reason: 'Deleted by owner' }));
       billsChanged.current = true;
-      toast(`Bill ${billNo} deleted · saved in the change log`);
+      toast(`Bill ${billNo} deleted`);
       onDeleted();
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
   };
   return (
     <Sheet open={open} onClose={onClose} title={`Delete Bill ${billNo ?? ''}?`}>
       <View style={st.line}><T style={{ color: C.muted, flex: 1 }}>Bill total</T><T w="heavy">{rs(total)}</T></View>
-      <T style={{ color: C.muted, fontSize: 12 }}>The bill is removed from sales. A full copy is kept in the change log with your name and reason.</T>
-      <Field label="Reason" value={reason} onChangeText={setReason} placeholder="e.g. Wrong table, entered twice" maxLength={200} autoFocus />
-      <Button kind="danger" title="Delete Bill" onPress={del} busy={busy} />
+      <TextInput value={word} onChangeText={setWord} autoCapitalize="none" autoCorrect={false} secureTextEntry autoFocus
+        placeholder="Confirmation word" placeholderTextColor="#A89A90" style={st.word} accessibilityLabel="Confirmation word" onSubmitEditing={del} />
+      <Button kind="danger" title="Delete Bill" onPress={del} busy={busy} disabled={!ok} />
     </Sheet>
   );
 }
 
 const st = StyleSheet.create({
+  word: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.semibold, fontSize: 15, color: C.text },
   line: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderRadius: 12, borderWidth: 1, borderColor: C.line, padding: 10 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' },

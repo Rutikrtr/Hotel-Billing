@@ -4,6 +4,7 @@ import {
   type StyleProp, type TextInputProps, type TextStyle, type ViewStyle,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Icon } from './icons';
 import { C, F, shadow } from './theme';
 
 /** Brand gradient fill behind any box (rounded to the box's own corners). */
@@ -208,13 +209,13 @@ export function SummaryCard({ label, value, note, noteColor, stats, right }: {
   );
 }
 
-/** Top of the Tables screen: the hotel's initials in a brand badge, its name, and today's date. */
+/** Top of the Tables screen: a serving-dish badge, the hotel's name, and today's date. */
 export function HotelHeader({ name, subtitle, right }: { name: string; subtitle: string; right?: React.ReactNode }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4, marginBottom: 12 }}>
-      <View style={{ width: 40, height: 40, borderRadius: 13, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
-        <Gradient radius={13} />
-        <T w="heavy" style={{ color: '#FFFFFF', fontSize: 15 }}>{initials(name) || 'MB'}</T>
+      <View style={{ width: 42, height: 42, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+        <Gradient radius={14} />
+        <View><Icon.cloche color="#FFFFFF" size={24} /></View>
       </View>
       <View style={{ flex: 1 }}>
         <T w="heavy" numberOfLines={1} style={{ fontSize: 17, letterSpacing: -0.2 }}>{name}</T>

@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "in.techyverve.masterbill",
-      "versionCode": 11,
+      "versionCode": 12,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundImage": "./assets/adaptive-bg.png",
@@ -60,7 +60,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 160,
+          "imageWidth": 200,
           "backgroundColor": "#FAF6F2"
         }
       ],

@@ -13,9 +13,9 @@ import { Empty, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
 import type { Stack } from '../Root';
 
-interface Row { id: number; kind: string; bill_no: string; label: string; method: string; total: number; closed_at: string; edit_count?: number }
+interface Row { id: number; kind: string; bill_no: string; label: string; method: string; total: number; closed_at: string; edit_count?: number; split?: Record<string, number> }
 const METHODS = ['Cash', 'UPI', 'Card'];
-const METHOD_COLOR: Record<string, string> = { Cash: '#15803D', UPI: '#6D28D9', Card: '#0E7490' };
+const METHOD_COLOR: Record<string, string> = { Cash: '#15803D', UPI: '#6D28D9', Card: '#0E7490', Split: '#B45309' };
 
 /** Set when a bill is edited or deleted, so the list reads again when you come back. */
 export const billsChanged = { current: false };
@@ -34,7 +34,15 @@ export default function BillsScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await q<Row[]>(sb.rpc('bill_list', { p_from: startOf(day), p_to: startOf(addDays(day, 1)) })));
+      const list = await q<Row[]>(sb.rpc('bill_list', { p_from: startOf(day), p_to: startOf(addDays(day, 1)) }));
+      // Split bills: one more small request for their parts, only on days that have any.
+      const ids = list.filter((r) => r.kind === 'order' && r.method === 'Split').map((r) => r.id);
+      if (ids.length) {
+        const parts = await q<{ id: number; payment_split: Record<string, number> | null }[]>(sb.from('orders').select('id, payment_split').in('id', ids));
+        const byId = new Map(parts.map((x) => [x.id, x.payment_split]));
+        for (const r of list) if (byId.has(r.id)) r.split = byId.get(r.id) ?? undefined;
+      }
+      setRows(list);
       setError(null);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }, [day]);
@@ -49,7 +57,7 @@ export default function BillsScreen() {
   const waiting = Object.values(orders).filter((o) => o.billed_at);
   const tableName = (id: number | null) => tables.find((t) => t.id === id)?.name ?? '';
   const total = rows.reduce((n, r) => n + Number(r.total), 0);
-  const by = (m: string) => rows.filter((r) => r.method === m).reduce((n, r) => n + Number(r.total), 0);
+  const by = (m: string) => rows.reduce((n, r) => n + (r.split ? Number(r.split[m] ?? 0) : r.method === m ? Number(r.total) : 0), 0);
 
   const [picking, setPicking] = useState(false);
   const dateChip = (
@@ -103,11 +111,11 @@ export default function BillsScreen() {
         renderItem={({ item: r }) => (
           <Pressable style={st.row} onPress={() => (r.kind === 'stay' ? nav.navigate('Stay', { stayId: r.id }) : nav.navigate('Bill', { orderId: r.id }))}>
             <View style={[st.badge, { backgroundColor: `${METHOD_COLOR[r.method] ?? C.muted}1A` }]}>
-              <T w="heavy" style={{ color: METHOD_COLOR[r.method] ?? C.muted, fontSize: r.method === 'Cash' ? 14 : 9.5 }}>{r.method === 'Cash' ? '₹' : r.method}</T>
+              <T w="heavy" style={{ color: METHOD_COLOR[r.method] ?? C.muted, fontSize: r.method === 'Cash' ? 14 : 9.5 }}>{r.method === 'Cash' ? '₹' : r.method === 'Split' ? '½' : r.method}</T>
             </View>
             <View style={{ flex: 1 }}>
               <T w="bold" numberOfLines={1}>{r.label} · {r.bill_no}</T>
-              <T style={{ color: C.muted, fontSize: 11.5 }}>{new Date(r.closed_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · {r.method}{r.edit_count ? ' · Edited' : ''}</T>
+              <T style={{ color: C.muted, fontSize: 11.5 }}>{new Date(r.closed_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · {r.split ? Object.entries(r.split).map(([m, a]) => `${m} ${rsShort(a)}`).join(' + ') : r.method}{r.edit_count ? ' · Edited' : ''}</T>
             </View>
             <T w="heavy">{rs(Number(r.total))}</T>
             <Icon.chevR color={C.muted} size={16} />

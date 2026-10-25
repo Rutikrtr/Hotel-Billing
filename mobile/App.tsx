@@ -1,7 +1,7 @@
 import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
@@ -10,6 +10,7 @@ import { restoreFromPhone, store } from './src/store';
 import { start } from './src/store/auth';
 import { C } from './src/ui/theme';
 import { ToastHost } from './src/ui/toast';
+import { StartScreen } from './src/ui/StartScreen';
 
 /** If anything fails while drawing, show the error instead of a frozen screen (so it can be reported and fixed). */
 class Guard extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
@@ -45,8 +46,12 @@ export default function App() {
     return () => { clearTimeout(t); clearTimeout(s); };
   }, []);
   const fontsReady = fontsLoaded || !!fontError || !fontWait;
-  // Fade the start screen out once the first screen is drawn (no blank flash in between).
-  useEffect(() => { if (fontsReady && ready) SplashScreen.hideAsync().catch(() => {}); }, [fontsReady, ready]);
+  // The phone's start screen hands over to our animated one at once (same logo, same place, no flash).
+  const [intro, setIntro] = useState(true);
+  useEffect(() => { SplashScreen.hideAsync().catch(() => {}); }, []);
+  // The first real screen (login or tables) is known once the saved login has been checked.
+  const authKnown = useSyncExternalStore(store.subscribe, () => store.getState().auth.status !== 'starting');
+  const appReady = fontsReady && ready && authKnown;
   return (
     <Guard>
       <Provider store={store}>
@@ -59,6 +64,7 @@ export default function App() {
                 <ToastHost />
               </View>
             ) : <View style={{ flex: 1 }} />}
+            {intro ? <StartScreen ready={appReady} onDone={() => setIntro(false)} /> : null}
           </View>
         </SafeAreaProvider>
       </Provider>

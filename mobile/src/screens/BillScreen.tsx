@@ -14,7 +14,7 @@ import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
 
-type Paid = Order & { payment_method: string | null; closed_at: string | null; tax_rate_bp: number | null; edit_count: number | null; dining_tables: { name: string } | null };
+type Paid = Order & { payment_split: Record<string, number> | null; payment_method: string | null; closed_at: string | null; tax_rate_bp: number | null; edit_count: number | null; dining_tables: { name: string } | null };
 const MONO = Platform.select({ android: 'monospace', ios: 'Menlo', default: 'monospace' });
 const dateTime = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 const pct = (bp: number) => `${+(bp / 100).toFixed(2)}%`;
@@ -32,7 +32,7 @@ export default function BillScreen() {
   const account = useAppSelector((s) => s.auth.account);
   const canEdit = account?.role === 'owner' && account.features?.bill_edit === true;
   const load = () => q<Paid>(sb.from('orders')
-      .select('id, table_id, section, is_parcel, status, discount, bill_no, billed_at, opened_at, closed_at, payment_method, tax_rate_bp, edit_count, dining_tables(name), items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)')
+      .select('id, table_id, section, is_parcel, status, discount, bill_no, billed_at, opened_at, closed_at, payment_method, payment_split, tax_rate_bp, edit_count, dining_tables(name), items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)')
       .eq('id', params.orderId).order('id', { referencedTable: 'order_items' }).single())
       .then(setOrder, (err: Error) => setError(err.message));
 
@@ -49,7 +49,7 @@ export default function BillScreen() {
   const print = async () => {
     setPrinting(true);
     try {
-      await printSlips(printer, [billSlip(paperOf(printer), order, settings, label, order.bill_no ?? 'Bill', order.payment_method, { rate, at })]);
+      await printSlips(printer, [billSlip(paperOf(printer), order, settings, label, order.bill_no ?? 'Bill', order.payment_method, { rate, at, split: order.payment_split })]);
       toast('Bill printed');
     } catch (err) { toast((err as Error).message, true); } finally { setPrinting(false); }
   };
@@ -101,6 +101,7 @@ export default function BillScreen() {
           {b.roundOff ? <KV k="Round off" v={fmt(b.roundOff)} /> : null}
         </>) : null}
         <KV k={`TOTAL (${b.itemCount})`} v={rs(b.total)} big />
+        {order.payment_split ? Object.entries(order.payment_split).map(([m, a]) => <KV key={m} k={`  Paid by ${m}`} v={fmt(a)} />) : null}
         <View style={st.rule} />
         <M style={{ textAlign: 'center' }}>Thank you! Visit again.</M>
       </View>

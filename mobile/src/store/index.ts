@@ -77,8 +77,11 @@ export const markKot = createAsyncThunk('orders/markKot', async (orderId: number
 });
 
 /** Finish the bill: the table is freed. Returns the bill number. */
-export const settle = createAsyncThunk('orders/settle', async (p: { order: Order; method: 'Cash' | 'UPI' | 'Card' }, api) => {
-  const billNo = await q<string>(sb.rpc('settle_order', { p_order_id: p.order.id, p_method: p.method }));
+export type Payment = { method: 'Cash' | 'UPI' | 'Card' } | { method: 'Split'; split: Partial<Record<'Cash' | 'UPI' | 'Card', number>> };
+export const settle = createAsyncThunk('orders/settle', async (p: { order: Order } & Payment, api) => {
+  const billNo = p.method === 'Split'
+    ? await q<string>(sb.rpc('settle_order_split', { p_order_id: p.order.id, p_split: p.split }))
+    : await q<string>(sb.rpc('settle_order', { p_order_id: p.order.id, p_method: p.method }));
   api.dispatch(orderClosed(keyOf(p.order)));
   return billNo;
 });

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeBill, fmt, rs, rsShort, toPaise } from '../money';
 import { billSlip, kotSlip, parcelKitchenSlip, tokenNo } from '../printing/escpos';
 import { paperOf, printSlips } from '../printing';
-import { generateBill, markKot, saveOrder, settle, store, useAppDispatch, useAppSelector, type Where } from '../store';
+import { generateBill, markKot, saveOrder, settle, store, useAppDispatch, useAppSelector, type Payment, type Where } from '../store';
 import { loginName } from '../store/auth';
 import { change, hasPending, mergeLines, setDiscount, type Line } from '../store/cart';
 import { parcelKey, tableKey, type Order } from '../types';
@@ -18,6 +18,8 @@ import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
 
 type Method = 'Cash' | 'UPI' | 'Card';
+const METHODS: Method[] = ['Cash', 'UPI', 'Card'];
+type PayState = { method: Method | 'Split'; parts: Record<Method, string> };
 
 export default function OrderScreen() {
   const nav = useNavigation<NativeStackNavigationProp<Stack>>();
@@ -39,13 +41,41 @@ export default function OrderScreen() {
   const canBill = account?.can_bill === true;
   const rate = settings?.tax_rate_bp ?? 0;
   const table = tables.find((t) => t.id === params.tableId);
-  const label = parcel ? (order?.bill_no ? `Parcel #${tokenNo(order.bill_no)}` : 'Parcel') : `${table?.name ?? 'Table'}${section !== 'A' ? `-${section}` : ''}`;
+  // Sections: different groups sharing one table each get their own order and bill (A, B, C…), like the web app.
+  const allOrders = useAppSelector((s) => s.data.orders);
+  const carts = useAppSelector((s) => s.cart);
+  const sections = useMemo(() => {
+    if (parcel) return ['A'];
+    const prefix = `t:${params.tableId}:`;
+    const fromOrders = Object.values(allOrders).filter((o) => !o.is_parcel && o.table_id === params.tableId).map((o) => o.section);
+    const fromCarts = Object.keys(carts).filter((k) => k.startsWith(prefix) && hasPending(carts[k])).map((k) => k.slice(prefix.length));
+    return [...new Set([...fromOrders, ...fromCarts, section])].sort();
+  }, [allOrders, carts, section, parcel, params.tableId]);
+  const multi = sections.length > 1;
+  const label = parcel ? (order?.bill_no ? `Parcel #${tokenNo(order.bill_no)}` : 'Parcel') : `${table?.name ?? 'Table'}${multi || order?.is_split || section !== 'A' ? `-${section}` : ''}`;
+  const sectionTotal = (x: string) => {
+    const o = allOrders[tableKey(params.tableId as number, x)];
+    return o ? computeBill(o.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), o.discount, settings?.tax_rate_bp ?? 0).total : null;
+  };
+  // Switching section: unsaved taps of this section are saved first (in the background).
+  const goSection = (x: string) => {
+    if (hasPending(store.getState().cart[key])) dispatch(saveOrder(where)).unwrap().catch(() => toast(`${label}: not saved yet (no internet). It will stay on this phone.`, true));
+    setSheet(false);
+    nav.setParams({ section: x });
+  };
+  const addSection = () => {
+    const next = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find((x) => !sections.includes(x));
+    if (!next) { toast('This table already has the most sections it can.', true); return; }
+    goSection(next);
+    toast(`Section ${next} added · take the second group’s order`);
+  };
 
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [payFor, setPayFor] = useState<Order | null>(null);
+  const [payment, setPayment] = useState<PayState>({ method: 'Cash', parts: { Cash: '', UPI: '', Card: '' } });
 
   const lines = useMemo(() => mergeLines(order, cart, menu), [order, cart, menu]);
   const qtyOf = (menuId: number) => lines.find((l) => l.menuId === menuId)?.quantity ?? 0;
@@ -55,7 +85,17 @@ export default function OrderScreen() {
   const kotOn = !parcel && settings?.kot_tables === true;
   const toKitchen = lines.filter((l) => l.quantity !== l.kotQty);
 
-  useEffect(() => { nav.setOptions({ title: parcel ? `🛍 ${label}` : label }); }, [label]);
+  const hasItems = lines.length > 0;
+  useEffect(() => {
+    nav.setOptions({
+      title: parcel ? `Parcel${order?.bill_no ? ` #${tokenNo(order.bill_no)}` : ''}` : label,
+      headerRight: parcel || !hasItems ? undefined : () => (
+        <Pressable onPress={addSection} hitSlop={8} style={st.addSection} accessibilityRole="button" accessibilityLabel="Add a section for another group">
+          <T w="bold" style={{ color: C.accent, fontSize: 13 }}>＋ Section</T>
+        </Pressable>
+      ),
+    });
+  }, [label, hasItems, sections.join('')]);
 
   // Leaving with unsaved taps: save them in the background (they stay on the phone if there is no internet).
   useEffect(() => nav.addListener('beforeRemove', () => {
@@ -101,29 +141,67 @@ export default function OrderScreen() {
     setSheet(false);
   });
 
+  /** The chosen payment as the server wants it, or an error message when a split doesn't add up. */
+  const paymentFor = (total: number): Payment | string => {
+    if (payment.method !== 'Split') return { method: payment.method };
+    const split: Partial<Record<Method, number>> = {};
+    try { for (const m of METHODS) { const v = toPaise(payment.parts[m]); if (v) split[m] = v; } } catch (err) { return (err as Error).message; }
+    const sum = Object.values(split).reduce((n, v) => n + (v ?? 0), 0);
+    if (Object.keys(split).length < 2) return 'For a split, enter the amount for at least two ways of paying.';
+    if (sum !== total) return `The parts add up to ${rs(sum)}, but the bill is ${rs(total)}.`;
+    return { method: 'Split', split };
+  };
+
+  /** Print the customer's bill on this phone's printer; for a parcel, the kitchen copy too (see printParcel). */
+  const printBill = async (o: Order, billNo: string, pay: Payment | null) => {
+    if (!settings) return;
+    const meta = { method: pay?.method ?? null, split: pay?.method === 'Split' ? pay.split : null };
+    const billSlips = [billSlip(paper, o, settings, label, billNo, pay?.method ?? null, meta)];
+    if (!printer.bill) { toast(`Bill ${billNo} saved · no printer set up on this phone`, true); return; }
+    const kitchenPrinter = printer.separateKitchen && printer.kitchen;
+    // Parcel with a kitchen printer: the kitchen copy goes straight there with the bill.
+    if (o.is_parcel && kitchenPrinter) billSlips.push(parcelKitchenSlip(paper, o, billNo));
+    try {
+      const failed = await printSlips(printer, billSlips);
+      if (failed.length) toast(failed[0], true);
+    } catch (err) { toast(`Bill ${billNo} saved, but printing failed: ${(err as Error).message}`, true); return; }
+    // Parcel without a kitchen printer: customer's bill first, then offer the kitchen copy on the same printer.
+    if (o.is_parcel && !kitchenPrinter) {
+      await new Promise<void>((done) => Alert.alert('Kitchen copy', `Print the kitchen copy for Parcel #${tokenNo(billNo)} now? Tear off the customer's bill first.`, [
+        { text: 'Skip', style: 'cancel', onPress: () => done() },
+        { text: 'Print', onPress: () => { printSlips(printer, [parcelKitchenSlip(paper, o, billNo)]).catch((err) => toast((err as Error).message, true)).finally(done); } },
+      ], { cancelable: false }));
+    }
+  };
+
   const onPrintBill = () => run('bill', async () => {
     const saved = await save();
     if (!saved || !settings) return;
     const quick = settings.quick_close !== false;
-    const billNo = quick ? await dispatch(settle({ order: saved, method: 'Cash' })).unwrap() : await dispatch(generateBill(saved)).unwrap();
-    const slips = [billSlip(paper, saved, settings, label, billNo, quick ? 'Cash' : null)];
-    if (saved.is_parcel) slips.push(parcelKitchenSlip(paper, saved, billNo));
-    if (printer.bill) {
-      try {
-        const failed = await printSlips(printer, slips);
-        if (failed.length) toast(failed[0], true);
-      } catch (err) { toast(`Bill ${billNo} saved, but printing failed: ${(err as Error).message}`, true); }
-    } else toast(`Bill ${billNo} saved · no printer set up on this phone`, true);
-    setSheet(false);
-    if (quick) { toast(saved.is_parcel ? `Parcel #${tokenNo(billNo)} done` : `Bill ${billNo} done · ${label} is free`); nav.goBack(); }
-    else setPayFor({ ...saved, bill_no: billNo });
+    if (quick) {
+      const total = computeBill(saved.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), saved.discount, rate).total;
+      const pay = paymentFor(total);
+      if (typeof pay === 'string') { toast(pay, true); return; }
+      const billNo = await dispatch(settle({ order: saved, ...pay })).unwrap();
+      setSheet(false);
+      await printBill(saved, billNo, pay);
+      toast(saved.is_parcel ? `Parcel #${tokenNo(billNo)} done` : `Bill ${billNo} done · ${label} is free`);
+      nav.goBack();
+    } else {
+      const billNo = await dispatch(generateBill(saved)).unwrap();
+      await printBill(saved, billNo, null);
+      setPayFor({ ...saved, bill_no: billNo });
+    }
   });
 
-  const pay = (method: Method) => run('pay', async () => {
+  const pay = () => run('pay', async () => {
     const o = payFor ?? order;
     if (!o) return;
-    const billNo = await dispatch(settle({ order: o, method })).unwrap();
-    toast(`Paid by ${method} · bill ${billNo}`);
+    const total = computeBill(o.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), o.discount, rate).total;
+    const p = paymentFor(total);
+    if (typeof p === 'string') { toast(p, true); return; }
+    const billNo = await dispatch(settle({ order: o, ...p })).unwrap();
+    toast(`Paid by ${p.method === 'Split' ? Object.keys(p.split).join(' + ') : p.method} · bill ${billNo}`);
     setPayFor(null);
     setSheet(false);
     nav.goBack();
@@ -152,6 +230,19 @@ export default function OrderScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={st.tools}>
+        {multi ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 6 }}>
+            {sections.map((x) => {
+              const total = sectionTotal(x);
+              return (
+                <Pressable key={x} onPress={() => x !== section && goSection(x)} style={[st.secTab, x === section && st.secOn]} accessibilityRole="tab" accessibilityState={{ selected: x === section }}>
+                  <T w="heavy" style={{ fontSize: 13, color: x === section ? '#FFFFFF' : C.text }}>Section {x}</T>
+                  <T w="semibold" style={{ fontSize: 11.5, color: x === section ? '#FFFFFF' : C.muted }}>{total != null ? rsShort(total) : 'New'}</T>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TextInput value={search} onChangeText={setSearch} placeholder="Search or tap the mic and say a dish" placeholderTextColor="#A39589" style={[st.search, { flex: 1 }]} accessibilityLabel="Search dishes" />
           <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
@@ -189,9 +280,8 @@ export default function OrderScreen() {
           {payFor ? (
             <View style={{ padding: 16, gap: 10 }}>
               <T w="heavy" style={{ fontSize: 30, textAlign: 'center' }}>{rs(computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total)}</T>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {(['Cash', 'UPI', 'Card'] as Method[]).map((m) => <Button key={m} title={m} onPress={() => pay(m)} busy={busy === 'pay'} style={{ flex: 1 }} />)}
-              </View>
+              <PayPicker value={payment} onChange={setPayment} total={computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total} />
+              <Button title="Mark as Paid" onPress={pay} busy={busy === 'pay'} />
             </View>
           ) : (
             <>
@@ -206,6 +296,7 @@ export default function OrderScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
                   <T w="heavy" style={{ fontSize: 20 }}>Total</T><T w="heavy" style={{ fontSize: 20, color: C.accent }}>{rs(bill.total)}</T>
                 </View>
+                {canBill && settings?.quick_close !== false && !order?.billed_at ? <PayPicker value={payment} onChange={setPayment} total={bill.total} /> : null}
               </View>
               <View style={{ paddingHorizontal: 16, gap: 8 }}>
                 {kotOn && toKitchen.length ? <Button kind="dark" title={`Send to Kitchen · ${toKitchen.reduce((n, l) => n + Math.abs(l.quantity - l.kotQty), 0)} items`} onPress={onKitchen} busy={busy === 'kot'} disabled={!!busy && busy !== 'kot'} /> : null}
@@ -249,6 +340,39 @@ function OrderLine({ l, kotOn, onTap }: { l: Line; kotOn: boolean; onTap: (d: nu
   );
 }
 
+/** How the customer pays: one tap for Cash / UPI / Card, or Split with an amount for each. */
+function PayPicker({ value, onChange, total }: { value: PayState; onChange: (v: PayState) => void; total: number }) {
+  let sum = 0;
+  for (const m of METHODS) { try { sum += toPaise(value.parts[m]); } catch { /* shown on pay */ } }
+  const left = total - sum;
+  const setPart = (m: Method, text: string) => onChange({ ...value, parts: { ...value.parts, [m]: text } });
+  return (
+    <View style={{ marginTop: 8, gap: 8 }}>
+      <View style={st.payRow}>
+        {([...METHODS, 'Split'] as const).map((m) => (
+          <Pressable key={m} onPress={() => onChange({ ...value, method: m })} style={[st.payOpt, value.method === m && st.payOn]} accessibilityRole="radio" accessibilityState={{ checked: value.method === m }}>
+            <T w="bold" style={{ fontSize: 13.5, color: value.method === m ? '#FFFFFF' : C.text }}>{m}</T>
+          </Pressable>
+        ))}
+      </View>
+      {value.method === 'Split' ? (
+        <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {METHODS.map((m) => (
+              <View key={m} style={{ flex: 1, gap: 3 }}>
+                <T w="semibold" style={{ fontSize: 11.5, color: C.muted }}>{m} (₹)</T>
+                <TextInput value={value.parts[m]} onChangeText={(v) => setPart(m, v)} keyboardType="decimal-pad" placeholder="0" style={st.part} accessibilityLabel={`${m} amount`}
+                  onFocus={() => { if (!value.parts[m] && left > 0 && METHODS.some((x) => x !== m && value.parts[x])) setPart(m, String(left / 100)); }} />
+              </View>
+            ))}
+          </View>
+          <T w="semibold" style={{ fontSize: 12, color: left === 0 ? C.free : C.danger }}>{left === 0 ? '✓ Adds up to the total' : left > 0 ? `${rs(left)} still to split` : `${rs(-left)} more than the total`}</T>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function Row({ k, v }: { k: string; v: string }) {
   return <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><T style={{ color: C.muted }}>{k}</T><T w="semibold">{v}</T></View>;
 }
@@ -282,5 +406,12 @@ const st = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, marginBottom: 10 },
   line: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },
   totals: { padding: 16, paddingTop: 10, gap: 3 },
+  addSection: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: C.accentSoft },
+  secTab: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, minWidth: 92 },
+  secOn: { backgroundColor: C.ink, borderColor: C.ink },
+  payRow: { flexDirection: 'row', gap: 6 },
+  payOpt: { flex: 1, height: 38, borderRadius: 10, borderWidth: 1, borderColor: C.line, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface },
+  payOn: { backgroundColor: C.accent, borderColor: C.accent },
+  part: { minHeight: 38, borderWidth: 1, borderColor: C.line, borderRadius: 10, paddingHorizontal: 10, fontFamily: F.semibold, color: C.text, textAlign: 'right' },
   discount: { width: 96, minHeight: 36, borderWidth: 1, borderColor: C.line, borderRadius: 10, textAlign: 'right', paddingHorizontal: 10, fontFamily: F.semibold, color: C.text },
 });

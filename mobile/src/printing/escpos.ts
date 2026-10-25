@@ -82,7 +82,7 @@ function header(s: Slip, settings: Settings, rate: number) {
 }
 
 /** Extra details for reprinting a paid bill: its own GST rate, time and payment. */
-export interface BillMeta { rate?: number; at?: string; method?: string | null }
+export interface BillMeta { rate?: number; at?: string; method?: string | null; split?: Partial<Record<string, number>> | null }
 
 /** The customer's bill, short: one "qty name amount" line per dish, then the total. */
 export function billSlip(p: Paper, order: Order, settings: Settings, label: string, billNo: string, method: string | null, meta: BillMeta = {}): Slip {
@@ -120,7 +120,10 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
     if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
     if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
   }
-  s.bold(true).size(1, 2).cols(`TOTAL (${b.itemCount})`, `Rs.${fmt(b.total)}`).size(1, 1).bold(false).rule();
+  s.bold(true).size(1, 2).cols(`TOTAL (${b.itemCount})`, `Rs.${fmt(b.total)}`).size(1, 1).bold(false);
+  // A split payment lists each part under the total.
+  for (const [m, amt] of Object.entries(meta.split ?? {})) if (amt) s.cols(`  Paid by ${m}`, fmt(amt));
+  s.rule();
   return s.align('center').line('Thank you! Visit again.').cut();
 }
 
