@@ -98,7 +98,7 @@ export default function SettingsScreen() {
         {account?.can_bill || settings?.kot_tables ? <Button kind="secondary" title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
         <Button kind="danger" title="Sign Out" onPress={out} />
       </Card>
-      <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill · Techyverve Solution Limited</T>
+      <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill 2.0 · Techyverve Solution Limited</T>
     </ScrollView>
   );
 }

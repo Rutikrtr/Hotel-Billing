@@ -31,9 +31,6 @@ begin
 end $f$;
 revoke execute on function public.bump_data_version() from public, anon, authenticated;
 
-drop trigger if exists bump_data_version on public.menu_items;
-create trigger bump_data_version after insert or update or delete on public.menu_items for each row execute function public.bump_data_version();
-drop trigger if exists bump_data_version on public.dining_tables;
-create trigger bump_data_version after insert or update or delete on public.dining_tables for each row execute function public.bump_data_version();
-drop trigger if exists bump_data_version on public.restaurants;
-create trigger bump_data_version after insert or update on public.restaurants for each row execute function public.bump_data_version();
+create or replace trigger bump_data_version after insert or update or delete on public.menu_items for each row execute function public.bump_data_version();
+create or replace trigger bump_data_version after insert or update or delete on public.dining_tables for each row execute function public.bump_data_version();
+create or replace trigger bump_data_version after insert or update on public.restaurants for each row execute function public.bump_data_version();
