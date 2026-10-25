@@ -1,5 +1,8 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import {
+  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View,
+  type StyleProp, type TextInputProps, type TextStyle, type ViewStyle,
+} from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { C, F } from './theme';
 
@@ -53,9 +56,9 @@ export function Card({ children, style }: { children: React.ReactNode; style?: S
   return <View style={[s.card, style]}>{children}</View>;
 }
 
-export function Chip({ label, on, onPress }: { label: string; on?: boolean; onPress: () => void }) {
+export function Chip({ label, on, onPress, onLongPress }: { label: string; on?: boolean; onPress: () => void; onLongPress?: () => void }) {
   return (
-    <Pressable onPress={onPress} hitSlop={6} style={[s.chip, on && s.chipOn]} accessibilityRole="button" accessibilityState={{ selected: !!on }}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} hitSlop={6} style={[s.chip, on && s.chipOn]} accessibilityRole="button" accessibilityState={{ selected: !!on }}>
       <T w="bold" style={{ fontSize: 13, color: on ? '#FFFFFF' : C.text }}>{label}</T>
     </Pressable>
   );
@@ -77,5 +80,81 @@ export const s = StyleSheet.create({
   card: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 14 },
   chip: { height: 34, paddingHorizontal: 13, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: 'center', marginRight: 6 },
   chipOn: { backgroundColor: C.ink, borderColor: C.ink },
+  input: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 15, color: C.text },
+  sheet: { backgroundColor: C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
   diet: { width: 13, height: 13, borderWidth: 1.5, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** Page title with a small line above it and an optional button on the right (same as the web app). */
+export function Header({ eyebrow, title, right }: { eyebrow?: string; title: string; right?: React.ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6, marginBottom: 12, gap: 10 }}>
+      <View style={{ flex: 1 }}>
+        {eyebrow ? <T w="heavy" numberOfLines={1} style={{ color: C.accent, fontSize: 11.5, letterSpacing: 0.6, textTransform: 'uppercase' }}>{eyebrow}</T> : null}
+        <T w="heavy" style={{ fontSize: 26, letterSpacing: -0.4 }}>{title}</T>
+      </View>
+      {right}
+    </View>
+  );
+}
+
+export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
+      <T w="heavy" style={{ fontSize: 16, flex: 1 }}>{children}</T>
+      {right}
+    </View>
+  );
+}
+
+export function Field({ label, style, ...p }: TextInputProps & { label: string }) {
+  return (
+    <View style={{ gap: 5, flex: (style as ViewStyle | undefined)?.flex }}>
+      <T w="semibold" style={{ fontSize: 12.5, color: C.muted }}>{label}</T>
+      <TextInput placeholderTextColor="#A89A90" {...p} style={[s.input, style]} />
+    </View>
+  );
+}
+
+export function ToggleRow({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Pressable onPress={() => onChange(!value)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }} accessibilityRole="switch" accessibilityState={{ checked: value }}>
+      <View style={{ flex: 1 }}>
+        <T w="semibold">{label}</T>
+        {hint ? <T style={{ color: C.muted, fontSize: 12 }}>{hint}</T> : null}
+      </View>
+      <Switch value={value} onValueChange={(v) => { onChange(v); }} trackColor={{ true: C.free, false: '#D6CCC4' }} thumbColor="#FFFFFF" />
+    </Pressable>
+  );
+}
+
+/** A card that slides up from the bottom (forms and confirmations). */
+export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
+        <Pressable style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(31,22,17,0.45)' }]} onPress={onClose} accessibilityLabel="Close" />
+        <View style={s.sheet}>
+          <View style={{ alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.line, marginBottom: 10 }} />
+          <T w="heavy" style={{ fontSize: 19, marginBottom: 12 }}>{title}</T>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 12, paddingBottom: 24 }}>{children}</ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+export function Empty({ icon, text }: { icon: string; text: string }) {
+  return (
+    <View style={[s.card, { alignItems: 'center', paddingVertical: 28, gap: 6 }]}>
+      <T style={{ fontSize: 30 }}>{icon}</T>
+      <T style={{ color: C.muted, textAlign: 'center' }}>{text}</T>
+    </View>
+  );
+}
+
+export const initials = (name: string) => name.split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
+
+export function Pill({ label, color, bg }: { label: string; color: string; bg: string }) {
+  return <View style={{ backgroundColor: bg, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}><T w="bold" style={{ color, fontSize: 11 }}>{label}</T></View>;
+}

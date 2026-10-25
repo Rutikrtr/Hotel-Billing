@@ -18,6 +18,7 @@ export interface Settings {
   tax_rate_bp: number;
   quick_close: boolean | null;
   kot_tables: boolean;
+  staff_limit?: number | null;
 }
 
 export interface MenuItem {

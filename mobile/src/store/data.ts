@@ -23,13 +23,19 @@ export const fetchOpenOrders = async (): Promise<Order[]> =>
 /** Everything the hotel screens need, in 4 requests at once. */
 export const loadAll = createAsyncThunk('data/loadAll', async () => {
   const [settings, menu, tables, orders] = await Promise.all([
-    q<Settings>(sb.from('restaurants').select('id, hotel_name, hotel_address, hotel_phone, hotel_gstin, tax_rate_bp, quick_close, kot_tables').single()),
+    q<Settings>(sb.from('restaurants').select('id, hotel_name, hotel_address, hotel_phone, hotel_gstin, tax_rate_bp, quick_close, kot_tables, staff_limit').single()),
     q<MenuItem[]>(sb.from('menu_items').select('id, name, category, price, is_veg, available, is_favorite').order('id')),
     q<Table[]>(sb.from('dining_tables').select('id, name, sort').order('sort').order('name')),
     fetchOpenOrders(),
   ]);
   return { settings, menu, tables, orders };
 });
+
+const MENU_COLUMNS = 'id, name, category, price, is_veg, available, is_favorite';
+/** After the owner edits the menu, tables or settings: re-read just that part. */
+export const reloadMenu = createAsyncThunk('data/reloadMenu', () => q<MenuItem[]>(sb.from('menu_items').select(MENU_COLUMNS).order('id')));
+export const reloadTables = createAsyncThunk('data/reloadTables', () => q<Table[]>(sb.from('dining_tables').select('id, name, sort').order('sort').order('name')));
+export const reloadSettings = createAsyncThunk('data/reloadSettings', () => q<Settings>(sb.from('restaurants').select('id, hotel_name, hotel_address, hotel_phone, hotel_gstin, tax_rate_bp, quick_close, kot_tables, staff_limit').single()));
 
 /** Only the open orders (1 request): used when another phone changes an order. */
 export const refreshOrders = createAsyncThunk('data/refreshOrders', fetchOpenOrders);
@@ -57,6 +63,9 @@ const data = createSlice({
       Object.assign(s, { ...a.payload, orders: byKey(a.payload.orders), loading: false, error: null, loadedAt: Date.now() });
     });
     b.addCase(loadAll.rejected, (s, a) => { s.loading = false; s.error = a.error.message ?? 'Couldn’t load'; });
+    b.addCase(reloadMenu.fulfilled, (s, a) => { s.menu = a.payload; });
+    b.addCase(reloadTables.fulfilled, (s, a) => { s.tables = a.payload; });
+    b.addCase(reloadSettings.fulfilled, (s, a) => { s.settings = a.payload; });
     b.addCase(refreshOrders.fulfilled, (s, a) => { s.orders = byKey(a.payload); });
   },
 });

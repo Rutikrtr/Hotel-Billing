@@ -3,10 +3,12 @@ import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { warmUp } from './printing/ble';
+import AnalyticsScreen from './screens/AnalyticsScreen';
 import BillsScreen from './screens/BillsScreen';
 import LoginScreen from './screens/LoginScreen';
+import MenuScreen from './screens/MenuScreen';
 import OrderScreen from './screens/OrderScreen';
 import PrinterScreen from './screens/PrinterScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -16,6 +18,7 @@ import { recheck, signOut } from './store/auth';
 import { loadAll, refreshOrders, resetData } from './store/data';
 import { sb } from './supabase';
 import { Button, T } from './ui/kit';
+import { Icon } from './ui/icons';
 import { Logo } from './ui/Logo';
 import { C, F } from './ui/theme';
 
@@ -29,30 +32,24 @@ const Tab = createBottomTabNavigator();
 
 const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: C.bg, primary: C.accent, card: C.surface, text: C.text, border: C.line } };
 
-const icon = (d: string) => ({ color }: { color: string }) => (
-  <Svg width={22} height={22} viewBox="0 0 24 24" fill={color}><Path d={d} fillRule="evenodd" /></Svg>
-);
-const ICONS = {
-  tables: ({ color }: { color: string }) => (
-    <Svg width={22} height={22} viewBox="0 0 24 24" fill={color}>
-      <Rect x={3} y={3} width={8} height={8} rx={2} /><Rect x={13} y={3} width={8} height={8} rx={2} />
-      <Rect x={3} y={13} width={8} height={8} rx={2} /><Rect x={13} y={13} width={8} height={8} rx={2} />
-    </Svg>
-  ),
-  bills: icon('M5 2.5h14v19l-2.33-1.6L14.33 21.5 12 19.9l-2.33 1.6-2.34-1.6L5 21.5zM8 7v1.6h8V7zm0 4v1.6h8V11zm0 4v1.6h5V15z'),
-  settings: icon('M10.3 2h3.4l.5 2.6a8 8 0 0 1 1.9 1.1l2.5-.9 1.7 2.9-2 1.7a8 8 0 0 1 0 2.2l2 1.7-1.7 2.9-2.5-.9a8 8 0 0 1-1.9 1.1l-.5 2.6h-3.4l-.5-2.6a8 8 0 0 1-1.9-1.1l-2.5.9-1.7-2.9 2-1.7a8 8 0 0 1 0-2.2l-2-1.7 1.7-2.9 2.5.9a8 8 0 0 1 1.9-1.1zM12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z'),
-};
-
 function Tabs() {
-  const canBill = useAppSelector((s) => s.auth.account?.can_bill === true);
+  const account = useAppSelector((s) => s.auth.account);
+  const insets = useSafeAreaInsets();
+  const feat = (k: string) => account?.features?.[k] === true;
+  const bill = account?.can_bill === true;
+  const owner = account?.role === 'owner';
   return (
     <Tab.Navigator screenOptions={{
-      headerShown: false, tabBarActiveTintColor: C.accent, tabBarInactiveTintColor: C.muted,
-      tabBarLabelStyle: { fontFamily: F.bold, fontSize: 11 }, tabBarStyle: { height: 60, paddingBottom: 8, paddingTop: 6 },
+      headerShown: false, tabBarActiveTintColor: C.accent, tabBarInactiveTintColor: C.muted, tabBarHideOnKeyboard: true,
+      tabBarLabelStyle: { fontFamily: F.bold, fontSize: 11, lineHeight: 15, marginTop: 2 },
+      // The phone's own buttons / gesture bar sit under the tabs, so the bar grows by that much.
+      tabBarStyle: { height: 64 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 6, backgroundColor: C.surface, borderTopColor: C.line },
     }}>
-      <Tab.Screen name="Tables" component={TablesScreen} options={{ tabBarIcon: ICONS.tables }} />
-      {canBill ? <Tab.Screen name="Bills" component={BillsScreen} options={{ tabBarIcon: ICONS.bills }} /> : null}
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: ICONS.settings }} />
+      <Tab.Screen name="Tables" component={TablesScreen} options={{ tabBarIcon: Icon.tables }} />
+      {bill ? <Tab.Screen name="Bills" component={BillsScreen} options={{ tabBarIcon: Icon.bills }} /> : null}
+      {bill && feat('trending') ? <Tab.Screen name="Analytics" component={AnalyticsScreen} options={{ tabBarIcon: Icon.analytics }} /> : null}
+      {owner ? <Tab.Screen name="Menu" component={MenuScreen} options={{ tabBarIcon: Icon.menu }} /> : null}
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ tabBarIcon: Icon.settings }} />
     </Tab.Navigator>
   );
 }
