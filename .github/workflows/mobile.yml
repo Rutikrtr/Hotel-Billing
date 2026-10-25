@@ -35,7 +35,7 @@ jobs:
           cache-read-only: false
       - run: npm ci
       - name: Type check and logic tests
-        run: npx tsc --noEmit && npx tsx --test tests/logic.test.ts
+        run: npx tsc --noEmit && npx tsx --test tests/*.test.ts
       - name: Generate the Android project
         run: npx expo prebuild --platform android --no-install
       - name: Build unsigned release APK
@@ -44,7 +44,9 @@ jobs:
           # Release builds are signed later with the private key, not Expo's debug key.
           sed -i 's/signingConfig signingConfigs.debug//' app/build.gradle
           # Phones use ARM; x86_64 is only for the emulator test. 32-bit x86 is skipped to save build time.
-          ./gradlew assembleRelease --build-cache --parallel -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64
+          sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86_64/' gradle.properties
+          grep reactNativeArchitectures gradle.properties
+          ./gradlew assembleRelease --build-cache --parallel
       - name: Publish to the mobile-apk-unsigned branch
         working-directory: mobile
         run: |

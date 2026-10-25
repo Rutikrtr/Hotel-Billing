@@ -42,19 +42,23 @@ export async function scan(onFound: (d: { id: string; name: string }) => void, s
 }
 export const stopScan = () => { try { ble().stopDeviceScan(); } catch { /* not scanning */ } };
 
-const conns = new Map<string, { device: Device; char: Characteristic }>();
+const conns = new Map<string, { device: Device; char: Characteristic; chunk: number }>();
 
-async function connect(id: string): Promise<{ device: Device; char: Characteristic }> {
+async function connect(id: string): Promise<{ device: Device; char: Characteristic; chunk: number }> {
   const have = conns.get(id);
   if (have && (await have.device.isConnected().catch(() => false))) return have;
   if (!(await askPermission())) throw new Error('Allow Bluetooth (Nearby devices) for Master Bill in phone Settings.');
-  const device = await within(ble().connectToDevice(id, { timeout: 12000 }), 15000, 'Printer didn’t answer. Check it is on and nearby.');
+  let device = await within(ble().connectToDevice(id, { timeout: 12000 }), 15000, 'Printer didn’t answer. Check it is on and nearby.');
+  // Android starts every link at 20 bytes per write and silently cuts longer writes, which printed
+  // half-lines. Ask for bigger writes, then never send more than the link actually allows.
+  if (Platform.OS === 'android') device = await within(device.requestMTU(185), 4000, '').catch(() => device);
   await within(device.discoverAllServicesAndCharacteristics(), 10000, 'Printer didn’t answer. Turn it off and on, then try again.');
   for (const service of await device.services()) {
     const chars = await service.characteristics();
     const char = chars.find((c) => c.isWritableWithoutResponse) ?? chars.find((c) => c.isWritableWithResponse);
     if (char) {
-      const conn = { device, char };
+      const chunk = Math.max(20, Math.min(180, (device.mtu || 23) - 3));
+      const conn = { device, char, chunk };
       conns.set(id, conn);
       device.onDisconnected(() => conns.delete(id));
       return conn;
@@ -63,11 +67,11 @@ async function connect(id: string): Promise<{ device: Device; char: Characterist
   throw new Error('Connected, but this printer has no print channel. It may not be a Bluetooth LE printer.');
 }
 
-/** Send bytes in small pieces (cheap printers have tiny buffers). */
+/** Send bytes in pieces that fit the Bluetooth link, with short pauses (cheap printers have tiny buffers). */
 export async function printBytes(id: string, data: Uint8Array): Promise<void> {
-  const { char } = await connect(id);
-  for (let i = 0; i < data.length; i += 100) {
-    const piece = Buffer.from(data.slice(i, i + 100)).toString('base64');
+  const { char, chunk } = await connect(id);
+  for (let i = 0; i < data.length; i += chunk) {
+    const piece = Buffer.from(data.slice(i, i + chunk)).toString('base64');
     const write = char.isWritableWithoutResponse ? char.writeWithoutResponse(piece) : char.writeWithResponse(piece);
     try {
       await within(write, 8000, 'Printer stopped answering while printing. Check it is on, then try again.');
@@ -75,7 +79,7 @@ export async function printBytes(id: string, data: Uint8Array): Promise<void> {
       conns.delete(id);
       throw err;
     }
-    await new Promise((r) => setTimeout(r, 25));
+    await new Promise((r) => setTimeout(r, char.isWritableWithoutResponse ? 20 : 0));
   }
 }
 

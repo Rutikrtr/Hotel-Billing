@@ -95,7 +95,7 @@ export default function AnalyticsScreen() {
       ['Discount given', money(t.discount)],
       ...(t.tax ? [['GST collected', money(t.tax)] as [string, string]] : []),
       ['Parcels', `${t.parcels} · ${money(t.parcel_sales)}`],
-      ...(t.dine_in_minutes ? [['Avg. time at table', `${t.dine_in_minutes} min`] as [string, string]] : []),
+      ...(t.dine_in_minutes ? [['Avg. time at table', t.dine_in_minutes! >= 60 ? `${Math.floor(t.dine_in_minutes! / 60)} h ${t.dine_in_minutes! % 60} min` : `${t.dine_in_minutes} min`] as [string, string]] : []),
       ...(peak ? [['Busiest hour', peak.label] as [string, string]] : []),
       ...(days > 1 && best ? [['Best day', `${shortDate(best.day)} · ${money(best.sales)}`] as [string, string]] : []),
     ];
