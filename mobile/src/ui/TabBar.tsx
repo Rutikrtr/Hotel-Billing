@@ -3,7 +3,7 @@ import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './icons';
-import { T } from './kit';
+import { Gradient, T } from './kit';
 import { C, shadow } from './theme';
 
 const ICONS: Record<string, (p: { color: string; size?: number }) => React.ReactElement> = {
@@ -30,9 +30,12 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
           return (
             <Pressable key={route.key} onPress={press} style={[st.tab, on && st.on]} hitSlop={4}
               accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={label}>
-              <Ico color={on ? '#FFFFFF' : C.muted} size={21} />
-              {on ? <T w="bold" numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 13 }}>{label}</T>
-                : <T w="semibold" numberOfLines={1} style={{ color: C.muted, fontSize: 10.5 }}>{label}</T>}
+              {on ? <Gradient radius={20} /> : null}
+              <View style={[{ alignItems: 'center', gap: 2, zIndex: 1 }, on && { flexDirection: 'row', gap: 6 }]}>
+                <Ico color={on ? '#FFFFFF' : C.muted} size={21} />
+                {on ? <T w="bold" numberOfLines={1} style={{ color: '#FFFFFF', fontSize: 13 }}>{label}</T>
+                  : <T w="semibold" numberOfLines={1} style={{ color: C.muted, fontSize: 10.5 }}>{label}</T>}
+              </View>
             </Pressable>
           );
         })}
@@ -44,5 +47,5 @@ export default function TabBar({ state, descriptors, navigation }: BottomTabBarP
 const st = StyleSheet.create({
   bar: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 26, borderWidth: 1, borderColor: C.line, padding: 6, gap: 4 },
   tab: { flex: 1, height: 52, borderRadius: 20, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  on: { flex: 1.9, flexDirection: 'row', gap: 6, backgroundColor: C.ink },
+  on: { flex: 1.9, flexDirection: 'row', gap: 6, overflow: 'hidden', backgroundColor: C.brand1 },
 });

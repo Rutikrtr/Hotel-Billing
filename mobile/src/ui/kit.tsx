@@ -46,6 +46,7 @@ export function Button({ title, onPress, kind = 'primary', busy, disabled, style
         { opacity: off ? 0.55 : 1, transform: [{ scale: pressed && !off ? 0.97 : 1 }] }, style,
       ]}
     >
+      {kind === 'primary' ? <Gradient radius={small ? 10 : 13} /> : null}
       {busy ? <ActivityIndicator color={fg} /> : <T w="bold" style={{ color: fg, fontSize: small ? 13 : 15 }}>{title}</T>}
     </Pressable>
   );
@@ -78,12 +79,13 @@ export const s = StyleSheet.create({
   btnDanger: { backgroundColor: C.surface, borderWidth: 1, borderColor: '#E9B4B4' },
   card: { backgroundColor: C.surface, borderRadius: 18, borderWidth: 1, borderColor: C.line, padding: 14 },
   chip: { height: 34, paddingHorizontal: 13, borderRadius: 17, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: 'center', marginRight: 6 },
-  chipOn: { backgroundColor: C.ink, borderColor: C.ink },
+  chipOn: { backgroundColor: C.accent, borderColor: C.accent },
   input: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 15, color: C.text },
   sheet: { backgroundColor: C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
-  summary: { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.line, padding: 16, marginBottom: 16 },
-  big: { fontSize: 32, letterSpacing: -0.8, color: C.text, fontVariant: ['tabular-nums'], marginTop: 2 },
-  stat: { flex: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12 },
+  summary: { borderRadius: 20, padding: 16, marginBottom: 16, overflow: 'hidden', backgroundColor: C.brand1 },
+  note: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 6 },
+  big: { fontSize: 32, letterSpacing: -0.8, color: '#FFFFFF', fontVariant: ['tabular-nums'], marginTop: 2 },
+  stat: { flex: 1, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#FFFFFF' },
   diet: { width: 13, height: 13, borderWidth: 1.5, borderRadius: 3, alignItems: 'center', justifyContent: 'center' },
 });
 
@@ -172,17 +174,18 @@ export function SummaryCard({ label, value, note, noteColor, stats, right }: {
 }) {
   return (
     <View style={[s.summary, shadow]}>
+      <Gradient radius={20} />
       <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
-          <T w="semibold" style={{ color: C.muted, fontSize: 13 }}>{label}</T>
+          <T w="semibold" style={{ color: '#FFFFFF', opacity: 0.9, fontSize: 13 }}>{label}</T>
           <T w="heavy" numberOfLines={1} adjustsFontSizeToFit style={s.big}>{value}</T>
-          {note ? <T w="semibold" style={{ fontSize: 12.5, color: noteColor ?? C.muted }}>{note}</T> : null}
+          {note ? <View style={s.note}><T w="bold" style={{ fontSize: 12, color: noteColor ?? C.text }}>{note}</T></View> : null}
         </View>
         {right}
       </View>
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
         {stats.map((x) => (
-          <View key={x.label} style={[s.stat, { backgroundColor: x.bg }]}>
+          <View key={x.label} style={s.stat}>
             <T w="heavy" numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 18, color: x.color, fontVariant: ['tabular-nums'] }}>{x.value}</T>
             <T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{x.label}</T>
           </View>
