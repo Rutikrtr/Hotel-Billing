@@ -11,16 +11,23 @@ let gradientIds = 0;
 export function Gradient({ radius = 14 }: { radius?: number }) {
   // Each gradient gets its own id: SVG ids can clash between drawings on Android.
   const [id] = React.useState(() => `g${++gradientIds}`);
+  // Android sizes a "100%" SVG before the box is laid out, so draw at the box's measured size.
+  const [size, setSize] = React.useState<{ w: number; h: number } | null>(null);
   return (
-    <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-      <Defs>
-        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={C.brand1} />
-          <Stop offset="1" stopColor={C.brand2} />
-        </LinearGradient>
-      </Defs>
-      <Rect x="0" y="0" width="100%" height="100%" rx={radius} ry={radius} fill={`url(#${id})`} />
-    </Svg>
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden', backgroundColor: C.brand1 }]}
+      onLayout={(e) => { const { width: w, height: h } = e.nativeEvent.layout; setSize((s) => (s && s.w === w && s.h === h ? s : { w, h })); }}>
+      {size ? (
+        <Svg width={size.w} height={size.h}>
+          <Defs>
+            <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor={C.brand1} />
+              <Stop offset="1" stopColor={C.brand2} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width={size.w} height={size.h} rx={radius} ry={radius} fill={`url(#${id})`} />
+        </Svg>
+      ) : null}
+    </View>
   );
 }
 
