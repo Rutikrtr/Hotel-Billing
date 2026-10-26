@@ -47,12 +47,46 @@ export default function TablesScreen() {
 
 
   /** One table: free (white), eating (orange) or billed (purple); compact in dense floor plans. */
-  const tile = (table: Table, os: Order[], compact = false, inGrid = false) => {
+  const tile = (table: Table, os: Order[], compact = false, inGrid = false, big: 'wide' | 'tall' | false = false) => {
     const busy = os.length > 0;
     const billed = busy && os.every((o) => o.billed_at);
     const unsaved = hasPending(carts[tableKey(table.id, os[0]?.section ?? 'A')]);
     const total = os.reduce((n, o) => n + totalOf(o), 0);
     const o = os[0];
+    const open = () => nav.navigate('Order', { tableId: table.id, section: o?.section ?? 'A' });
+    const label = `${table.name}, ${busy ? (billed ? 'billed' : 'eating') : 'free'}`;
+    if (big) {
+      // A big table on the floor plan. Wide (one row): name on the left, status and amount on the right.
+      // Tall or square: everything centred.
+      const pill = (
+        <View style={[st.pill, { backgroundColor: busy ? (billed ? C.billedSoft : C.accentSoft) : C.freeSoft }]}>
+          <T w="heavy" style={{ fontSize: 11, color: busy ? (billed ? C.billed : C.accentStrong) : C.free }}>{busy ? (billed ? 'Billed' : os.length > 1 ? `${os.length} groups` : 'Eating') : 'Free'}</T>
+        </View>
+      );
+      const money = busy ? <T w="heavy" numberOfLines={1} style={{ fontSize: 15, color: billed ? C.billed : C.accentStrong }}>{rsShort(total)}</T> : null;
+      return (
+        <Pressable onPress={open} key={table.id} accessibilityLabel={label}
+          style={({ pressed }) => [st.tile, st.tileInGrid, big === 'wide' ? st.tileWide : st.tileBig, busy && st.tileBusy, billed && st.tileBilled, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}>
+          {big === 'wide' ? (
+            <>
+              <View style={{ flex: 1 }}>
+                <T w="heavy" numberOfLines={1} style={{ fontSize: 18, letterSpacing: -0.3 }}>{table.name}</T>
+                {busy ? <T style={{ fontSize: 11.5, color: C.muted }}>{since(o.opened_at)}</T> : null}
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>{pill}{money}</View>
+            </>
+          ) : (
+            <>
+              <T w="heavy" numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 22, letterSpacing: -0.3 }}>{table.name}</T>
+              {pill}
+              {money}
+              {busy ? <T style={{ fontSize: 11.5, color: C.muted }}>{since(o.opened_at)}</T> : null}
+            </>
+          )}
+          {unsaved ? <View style={st.unsavedDot} /> : null}
+        </Pressable>
+      );
+    }
     return (
       <Pressable
         onPress={() => nav.navigate('Order', { tableId: table.id, section: o?.section ?? 'A' })}
@@ -122,8 +156,8 @@ export default function TablesScreen() {
   // Slim bar that slides in at the top once the big card has scrolled away.
   const miniBar = (
     <Animated.View pointerEvents="none" style={[st.mini, {
-      opacity: y.interpolate({ inputRange: [90, 130], outputRange: [0, 1], extrapolate: 'clamp' }),
-      transform: [{ translateY: y.interpolate({ inputRange: [90, 130], outputRange: [-12, 0], extrapolate: 'clamp' }) }],
+      opacity: y.interpolate({ inputRange: [100, 112], outputRange: [0, 1], extrapolate: 'clamp' }),
+      transform: [{ translateY: y.interpolate({ inputRange: [96, 112], outputRange: [-56, 0], extrapolate: 'clamp' }) }],
     }]}>
       <View style={st.miniTotal}><Gradient radius={10} /><T w="heavy" style={{ color: '#FFFFFF', fontSize: 13.5, fontVariant: ['tabular-nums'] }}>{rsShort(onTables)}</T></View>
       <T w="bold" numberOfLines={1} style={{ flex: 1, fontSize: 12.5 }}>
@@ -168,7 +202,7 @@ export default function TablesScreen() {
               </View>
               <PlanGrid area={a} rowH={compact ? 64 : 84} render={(x) => {
                 const tb = x.kind === 'table' ? byId.get(x.id!) : undefined;
-                if (tb) return tile(tb.table, tb.orders, compact, true);
+                if (tb) return tile(tb.table, tb.orders, compact, true, x.h > 1 ? 'tall' : x.w > 1 ? 'wide' : false);
                 if (x.kind === 'fixture') return <FixtureBlock kind={fixtureKind(x.id!)} compact={compact} />;
                 return <View style={[st.empty, { flex: 1, minHeight: 0 }, x.kind === 'blank' && st.blank]} />;
               }} />
@@ -224,7 +258,7 @@ const st = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 12 },
   facts: { flexDirection: 'row', gap: 5 },
   fact: { minWidth: 54, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 11, paddingVertical: 5, paddingHorizontal: 6 },
-  mini: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(250,246,242,0.97)', borderBottomWidth: 1, borderBottomColor: C.line },
+  mini: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: C.line, shadowColor: '#7C2D12', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   miniTotal: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, overflow: 'hidden' },
   factN: { color: '#FFFFFF', fontSize: 16 },
   factL: { color: '#FFFFFF', fontSize: 11 },
@@ -237,8 +271,10 @@ const st = StyleSheet.create({
   cell: { flex: 1 },
   blank: { backgroundColor: 'transparent', borderWidth: 0 },
   empty: { flex: 1, minHeight: 84, borderRadius: 11, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#DCD2C9', borderStyle: 'dashed' },
-  tileInGrid: { flex: 1, maxWidth: '100%', marginBottom: 0, borderColor: '#FFFFFF', shadowColor: '#7C2D12', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  tileCompact: { minHeight: 64, padding: 7, marginBottom: 0, borderRadius: 11 },
+  tileInGrid: { flex: 1, maxWidth: '100%', minHeight: 0, marginBottom: 0, borderColor: '#FFFFFF', shadowColor: '#7C2D12', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  tileBig: { alignItems: 'center', justifyContent: 'center', gap: 4, padding: 8 },
+  tileWide: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
+  tileCompact: { minHeight: 0, padding: 7, marginBottom: 0, borderRadius: 11 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   tileBusy: { backgroundColor: '#FFF6EF', borderColor: '#F0C2A4' },
   tileBilled: { backgroundColor: '#F7F2FF', borderColor: '#D5C2FF' },

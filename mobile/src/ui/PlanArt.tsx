@@ -1,13 +1,21 @@
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Pattern, Rect, Stop } from 'react-native-svg';
 import { FIXTURES, type FixtureKind } from '../types';
 
+/** Android sizes a "100%" SVG before the box is laid out, so draw at the box's measured size. */
+function useBox() {
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const onLayout = (e: LayoutChangeEvent) => { const { width: w, height: h } = e.nativeEvent.layout; setBox((b) => (b && b.w === w && b.h === h ? b : { w, h })); };
+  return [box, onLayout] as const;
+}
+
 /** Floor of a hall: warm paper with a faint dot grid, like an architect's floor plan. */
 export function DotFloor() {
+  const [box, onLayout] = useBox();
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: 18, overflow: 'hidden' }]}>
-      <Svg width="100%" height="100%">
+    <View pointerEvents="none" onLayout={onLayout} style={[StyleSheet.absoluteFill, { borderRadius: 18, overflow: 'hidden', backgroundColor: '#F7F2ED' }]}>
+      {box ? <Svg width={box.w} height={box.h}>
         <Defs>
           <Pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse">
             <Circle cx="2" cy="2" r="1.1" fill="#D9CCC0" />
@@ -17,9 +25,9 @@ export function DotFloor() {
             <Stop offset="1" stopColor="#F4EDE6" />
           </LinearGradient>
         </Defs>
-        <Rect width="100%" height="100%" fill="url(#floor)" />
-        <Rect width="100%" height="100%" fill="url(#dots)" />
-      </Svg>
+        <Rect width={box.w} height={box.h} fill="url(#floor)" />
+        <Rect width={box.w} height={box.h} fill="url(#dots)" />
+      </Svg> : null}
     </View>
   );
 }
@@ -69,9 +77,10 @@ const TONES: Record<FixtureKind, [string, string]> = {
 export function FixtureBlock({ kind, compact }: { kind: FixtureKind; compact?: boolean }) {
   const [a, b] = TONES[kind];
   const id = `fx${kind}`;
+  const [box, onLayout] = useBox();
   return (
-    <View style={{ flex: 1, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 4 }} accessible accessibilityLabel={FIXTURES[kind]}>
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+    <View onLayout={onLayout} style={{ flex: 1, alignSelf: 'stretch', backgroundColor: a, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 4 }} accessible accessibilityLabel={FIXTURES[kind]}>
+      {box ? <Svg style={StyleSheet.absoluteFill} width={box.w} height={box.h}>
         <Defs>
           <LinearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0" stopColor={a} /><Stop offset="1" stopColor={b} />
@@ -80,9 +89,9 @@ export function FixtureBlock({ kind, compact }: { kind: FixtureKind; compact?: b
             <Line x1="0" y1="0" x2="0" y2="10" stroke="#FFFFFF" strokeOpacity="0.06" strokeWidth="4" />
           </Pattern>
         </Defs>
-        <Rect width="100%" height="100%" fill={`url(#${id}g)`} />
-        <Rect width="100%" height="100%" fill={`url(#${id}s)`} />
-      </Svg>
+        <Rect width={box.w} height={box.h} fill={`url(#${id}g)`} />
+        <Rect width={box.w} height={box.h} fill={`url(#${id}s)`} />
+      </Svg> : null}
       <View style={{ width: compact ? 36 : 46, height: compact ? 36 : 46, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>
         <FixtureIcon kind={kind} size={compact ? 20 : 25} />
       </View>
