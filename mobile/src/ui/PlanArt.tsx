@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Pattern, Rect, Stop } from 'react-native-svg';
 import { FIXTURES, type FixtureKind } from '../types';
-import { T } from './kit';
 
 /** Floor of a hall: warm paper with a faint dot grid, like an architect's floor plan. */
 export function DotFloor() {
@@ -66,12 +65,12 @@ const TONES: Record<FixtureKind, [string, string]> = {
   4: ['#4B4453', '#6A6274'],   // washroom: grey violet
 };
 
-/** A fixed place on the plan (bill counter, kitchen…): a coloured block with a stripe texture, icon and name. */
+/** A fixed place on the plan (bill counter, kitchen…): a coloured block with a stripe texture and its icon only (the name is for screen readers). */
 export function FixtureBlock({ kind, compact }: { kind: FixtureKind; compact?: boolean }) {
   const [a, b] = TONES[kind];
   const id = `fx${kind}`;
   return (
-    <View style={{ flex: 1, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', gap: 3, padding: 4 }} accessibilityLabel={FIXTURES[kind]}>
+    <View style={{ flex: 1, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 4 }} accessible accessibilityLabel={FIXTURES[kind]}>
       <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
         <Defs>
           <LinearGradient id={`${id}g`} x1="0" y1="0" x2="1" y2="1">
@@ -84,10 +83,9 @@ export function FixtureBlock({ kind, compact }: { kind: FixtureKind; compact?: b
         <Rect width="100%" height="100%" fill={`url(#${id}g)`} />
         <Rect width="100%" height="100%" fill={`url(#${id}s)`} />
       </Svg>
-      <View style={{ width: compact ? 30 : 38, height: compact ? 30 : 38, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' }}>
-        <FixtureIcon kind={kind} size={compact ? 17 : 21} />
+      <View style={{ width: compact ? 36 : 46, height: compact ? 36 : 46, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' }}>
+        <FixtureIcon kind={kind} size={compact ? 20 : 25} />
       </View>
-      <T w="heavy" numberOfLines={2} adjustsFontSizeToFit style={{ color: '#FFFFFF', fontSize: compact ? 10 : 11.5, letterSpacing: 0.6, textAlign: 'center' }}>{FIXTURES[kind].toUpperCase()}</T>
     </View>
   );
 }
