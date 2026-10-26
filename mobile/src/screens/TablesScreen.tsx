@@ -7,10 +7,11 @@ import { tokenNo } from '../printing/escpos';
 import { useAppDispatch, useAppSelector } from '../store';
 import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
-import { areaTables, tableKey, type LayoutArea, type Order, type Table } from '../types';
+import { areaTables, fixtureKind, tableKey, type LayoutArea, type Order, type Table } from '../types';
 import { Icon } from '../ui/icons';
 import { Button, Chip, Gradient, HotelHeader, T } from '../ui/kit';
 import PlanGrid from '../ui/PlanGrid';
+import { DotFloor, FixtureBlock } from '../ui/PlanArt';
 import { C, shadow } from '../ui/theme';
 import type { Stack } from '../Root';
 
@@ -160,19 +161,23 @@ export default function TablesScreen() {
           const compact = a.cols >= 4;
           return (
             <View key={a.id} style={st.area}>
+              <DotFloor />
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <T w="heavy" style={{ fontSize: 15, flex: 1 }}>{a.name}</T>
                 <T w="semibold" style={{ fontSize: 11.5, color: C.muted }}>{s.busy} of {s.tables} busy</T>
               </View>
               <PlanGrid area={a} rowH={compact ? 64 : 84} render={(x) => {
                 const tb = x.kind === 'table' ? byId.get(x.id!) : undefined;
-                return tb ? tile(tb.table, tb.orders, compact, true) : <View style={[st.empty, { flex: 1, minHeight: 0 }, x.kind === 'blank' && st.blank]} />;
+                if (tb) return tile(tb.table, tb.orders, compact, true);
+                if (x.kind === 'fixture') return <FixtureBlock kind={fixtureKind(x.id!)} compact={compact} />;
+                return <View style={[st.empty, { flex: 1, minHeight: 0 }, x.kind === 'blank' && st.blank]} />;
               }} />
             </View>
           );
         })}
         {area === 'all' && others.length ? (
           <View style={st.area}>
+            <DotFloor />
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <T w="heavy" style={{ fontSize: 15, flex: 1 }}>Other tables</T>
               <T w="semibold" style={{ fontSize: 11.5, color: C.muted }}>not placed in an area</T>
@@ -226,12 +231,13 @@ const st = StyleSheet.create({
   section: { fontSize: 11.5, color: C.muted, letterSpacing: 0.8, marginBottom: 6 },
   parcel: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 12, marginBottom: 6 },
   tile: { flex: 1, maxWidth: '32.2%', minHeight: 72, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 9, marginBottom: 8 },
-  area: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 10, marginBottom: 12 },
+  // Each hall is drawn as a floor plan (dotted paper, see DotFloor); white tables stand out on it.
+  area: { borderRadius: 18, borderWidth: 1, borderColor: '#E6DCD2', padding: 10, marginBottom: 12 },
   gridRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   cell: { flex: 1 },
   blank: { backgroundColor: 'transparent', borderWidth: 0 },
-  empty: { flex: 1, minHeight: 84, borderRadius: 11, backgroundColor: '#F1ECE7', borderWidth: 1, borderColor: '#E7DFD8', borderStyle: 'dashed' },
-  tileInGrid: { flex: 1, maxWidth: '100%', marginBottom: 0 },
+  empty: { flex: 1, minHeight: 84, borderRadius: 11, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#DCD2C9', borderStyle: 'dashed' },
+  tileInGrid: { flex: 1, maxWidth: '100%', marginBottom: 0, borderColor: '#FFFFFF', shadowColor: '#7C2D12', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   tileCompact: { minHeight: 64, padding: 7, marginBottom: 0, borderRadius: 11 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   tileBusy: { backgroundColor: '#FFF6EF', borderColor: '#F0C2A4' },

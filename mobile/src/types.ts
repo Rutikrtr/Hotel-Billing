@@ -23,13 +23,21 @@ export interface Settings {
 }
 
 /** Optional floor plan: areas (Hall 1, Garden…) each with a grid; cells hold a table id or null (an empty spot). */
-/** cells: a table id, null for a free (grey) spot, or BLANK for empty floor. A table in two side-by-side cells is a big table. */
+/** cells: a table id, null for a free (grey) spot, BLANK for empty floor, or a negative fixture (Bill Counter…). A table in two side-by-side cells is a big table. */
 export interface LayoutArea { id: string; name: string; cols: number; rows: number; cells: (number | null)[] }
 export const BLANK = 0;
 /** Table ids placed in an area, each once (a big table fills two cells). */
-export const areaTables = (a: LayoutArea) => [...new Set(a.cells.filter((c): c is number => c != null && c !== BLANK))];
+export const areaTables = (a: LayoutArea) => [...new Set(a.cells.filter((c): c is number => c != null && c > 0))];
+/** Fixed places on a plan (not tables): stored as negative numbers, -(kind × 100 + n), so two of a kind stay apart. */
+export const FIXTURES = { 1: 'Bill Counter', 2: 'Kitchen', 3: 'Entrance', 4: 'Washroom' } as const;
+export type FixtureKind = keyof typeof FIXTURES;
+export const fixtureKind = (v: number) => Math.floor(-v / 100) as FixtureKind;
+export const newFixture = (a: LayoutArea, kind: FixtureKind) => {
+  let n = 1; while (a.cells.includes(-(kind * 100 + n))) n++;
+  return -(kind * 100 + n);
+};
 /** One thing drawn on a plan: a table block (w spots across, h down), a free grey spot, or blank floor. */
-export interface PlanItem { kind: 'table' | 'free' | 'blank'; id: number | null; r: number; c: number; w: number; h: number }
+export interface PlanItem { kind: 'table' | 'fixture' | 'free' | 'blank'; id: number | null; r: number; c: number; w: number; h: number }
 /** Read an area's cells as blocks: a table's cells form a rectangle (its top-left cell is where it starts). */
 export const planItems = (a: LayoutArea): PlanItem[] => {
   const at = (r: number, c: number) => (r < a.rows && c < a.cols ? a.cells[r * a.cols + c] : undefined);
@@ -42,7 +50,7 @@ export const planItems = (a: LayoutArea): PlanItem[] => {
     seen.add(id);
     let w = 1; while (at(r, c + w) === id) w++;
     let h = 1; while (at(r + h, c) === id) h++;
-    out.push({ kind: 'table', id, r, c, w, h });
+    out.push({ kind: id > 0 ? 'table' : 'fixture', id, r, c, w, h });
   }
   return out;
 };

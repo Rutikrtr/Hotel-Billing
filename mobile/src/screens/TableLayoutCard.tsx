@@ -3,7 +3,7 @@ import { LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../store';
 import { reloadSettings } from '../store/data';
 import { q, sb } from '../supabase';
-import { BLANK, areaTables } from '../types';
+import { BLANK, FIXTURES, areaTables, fixtureKind, newFixture, type FixtureKind } from '../types';
 import PlanGrid from '../ui/PlanGrid';
 import type { LayoutArea, Table, TableLayout } from '../types';
 import { Button, Card, Chip, Field, Sheet, T, ToggleRow } from '../ui/kit';
@@ -11,6 +11,7 @@ import { ask, closeAsk } from '../ui/dialog';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 
+export const FIX_ICON: Record<FixtureKind, string> = { 1: '🧾', 2: '🍳', 3: '🚪', 4: '🚻' };
 const SIZES: [number, number][] = [[2, 2], [3, 3], [3, 4], [4, 4], [4, 5], [5, 5]];
 const MAX = 8;
 
@@ -73,7 +74,7 @@ export default function TableLayoutCard() {
       }]);
   };
 
-  const nameOf = (id: number | null) => tables.find((t) => t.id === id)?.name;
+  const nameOf = (id: number | null) => (id != null && id < 0 ? FIXTURES[fixtureKind(id)] : tables.find((t) => t.id === id)?.name);
   const placedElsewhere = (areaId: string) => new Set(layout.areas.filter((a) => a.id !== areaId).flatMap(areaTables));
   const saveArea = async () => {
     if (!edit) return;
@@ -120,7 +121,7 @@ export default function TableLayoutCard() {
               <Stepper label="Down" n={edit.rows} onChange={(n) => setEdit(resize(edit, edit.cols, n))} />
             </View>
           </View>
-          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table or a blank space there. Tap a table to make it bigger (up to 4 across, or 2 × 2) or take it off.</T>
+          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table, Bill Counter, Kitchen, Entrance or a blank space there. Tap a table to make it bigger (up to 4 across, or 2 × 2) or take it off.</T>
           <View style={st.plan}>
             <PlanGrid area={edit} rowH={44} render={(x) => {
               const i = x.r * edit.cols + x.c;
@@ -145,10 +146,10 @@ export default function TableLayoutCard() {
                   for (let r = at[0]; r < at[0] + h; r++) for (let c = at[1]; c < at[1] + w; c++) ch.push([r * edit.cols + c, tid]);
                   put(ch);
                 };
-                const SHAPES: [number, number][] = [[1, 1], [2, 1], [3, 1], [4, 1], [1, 2], [2, 2]];
-                const opts = SHAPES.map(([w, h]) => ({ w, h, at: fit(w, h) }));
+                const SHAPES: [number, number][] = [[1, 1], [2, 1], [3, 1], [4, 1], [1, 2], [2, 2], [1, 3], [1, 4], [2, 3]];
+                const opts = SHAPES.filter(([w, h]) => w <= edit.cols && h <= edit.rows).map(([w, h]) => ({ w, h, at: fit(w, h) }));
                 const any = opts.some((o) => o.at && (o.w !== x.w || o.h !== x.h));
-                ask(nameOf(tid) ?? 'Table', any ? 'Pick the table’s size on the plan. Bigger tables suit families and groups.' : 'There is no free spot around it. Free a spot beside or below it (or make the area bigger) to make it bigger.', [
+                ask(nameOf(tid) ?? 'Table', any ? (tid < 0 ? 'Pick its size on the plan, e.g. 1 × 3 for a counter along one side.' : 'Pick the table’s size on the plan. Bigger tables suit families and groups.') : 'There is no free spot around it. Free a spot beside or below it (or make the area bigger) to make it bigger.', [
                   { text: 'Take off the plan', style: 'destructive', onPress: () => put(clearAll()) },
                   { text: 'Done', style: 'cancel' },
                 ], any ? (
@@ -170,14 +171,14 @@ export default function TableLayoutCard() {
               };
               const id = x.id;
               return (
-                <Pressable style={[st.spot, x.kind === 'table' && st.spotOn, x.kind === 'blank' && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
+                <Pressable style={[st.spot, x.kind === 'table' && st.spotOn, x.kind === 'fixture' && st.spotFix, x.kind === 'blank' && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
                   onPress={() => {
                     if (x.kind === 'blank') put([[i, null]]);
-                    else if (x.kind === 'table') tapTable(id!);
+                    else if (x.kind === 'table' || x.kind === 'fixture') tapTable(id!);
                     else setPick(pick === i ? null : i);
                   }}>
-                  <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: x.kind === 'blank' ? '#C9BDB3' : x.kind === 'table' ? '#FFFFFF' : '#B5A99F' }}>
-                    {x.kind === 'blank' ? 'blank' : x.kind === 'table' ? `${nameOf(id) ?? '?'}${x.w > 1 || x.h > 1 ? ` · ${x.w}×${x.h}` : ''}` : '+'}
+                  <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: x.kind === 'blank' ? '#C9BDB3' : x.kind === 'table' || x.kind === 'fixture' ? '#FFFFFF' : '#B5A99F' }}>
+                    {x.kind === 'blank' ? 'blank' : x.kind === 'table' || x.kind === 'fixture' ? `${nameOf(id) ?? '?'}${x.w > 1 || x.h > 1 ? ` · ${x.w}×${x.h}` : ''}` : '+'}
                   </T>
                 </Pressable>
               );
@@ -188,8 +189,14 @@ export default function TableLayoutCard() {
             const free = tables.filter((t) => !taken.has(t.id));
             return (
               <View style={{ gap: 6 }}>
-                <T w="semibold" style={{ fontSize: 12.5 }}>Put which table here?</T>
-                <Chip label="▢ Blank space (no table)" onPress={() => { const cells = [...edit.cells]; cells[pick] = BLANK; setEdit({ ...edit, cells }); setPick(null); }} />
+                <T w="semibold" style={{ fontSize: 12.5 }}>Put what here?</T>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  <Chip label="▢ Blank space" onPress={() => { const cells = [...edit.cells]; cells[pick] = BLANK; setEdit({ ...edit, cells }); setPick(null); }} />
+                  {(Object.keys(FIXTURES) as unknown as FixtureKind[]).map((k) => (
+                    <Chip key={k} label={`${FIX_ICON[+k as FixtureKind]} ${FIXTURES[+k as FixtureKind]}`} onPress={() => { const cells = [...edit.cells]; cells[pick] = newFixture(edit, +k as FixtureKind); setEdit({ ...edit, cells }); setPick(null); }} />
+                  ))}
+                </View>
+                <T w="semibold" style={{ fontSize: 12.5, marginTop: 4 }}>Or a table:</T>
                 {free.length ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {free.map((t) => <Chip key={t.id} label={t.name} onPress={() => { const cells = [...edit.cells]; cells[pick] = t.id; setEdit({ ...edit, cells }); setPick(null); }} />)}
@@ -222,7 +229,7 @@ function MiniGrid({ a }: { a: LayoutArea }) {
     <View style={{ gap: 2 }}>
       {Array.from({ length: Math.min(a.rows, 5) }, (_, r) => (
         <View key={r} style={{ flexDirection: 'row', gap: 2 }}>
-          {Array.from({ length: Math.min(a.cols, 6) }, (_, c) => <View key={c} style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: a.cells[r * a.cols + c] == null ? '#E5DDD6' : a.cells[r * a.cols + c] === BLANK ? 'transparent' : C.brand1 }} />)}
+          {Array.from({ length: Math.min(a.cols, 6) }, (_, c) => <View key={c} style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: a.cells[r * a.cols + c] == null ? '#E5DDD6' : a.cells[r * a.cols + c] === BLANK ? 'transparent' : a.cells[r * a.cols + c]! < 0 ? '#4A3428' : C.brand1 }} />)}
         </View>
       ))}
     </View>
@@ -238,6 +245,7 @@ const st = StyleSheet.create({
   sizeOn: { backgroundColor: C.accent, borderColor: C.accent },
   sizeDot: { width: 8, height: 8, borderRadius: 2, backgroundColor: C.accent },
   blank: { backgroundColor: 'transparent', borderColor: '#E6DDD5' },
+  spotFix: { backgroundColor: '#4A3428', borderColor: '#4A3428', borderStyle: 'solid' },
   spotOn: { backgroundColor: C.brand1, borderColor: C.brand1, borderStyle: 'solid' },
   spotPick: { borderColor: C.accent, borderWidth: 2, backgroundColor: C.accentSoft },
   step: { width: 30, height: 30, borderRadius: 9, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
