@@ -1,9 +1,48 @@
 // Finding dishes from what a waiter types or says: "chin biryani" → Chicken Biryani, "puneri misal" → Puneri Misal.
 // Indian dish names are spelt many ways (paneer/panir, bhaji/baji), so words are compared by sound, not letter by letter.
 
+// Devanagari (Marathi/Hindi) names are read out in Latin letters, so "misal pav" (typed or heard in English)
+// finds मिसळ पाव. Each consonant carries an "a" unless a vowel sign or virama follows; a word's last "a" is silent.
+const CONS: Record<string, string> = {
+  क: 'k', ख: 'kh', ग: 'g', घ: 'gh', ङ: 'n', च: 'ch', छ: 'chh', ज: 'j', झ: 'jh', ञ: 'n', ट: 't', ठ: 'th', ड: 'd', ढ: 'dh', ण: 'n',
+  त: 't', थ: 'th', द: 'd', ध: 'dh', न: 'n', प: 'p', फ: 'f', ब: 'b', भ: 'bh', म: 'm', य: 'y', र: 'r', ल: 'l', ळ: 'l', व: 'v',
+  श: 'sh', ष: 'sh', स: 's', ह: 'h',
+};
+const VOWELS: Record<string, string> = { अ: 'a', आ: 'a', इ: 'i', ई: 'i', उ: 'u', ऊ: 'u', ऋ: 'ri', ए: 'e', ऐ: 'ai', ओ: 'o', औ: 'au', ऑ: 'o', ॲ: 'e' };
+const SIGNS: Record<string, string> = { 'ा': 'a', 'ि': 'i', 'ी': 'i', 'ु': 'u', 'ू': 'u', 'ृ': 'ri', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ॉ': 'o', 'ॅ': 'e' };
+const DIGITS = '०१२३४५६७८९';
+
+/** Devanagari → Latin letters (other text is left as it is). */
+export function toLatin(text: string): string {
+  if (!/[\u0900-\u097F]/.test(text)) return text;
+  let out = '';
+  const chars = [...text];
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (CONS[ch]) {
+      out += CONS[ch];
+      let j = i + 1;
+      while (chars[j] === '़') j++;                      // nukta
+      const next = chars[j];
+      if (next === '्') { i = j; continue; }             // virama: no vowel
+      if (next && SIGNS[next]) { out += SIGNS[next]; i = j; continue; }
+      const end = !next || !/[\u0900-\u097F]/.test(next) || next === '।';
+      if (!end) out += 'a';                              // last "a" of a word is not said (मिसळ → misal)
+      i = j - 1;
+    } else if (VOWELS[ch]) out += VOWELS[ch];
+    else if (SIGNS[ch]) out += SIGNS[ch];
+    else if (ch === 'ं' || ch === 'ँ') out += /[पफबभम]/.test(chars[i + 1] ?? '') ? 'm' : 'n';   // सांबर → sambar
+    else if (ch === 'ः') out += 'h';
+    else if (DIGITS.includes(ch)) out += String(DIGITS.indexOf(ch));
+    else if (ch === '्' || ch === '़') continue;
+    else out += ch;
+  }
+  return out;
+}
+
 /** Rough sound-alike form of a word: lower case, h after consonants dropped, doubled letters and long vowels squeezed. */
 export function soundOf(word: string): string {
-  return word.toLowerCase()
+  return toLatin(word).toLowerCase()
     .replace(/[^a-z0-9]/g, '')
     .replace(/([bcdgjkpt])h/g, '$1')        // bhaji → baji, kheer → keer
     .replace(/sh/g, 's').replace(/ph/g, 'f').replace(/z/g, 'j').replace(/w/g, 'v').replace(/q/g, 'k').replace(/ck/g, 'k').replace(/c(?=[aou])/g, 'k')
@@ -46,7 +85,11 @@ export function matchScore(search: string, name: string): number {
   let total = 0;
   for (const w of said) {
     const best = Math.max(...dish.map((d) => wordScore(w, d)));
-    if (best < 0.55) return 0;
+    if (best < 0.55) {
+      // Names written as one word ("vada pav" → वडापाव / Vadapav): compare without the spaces.
+      const joined = wordScore(said.join(''), dish.join(''));
+      return said.length > 1 && joined >= 0.75 ? joined * 0.9 : 0;
+    }
     total += best;
   }
   // Prefer names that are covered by the search (Misal over Misal Pav for "misal").

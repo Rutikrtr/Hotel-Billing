@@ -6,9 +6,43 @@
 const ESC = 0x1b;
 const GS = 0x1d;
 
+// Marathi/Hindi names are printed in English letters (मिसळ पाव → Misal Pav): these printers have no Devanagari
+// font. Same rules as the phone app (mobile/src/match.ts): a consonant carries "a" unless a vowel sign or virama
+// follows, and a word's last "a" is not said.
+const DEVA_CONS = { क: 'k', ख: 'kh', ग: 'g', घ: 'gh', ङ: 'n', च: 'ch', छ: 'chh', ज: 'j', झ: 'jh', ञ: 'n', ट: 't', ठ: 'th', ड: 'd', ढ: 'dh', ण: 'n',
+  त: 't', थ: 'th', द: 'd', ध: 'dh', न: 'n', प: 'p', फ: 'f', ब: 'b', भ: 'bh', म: 'm', य: 'y', र: 'r', ल: 'l', ळ: 'l', व: 'v', श: 'sh', ष: 'sh', स: 's', ह: 'h' };
+const DEVA_VOWELS = { अ: 'a', आ: 'a', इ: 'i', ई: 'i', उ: 'u', ऊ: 'u', ऋ: 'ri', ए: 'e', ऐ: 'ai', ओ: 'o', औ: 'au', ऑ: 'o', ॲ: 'e' };
+const DEVA_SIGNS = { 'ा': 'a', 'ि': 'i', 'ी': 'i', 'ु': 'u', 'ू': 'u', 'ृ': 'ri', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ॉ': 'o', 'ॅ': 'e' };
+const DEVA_DIGITS = '०१२३४५६७८९';
+function toLatin(text) {
+  if (!/[\u0900-\u097F]/.test(text)) return text;
+  const chars = [...text];
+  let out = '';
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (DEVA_CONS[ch]) {
+      out += DEVA_CONS[ch];
+      let j = i + 1;
+      while (chars[j] === '़') j++;
+      const next = chars[j];
+      if (next === '्') { i = j; continue; }
+      if (next && DEVA_SIGNS[next]) { out += DEVA_SIGNS[next]; i = j; continue; }
+      if (next && /[\u0900-\u097F]/.test(next) && next !== '।') out += 'a';
+      i = j - 1;
+    } else if (DEVA_VOWELS[ch]) out += DEVA_VOWELS[ch];
+    else if (DEVA_SIGNS[ch]) out += DEVA_SIGNS[ch];
+    else if (ch === 'ं' || ch === 'ँ') out += /[पफबभम]/.test(chars[i + 1] ?? '') ? 'm' : 'n';
+    else if (ch === 'ः') out += 'h';
+    else if (DEVA_DIGITS.includes(ch)) out += String(DEVA_DIGITS.indexOf(ch));
+    else if (ch === '्' || ch === '़') continue;
+    else out += ch;
+  }
+  return out.replace(/(^|[\s(])([a-z])/g, (_, a, b) => a + b.toUpperCase());
+}
+
 /** Printers only know plain ASCII: swap the rupee sign and strip accents, anything else becomes "?". */
 function ascii(text) {
-  return String(text ?? '')
+  return toLatin(String(text ?? ''))
     .replace(/₹/g, 'Rs.')
     .replace(/[–—]/g, '-')
     .replace(/[‘’]/g, "'")

@@ -1,13 +1,19 @@
 // Receipts as ESC/POS printer bytes. Same layout as the web app's slips (public/printer.js and app.js).
 import { computeBill, fmt, nightsBetween } from '../money';
+import { toLatin } from '../match';
 import type { Order, Settings, Stay } from '../types';
 
 const ESC = 0x1b;
 const GS = 0x1d;
 
-/** Printers only know plain ASCII: swap the rupee sign and strip accents. */
+/**
+ * Printers only know plain ASCII: swap the rupee sign and strip accents. Marathi/Hindi names are printed in
+ * English letters (मिसळ पाव → Misal Pav), as these printers have no Devanagari font.
+ */
 export function ascii(text: unknown): string {
-  return String(text ?? '')
+  let s = String(text ?? '');
+  if (/[\u0900-\u097F]/.test(s)) s = toLatin(s).replace(/(^|[\s(])([a-z])/g, (_, a: string, b: string) => a + b.toUpperCase());
+  return s
     .replace(/₹/g, 'Rs.').replace(/[–—]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/·/g, '-')
     .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7e]/g, '?');
 }

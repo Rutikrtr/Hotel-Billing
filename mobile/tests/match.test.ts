@@ -24,3 +24,16 @@ test('typing part of a name still works and unrelated words find nothing', () =>
   assert.equal(findDishes('pizza', menu).length, 0);
   assert.equal(findDishes('', menu).length, menu.length);
 });
+
+test('Marathi (Devanagari) dish names are found by English typing or voice', () => {
+  const menu = ['मिसळ पाव', 'वडापाव', 'इडली सांबर', 'चहा', 'स्पेशल चहा', 'कोल्ड कॉफी', 'ताक', 'भजे'].map((name) => ({ name }));
+  const first = (s: string) => findDishes(s, menu)[0]?.name;
+  assert.equal(first('misal pav'), 'मिसळ पाव');
+  assert.equal(first('vada pav'), 'वडापाव');
+  assert.equal(first('idli sambar'), 'इडली सांबर');
+  assert.equal(first('chai'), 'चहा');
+  assert.equal(first('cold coffee'), 'कोल्ड कॉफी');
+  assert.equal(first('taak'), 'ताक');
+  assert.equal(first('bhaji'), 'भजे');
+  assert.equal(first('चहा'), 'चहा');
+});
