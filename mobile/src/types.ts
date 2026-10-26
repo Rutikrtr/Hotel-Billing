@@ -28,15 +28,23 @@ export interface LayoutArea { id: string; name: string; cols: number; rows: numb
 export const BLANK = 0;
 /** Table ids placed in an area, each once (a big table fills two cells). */
 export const areaTables = (a: LayoutArea) => [...new Set(a.cells.filter((c): c is number => c != null && c !== BLANK))];
-/** How many spots across a cell draws: 0 for the later spots of a big table, else 1–4 (a table can fill up to 4 spots side by side). */
-export const cellSpan = (a: LayoutArea, r: number, c: number) => {
-  const at = (k: number) => a.cells[r * a.cols + k];
-  const id = at(c);
-  if (id == null || id === BLANK) return 1;
-  if (c > 0 && at(c - 1) === id) return 0;
-  let n = 1;
-  while (c + n < a.cols && at(c + n) === id) n++;
-  return n;
+/** One thing drawn on a plan: a table block (w spots across, h down), a free grey spot, or blank floor. */
+export interface PlanItem { kind: 'table' | 'free' | 'blank'; id: number | null; r: number; c: number; w: number; h: number }
+/** Read an area's cells as blocks: a table's cells form a rectangle (its top-left cell is where it starts). */
+export const planItems = (a: LayoutArea): PlanItem[] => {
+  const at = (r: number, c: number) => (r < a.rows && c < a.cols ? a.cells[r * a.cols + c] : undefined);
+  const seen = new Set<number>(); const out: PlanItem[] = [];
+  for (let r = 0; r < a.rows; r++) for (let c = 0; c < a.cols; c++) {
+    const id = at(r, c);
+    if (id == null) { out.push({ kind: 'free', id: null, r, c, w: 1, h: 1 }); continue; }
+    if (id === BLANK) { out.push({ kind: 'blank', id, r, c, w: 1, h: 1 }); continue; }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    let w = 1; while (at(r, c + w) === id) w++;
+    let h = 1; while (at(r + h, c) === id) h++;
+    out.push({ kind: 'table', id, r, c, w, h });
+  }
+  return out;
 };
 export interface TableLayout { on: boolean; areas: LayoutArea[] }
 

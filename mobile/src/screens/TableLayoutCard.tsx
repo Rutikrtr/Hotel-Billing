@@ -3,7 +3,8 @@ import { LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../store';
 import { reloadSettings } from '../store/data';
 import { q, sb } from '../supabase';
-import { BLANK, areaTables, cellSpan } from '../types';
+import { BLANK, areaTables } from '../types';
+import PlanGrid from '../ui/PlanGrid';
 import type { LayoutArea, Table, TableLayout } from '../types';
 import { Button, Card, Chip, Field, Sheet, T, ToggleRow } from '../ui/kit';
 import { ask, closeAsk } from '../ui/dialog';
@@ -119,65 +120,68 @@ export default function TableLayoutCard() {
               <Stepper label="Down" n={edit.rows} onChange={(n) => setEdit(resize(edit, edit.cols, n))} />
             </View>
           </View>
-          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table or a blank space there. Tap a table to make it bigger (up to 4 spots) or take it off.</T>
+          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table or a blank space there. Tap a table to make it bigger (up to 4 across, or 2 × 2) or take it off.</T>
           <View style={st.plan}>
-            {Array.from({ length: edit.rows }, (_, r) => (
-              <View key={r} style={st.planRow}>
-                {Array.from({ length: edit.cols }, (_, c) => {
-                  const i = r * edit.cols + c;
-                  const id = edit.cells[i];
-                  const span = cellSpan(edit, r, c);
-                  if (!span) return null;
-                  const blank = id === BLANK;
-                  const put = (changes: [number, number | null][]) => { const cells = [...edit.cells]; changes.forEach(([k, v]) => { cells[k] = v; }); setEdit({ ...edit, cells }); setPick(null); };
-                  const tapTable = (tid: number) => {
-                    // A table grows into free (grey) spots on its right first, then on its left, so a table at
-                    // the end of a row or in a corner can still be made bigger. Up to 4 spots across.
-                    const free = (k: number) => k >= 0 && k < edit.cols && edit.cells[r * edit.cols + k] == null;
-                    let lo = c, hi = c + span - 1;   // columns the table covers now
-                    const startFor: number[] = [];   // left column for each size 1..4
-                    startFor[span] = c;
-                    for (let k = span + 1; k <= 4; k++) {
-                      if (free(hi + 1)) hi++; else if (free(lo - 1)) lo--; else break;
-                      startFor[k] = lo;
-                    }
-                    for (let k = span - 1; k >= 1; k--) startFor[k] = c;   // smaller: keep the left edge
-                    const max = startFor.length - 1;
-                    const resizeTo = (k: number) => {
-                      const s = r * edit.cols + startFor[k];
-                      put([...Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null]), ...Array.from({ length: k }, (_, j): [number, number | null] => [s + j, tid])]);
-                    };
-                    ask(nameOf(tid) ?? 'Table', max > 1 ? 'How many spots across should this table take? Bigger tables suit families and groups.' : 'There is no free spot next to it in this row. Free a spot beside it (or make the area wider) to make it bigger.', [
-                      { text: 'Take off the plan', style: 'destructive', onPress: () => put(Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null])) },
-                      { text: 'Done', style: 'cancel' },
-                    ], max > 1 ? (
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignSelf: 'stretch' }}>
-                        {[1, 2, 3, 4].map((k) => {
-                          const can = k <= max;
-                          return (
-                            <Pressable key={k} disabled={!can} onPress={() => { closeAsk(); resizeTo(k); }} accessibilityRole="button" accessibilityLabel={`${k} spots`}
-                              style={({ pressed }) => [st.size, k === span && st.sizeOn, !can && { opacity: 0.35 }, pressed && { transform: [{ scale: 0.96 }] }]}>
-                              <View style={{ flexDirection: 'row', gap: 2 }}>{Array.from({ length: k }, (_, j) => <View key={j} style={[st.sizeDot, k === span && { backgroundColor: '#FFFFFF' }]} />)}</View>
-                              <T w="heavy" style={{ fontSize: 12, color: k === span ? '#FFFFFF' : C.text }}>{k === 1 ? '1 spot' : `${k} spots`}</T>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    ) : null, 'info');
-                  };
-                  return (
-                    <Pressable key={c} style={[st.spot, span > 1 && { flexGrow: span, flexBasis: 6 * (span - 1) }, id != null && !blank && st.spotOn, blank && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
-                      onPress={() => {
-                        if (blank) put([[i, null]]);
-                        else if (id != null) tapTable(id);
-                        else setPick(pick === i ? null : i);
-                      }}>
-                      <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: blank ? '#C9BDB3' : id != null ? '#FFFFFF' : '#B5A99F' }}>{blank ? 'blank' : id != null ? `${nameOf(id) ?? '?'}${span > 1 ? ` · ${span} wide` : ''}` : '+'}</T>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
+            <PlanGrid area={edit} rowH={44} render={(x) => {
+              const i = x.r * edit.cols + x.c;
+              const put = (changes: [number, number | null][]) => { const cells = [...edit.cells]; changes.forEach(([k, v]) => { cells[k] = v; }); setEdit({ ...edit, cells }); setPick(null); };
+              const tapTable = (tid: number) => {
+                // Find where a w × h block fits: it must keep the table's current top-left spot and only use
+                // free (grey) spots or the table's own, so it grows right/down first, then left/up.
+                const ok = (r0: number, c0: number, w: number, h: number) => {
+                  if (r0 < 0 || c0 < 0 || r0 + h > edit.rows || c0 + w > edit.cols) return false;
+                  for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + w; c++) { const v = edit.cells[r * edit.cols + c]; if (v != null && v !== tid) return false; }
+                  return true;
+                };
+                const fit = (w: number, h: number): [number, number] | null => {
+                  const spots: [number, number][] = [];
+                  for (let r0 = x.r - h + 1; r0 <= x.r; r0++) for (let c0 = x.c - w + 1; c0 <= x.c; c0++) spots.push([r0, c0]);
+                  spots.sort((a, b) => (x.r - a[0]) + (x.c - a[1]) - ((x.r - b[0]) + (x.c - b[1])));
+                  return spots.find(([r0, c0]) => ok(r0, c0, w, h)) ?? null;
+                };
+                const clearAll = () => edit.cells.map((v, k): [number, number | null] => [k, v === tid ? null : v]);
+                const resizeTo = (w: number, h: number, at: [number, number]) => {
+                  const ch = clearAll();
+                  for (let r = at[0]; r < at[0] + h; r++) for (let c = at[1]; c < at[1] + w; c++) ch.push([r * edit.cols + c, tid]);
+                  put(ch);
+                };
+                const SHAPES: [number, number][] = [[1, 1], [2, 1], [3, 1], [4, 1], [1, 2], [2, 2]];
+                const opts = SHAPES.map(([w, h]) => ({ w, h, at: fit(w, h) }));
+                const any = opts.some((o) => o.at && (o.w !== x.w || o.h !== x.h));
+                ask(nameOf(tid) ?? 'Table', any ? 'Pick the table’s size on the plan. Bigger tables suit families and groups.' : 'There is no free spot around it. Free a spot beside or below it (or make the area bigger) to make it bigger.', [
+                  { text: 'Take off the plan', style: 'destructive', onPress: () => put(clearAll()) },
+                  { text: 'Done', style: 'cancel' },
+                ], any ? (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6, alignSelf: 'stretch' }}>
+                    {opts.map((o) => {
+                      const on = o.w === x.w && o.h === x.h;
+                      return (
+                        <Pressable key={`${o.w}x${o.h}`} disabled={!o.at || on} onPress={() => { closeAsk(); resizeTo(o.w, o.h, o.at!); }} accessibilityRole="button" accessibilityLabel={`${o.w} by ${o.h}`}
+                          style={({ pressed }) => [st.size, on && st.sizeOn, !o.at && { opacity: 0.35 }, pressed && { transform: [{ scale: 0.96 }] }]}>
+                          <View style={{ gap: 2, height: 18, justifyContent: 'center' }}>
+                            {Array.from({ length: o.h }, (_, r) => <View key={r} style={{ flexDirection: 'row', gap: 2 }}>{Array.from({ length: o.w }, (_, c) => <View key={c} style={[st.sizeDot, on && { backgroundColor: '#FFFFFF' }]} />)}</View>)}
+                          </View>
+                          <T w="heavy" style={{ fontSize: 12, color: on ? '#FFFFFF' : C.text }}>{o.w} × {o.h}</T>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null, 'info');
+              };
+              const id = x.id;
+              return (
+                <Pressable style={[st.spot, x.kind === 'table' && st.spotOn, x.kind === 'blank' && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
+                  onPress={() => {
+                    if (x.kind === 'blank') put([[i, null]]);
+                    else if (x.kind === 'table') tapTable(id!);
+                    else setPick(pick === i ? null : i);
+                  }}>
+                  <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: x.kind === 'blank' ? '#C9BDB3' : x.kind === 'table' ? '#FFFFFF' : '#B5A99F' }}>
+                    {x.kind === 'blank' ? 'blank' : x.kind === 'table' ? `${nameOf(id) ?? '?'}${x.w > 1 || x.h > 1 ? ` · ${x.w}×${x.h}` : ''}` : '+'}
+                  </T>
+                </Pressable>
+              );
+            }} />
           </View>
           {pick != null ? (() => {
             const taken = new Set([...placedElsewhere(edit.id), ...areaTables(edit)]);
@@ -229,8 +233,8 @@ const st = StyleSheet.create({
   areaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface2, borderRadius: 12, padding: 10 },
   plan: { backgroundColor: C.surface2, borderRadius: 14, padding: 8, gap: 6 },
   planRow: { flexDirection: 'row', gap: 6 },
-  spot: { flex: 1, height: 44, borderRadius: 10, backgroundColor: '#ECE5DF', borderWidth: 1, borderColor: '#E0D6CE', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  size: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  spot: { flex: 1, borderRadius: 10, backgroundColor: '#ECE5DF', borderWidth: 1, borderColor: '#E0D6CE', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  size: { width: '30%', flexGrow: 1, alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   sizeOn: { backgroundColor: C.accent, borderColor: C.accent },
   sizeDot: { width: 8, height: 8, borderRadius: 2, backgroundColor: C.accent },
   blank: { backgroundColor: 'transparent', borderColor: '#E6DDD5' },

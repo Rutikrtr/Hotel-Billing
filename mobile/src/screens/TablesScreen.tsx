@@ -7,9 +7,10 @@ import { tokenNo } from '../printing/escpos';
 import { useAppDispatch, useAppSelector } from '../store';
 import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
-import { BLANK, areaTables, cellSpan, tableKey, type LayoutArea, type Order, type Table } from '../types';
+import { areaTables, tableKey, type LayoutArea, type Order, type Table } from '../types';
 import { Icon } from '../ui/icons';
 import { Button, Chip, Gradient, HotelHeader, T } from '../ui/kit';
+import PlanGrid from '../ui/PlanGrid';
 import { C, shadow } from '../ui/theme';
 import type { Stack } from '../Root';
 
@@ -163,22 +164,10 @@ export default function TablesScreen() {
                 <T w="heavy" style={{ fontSize: 15, flex: 1 }}>{a.name}</T>
                 <T w="semibold" style={{ fontSize: 11.5, color: C.muted }}>{s.busy} of {s.tables} busy</T>
               </View>
-              {Array.from({ length: a.rows }, (_, r) => (
-                <View key={r} style={st.gridRow}>
-                  {Array.from({ length: a.cols }, (_, c) => {
-                    const id = a.cells[r * a.cols + c];
-                    const span = cellSpan(a, r, c);
-                    if (!span) return null;
-                    const x = id != null ? byId.get(id) : undefined;
-                    return (
-                      <View key={c} style={[st.cell, span > 1 && { flexGrow: span, flexBasis: 6 * (span - 1) }]}>
-                        {x ? tile(x.table, x.orders, compact, true)
-                          : <View style={[st.empty, compact && { minHeight: 64 }, id === BLANK && st.blank]} />}
-                      </View>
-                    );
-                  })}
-                </View>
-              ))}
+              <PlanGrid area={a} rowH={compact ? 64 : 84} render={(x) => {
+                const tb = x.kind === 'table' ? byId.get(x.id!) : undefined;
+                return tb ? tile(tb.table, tb.orders, compact, true) : <View style={[st.empty, { flex: 1, minHeight: 0 }, x.kind === 'blank' && st.blank]} />;
+              }} />
             </View>
           );
         })}
