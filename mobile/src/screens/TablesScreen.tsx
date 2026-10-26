@@ -1,13 +1,13 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FlatList, LayoutAnimation, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { computeBill, rsShort } from '../money';
 import { tokenNo } from '../printing/escpos';
 import { useAppDispatch, useAppSelector } from '../store';
 import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
-import { tableKey, type LayoutArea, type Order, type Table } from '../types';
+import { BLANK, areaTables, cellSpan, tableKey, type LayoutArea, type Order, type Table } from '../types';
 import { Icon } from '../ui/icons';
 import { Button, Chip, HotelHeader, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
@@ -24,6 +24,13 @@ export default function TablesScreen() {
   const dispatch = useAppDispatch();
   const { tables, orders, settings, loading, error } = useAppSelector((s) => s.data);
   const carts = useAppSelector((s) => s.cart);
+  // Switching the floor plan on or off (Settings) slides between the two views instead of jumping.
+  const layoutOn = !!settings?.table_layout?.on;
+  const firstLayout = useRef(true);
+  useEffect(() => {
+    if (firstLayout.current) { firstLayout.current = false; return; }
+    if (Platform.OS !== 'web') LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  }, [layoutOn]);
   const account = useAppSelector((s) => s.auth.account);
   const canBill = account?.can_bill === true;
   const rate = settings?.tax_rate_bp ?? 0;
@@ -104,11 +111,11 @@ export default function TablesScreen() {
   const layout = settings?.table_layout?.on && settings.table_layout.areas.length ? settings.table_layout : null;
   if (layout) {
     const byId = new Map(tiles.map((x) => [x.table.id, x]));
-    const placed = new Set(layout.areas.flatMap((a) => a.cells.filter((c): c is number => c != null)));
+    const placed = new Set(layout.areas.flatMap(areaTables));
     const others = tiles.filter((x) => !placed.has(x.table.id));
     const shown = area === 'all' || !layout.areas.some((a) => a.id === area) ? layout.areas : layout.areas.filter((a) => a.id === area);
     const areaStats = (a: LayoutArea) => {
-      const ids = a.cells.filter((c): c is number => c != null && byId.has(c));
+      const ids = areaTables(a).filter((id) => byId.has(id));
       return { tables: ids.length, busy: ids.filter((id) => byId.get(id)!.orders.length).length };
     };
     return (
@@ -134,8 +141,15 @@ export default function TablesScreen() {
                 <View key={r} style={st.gridRow}>
                   {Array.from({ length: a.cols }, (_, c) => {
                     const id = a.cells[r * a.cols + c];
+                    const span = cellSpan(a, r, c);
+                    if (!span) return null;
                     const x = id != null ? byId.get(id) : undefined;
-                    return <View key={c} style={st.cell}>{x ? tile(x.table, x.orders, compact, true) : <View style={[st.empty, compact && { minHeight: 64 }]} />}</View>;
+                    return (
+                      <View key={c} style={[st.cell, span === 2 && st.wide]}>
+                        {x ? tile(x.table, x.orders, compact, true)
+                          : <View style={[st.empty, compact && { minHeight: 64 }, id === BLANK && st.blank]} />}
+                      </View>
+                    );
                   })}
                 </View>
               ))}
@@ -183,6 +197,8 @@ const st = StyleSheet.create({
   area: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 10, marginBottom: 12 },
   gridRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   cell: { flex: 1 },
+  wide: { flexGrow: 2, flexBasis: 6 },   // a big table: two cells plus the gap between them
+  blank: { backgroundColor: 'transparent', borderWidth: 0 },
   empty: { flex: 1, minHeight: 84, borderRadius: 11, backgroundColor: '#F1ECE7', borderWidth: 1, borderColor: '#E7DFD8', borderStyle: 'dashed' },
   tileInGrid: { flex: 1, maxWidth: '100%', marginBottom: 0 },
   tileCompact: { minHeight: 64, padding: 7, marginBottom: 0, borderRadius: 11 },

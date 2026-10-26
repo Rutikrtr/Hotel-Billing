@@ -2,7 +2,7 @@ import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, 
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View, Platform, UIManager } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider } from 'react-redux';
 import Root from './src/Root';
@@ -10,6 +10,9 @@ import { restoreFromPhone, store } from './src/store';
 import { start } from './src/store/auth';
 import { C } from './src/ui/theme';
 import { ToastHost } from './src/ui/toast';
+
+// Smooth show/hide of parts of a screen (e.g. the floor plan switch) on Android.
+if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
 
 /** If anything fails while drawing, show the error instead of a frozen screen (so it can be reported and fixed). */
 class Guard extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {

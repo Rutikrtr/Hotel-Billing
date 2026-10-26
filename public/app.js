@@ -1979,8 +1979,8 @@ async function settingsView(token) {
         <h2 style="margin:0">Bill Details</h2>
         <div class="locked-field"><span>Restaurant name ${ic('lock')}</span><strong>${s.hotel_name}</strong></div>
         <div class="locked-field"><span>Address ${ic('lock')}</span><strong>${s.hotel_address || '—'}</strong></div>
-        <p class="small" style="margin:-4px 0 0">To change the name or address, contact Techyverve.</p>
-        <label>Phone <input name="hotel_phone" type="tel" value="${s.hotel_phone}" maxlength="20"></label>
+        <div class="locked-field"><span>Phone ${ic('lock')}</span><strong>${s.hotel_phone || '—'}</strong></div>
+        <p class="small" style="margin:-4px 0 0">To change the name, address or phone, contact Techyverve.</p>
         <div class="gst-box">
           <label class="toggle"><input type="checkbox" name="gst_on" id="gst-on" ${s.tax_rate_bp > 0 ? new Raw('checked') : ''}> Charge GST on bills</label>
           <p class="small" style="margin:0">Off: bills show only items and the total. Turn on if your restaurant is GST-registered.</p>
@@ -2082,7 +2082,6 @@ async function settingsView(token) {
     if (f.gst_on === 'on' && rate <= 0) throw new Error('Enter a GST rate, like 5, or turn GST off.');
     if (rate > 10000) throw new Error('GST rate can’t be more than 100%.');
     await q(sb.from('restaurants').update({
-      hotel_phone: f.hotel_phone.trim(),
       hotel_gstin: (f.hotel_gstin ?? s.hotel_gstin).trim().toUpperCase(), tax_rate_bp: rate, quick_close: f.quick_close === 'on', kot_tables: f.kot_tables === 'on',
     }).eq('id', s.id));
     getSettings.clear();

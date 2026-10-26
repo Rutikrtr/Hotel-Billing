@@ -97,6 +97,9 @@ export default function MenuScreen() {
               <T w="bold" style={{ opacity: m.available ? 1 : 0.5 }}>{m.name}</T>
               <T style={{ color: C.muted, fontSize: 12.5 }}>{rs(m.price)}{m.available ? '' : ' · Sold out'}</T>
             </Pressable>
+            <Pressable hitSlop={6} onPress={() => openEdit(m)} style={({ pressed }) => [st.edit, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel={`Edit ${m.name}`}>
+              <T w="bold" style={{ color: C.accent, fontSize: 12 }}>Edit</T>
+            </Pressable>
             <Pressable hitSlop={10} onPress={() => quick(m, { is_favorite: !m.is_favorite }, m.is_favorite ? `${m.name} removed from favourites` : `★ ${m.name} will show first`)}
               accessibilityRole="button" accessibilityLabel={m.is_favorite ? 'Remove from favourites' : 'Mark as favourite'}>
               {m.is_favorite ? <Icon.star color="#F59E0B" /> : <Icon.starOff color="#C9BBB0" />}
@@ -138,5 +141,6 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderColor: C.line, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   first: { borderTopWidth: 1, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
   last: { borderBottomLeftRadius: 14, borderBottomRightRadius: 14 },
+  edit: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#F5C7AC', backgroundColor: '#FFF7F2' },
   fab: { position: 'absolute', left: 12, right: 12, bottom: 12 },
 });

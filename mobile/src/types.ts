@@ -23,7 +23,18 @@ export interface Settings {
 }
 
 /** Optional floor plan: areas (Hall 1, Garden…) each with a grid; cells hold a table id or null (an empty spot). */
+/** cells: a table id, null for a free (grey) spot, or BLANK for empty floor. A table in two side-by-side cells is a big table. */
 export interface LayoutArea { id: string; name: string; cols: number; rows: number; cells: (number | null)[] }
+export const BLANK = 0;
+/** Table ids placed in an area, each once (a big table fills two cells). */
+export const areaTables = (a: LayoutArea) => [...new Set(a.cells.filter((c): c is number => c != null && c !== BLANK))];
+/** How a grid cell draws: skip the second half of a big table; span 2 for the first half. */
+export const cellSpan = (a: LayoutArea, r: number, c: number) => {
+  const id = a.cells[r * a.cols + c];
+  if (id == null || id === BLANK) return 1;
+  if (c > 0 && a.cells[r * a.cols + c - 1] === id) return 0;
+  return c + 1 < a.cols && a.cells[r * a.cols + c + 1] === id ? 2 : 1;
+};
 export interface TableLayout { on: boolean; areas: LayoutArea[] }
 
 export interface MenuItem {

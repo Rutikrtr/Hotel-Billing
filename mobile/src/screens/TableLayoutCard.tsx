@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../store';
 import { reloadSettings } from '../store/data';
 import { q, sb } from '../supabase';
+import { BLANK, areaTables, cellSpan } from '../types';
 import type { LayoutArea, Table, TableLayout } from '../types';
 import { Button, Card, Chip, Field, Sheet, T, ToggleRow } from '../ui/kit';
 import { C } from '../ui/theme';
@@ -13,9 +14,11 @@ const MAX = 8;
 
 /** Put the tables of an area into a grid of a new size, keeping their order; extra ones come off the plan. */
 function resize(a: LayoutArea, cols: number, rows: number): LayoutArea {
-  const ids = a.cells.filter((c): c is number => c != null).slice(0, cols * rows);
+  const used = a.cells.filter((c) => c != null).length;
   const old = a.cols === cols ? a.cells.slice(0, cols * rows) : null;
-  const cells = old && old.filter((c) => c != null).length === ids.length
+  // Same width and nothing cut off: keep the plan as drawn (big tables, blanks). Otherwise refill in order.
+  const ids = areaTables(a).slice(0, cols * rows);
+  const cells = old && old.filter((c) => c != null).length === used
     ? [...old, ...Array(Math.max(0, cols * rows - old.length)).fill(null)]
     : [...ids, ...Array(cols * rows - ids.length).fill(null)];
   return { ...a, cols, rows, cells };
@@ -52,10 +55,24 @@ export default function TableLayoutCard() {
       return true;
     } catch (err) { toast((err as Error).message, true); return false; } finally { setBusy(false); }
   };
-  const toggle = (on: boolean) => save(on && !layout.areas.length ? starter(tables) : { ...layout, on }, on ? 'Table layout on' : 'Back to the simple list of tables');
+  // The switch moves at once; the change is saved after the owner confirms, and moves back if saving fails.
+  const [on, setOn] = useState(layout.on);
+  useEffect(() => setOn(layout.on), [layout.on]);
+  const toggle = (next: boolean) => {
+    Alert.alert(next ? 'Turn on table layout?' : 'Turn off table layout?',
+      next ? 'Tables will show by area (Hall, Garden…) in the places you set. Everyone on staff sees it.' : 'Tables go back to one simple list. Your areas are kept for later.',
+      [{ text: 'Cancel', style: 'cancel' }, {
+        text: next ? 'Turn On' : 'Turn Off', onPress: async () => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setOn(next);
+          const ok = await save(next && !layout.areas.length ? starter(tables) : { ...layout, on: next }, next ? 'Table layout on' : 'Back to the simple list of tables');
+          if (!ok) setOn(!next);
+        },
+      }]);
+  };
 
   const nameOf = (id: number | null) => tables.find((t) => t.id === id)?.name;
-  const placedElsewhere = (areaId: string) => new Set(layout.areas.filter((a) => a.id !== areaId).flatMap((a) => a.cells).filter((c): c is number => c != null));
+  const placedElsewhere = (areaId: string) => new Set(layout.areas.filter((a) => a.id !== areaId).flatMap(areaTables));
   const saveArea = async () => {
     if (!edit) return;
     if (!edit.name.trim()) { toast('Give this area a name, like Hall 1 or Garden.', true); return; }
@@ -72,14 +89,14 @@ export default function TableLayoutCard() {
 
   return (
     <Card style={{ gap: 10 }}>
-      <ToggleRow label="Table layout by area" hint={layout.on ? 'Tables show by hall, in the places you set' : 'Off: all tables in one simple list'} value={layout.on} onChange={toggle} />
-      {layout.on ? (
+      <ToggleRow label="Table layout by area" hint={on ? 'Tables show by hall, in the places you set' : 'Off: all tables in one simple list'} value={on} onChange={toggle} />
+      {on && layout.on ? (
         <>
           {layout.areas.map((a) => (
             <Pressable key={a.id} onPress={() => setEdit({ ...a, cells: [...a.cells] })} style={st.areaRow} accessibilityRole="button">
               <View style={{ flex: 1 }}>
                 <T w="bold">{a.name}</T>
-                <T style={{ color: C.muted, fontSize: 11.5 }}>{a.cols} × {a.rows} · {a.cells.filter((c) => c != null).length} tables</T>
+                <T style={{ color: C.muted, fontSize: 11.5 }}>{a.cols} × {a.rows} · {areaTables(a).length} tables</T>
               </View>
               <MiniGrid a={a} />
             </Pressable>
@@ -101,20 +118,34 @@ export default function TableLayoutCard() {
               <Stepper label="Down" n={edit.rows} onChange={(n) => setEdit(resize(edit, edit.cols, n))} />
             </View>
           </View>
-          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table there. Tap a table to take it off.</T>
+          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table or a blank space there. Tap a table to make it big (2 spots) or take it off.</T>
           <View style={st.plan}>
             {Array.from({ length: edit.rows }, (_, r) => (
               <View key={r} style={st.planRow}>
                 {Array.from({ length: edit.cols }, (_, c) => {
                   const i = r * edit.cols + c;
                   const id = edit.cells[i];
+                  const span = cellSpan(edit, r, c);
+                  if (!span) return null;
+                  const blank = id === BLANK;
+                  const put = (changes: [number, number | null][]) => { const cells = [...edit.cells]; changes.forEach(([k, v]) => { cells[k] = v; }); setEdit({ ...edit, cells }); setPick(null); };
+                  const tapTable = (tid: number) => {
+                    const canGrow = span === 1 && c + 1 < edit.cols && edit.cells[i + 1] == null;
+                    Alert.alert(nameOf(tid) ?? 'Table', span === 2 ? 'Big table · 2 spots' : undefined, [
+                      ...(span === 2 ? [{ text: 'Make normal (1 spot)', onPress: () => put([[i + 1, null]]) }] : []),
+                      ...(canGrow ? [{ text: 'Make big (2 spots)', onPress: () => put([[i + 1, tid]]) }] : []),
+                      { text: 'Take off', style: 'destructive' as const, onPress: () => put(span === 2 ? [[i, null], [i + 1, null]] : [[i, null]]) },
+                      { text: 'Cancel', style: 'cancel' as const },
+                    ]);
+                  };
                   return (
-                    <Pressable key={c} style={[st.spot, id != null && st.spotOn, pick === i && st.spotPick]} accessibilityRole="button"
+                    <Pressable key={c} style={[st.spot, span === 2 && st.wide, id != null && !blank && st.spotOn, blank && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
                       onPress={() => {
-                        if (id != null) { const cells = [...edit.cells]; cells[i] = null; setEdit({ ...edit, cells }); setPick(null); }
+                        if (blank) put([[i, null]]);
+                        else if (id != null) tapTable(id);
                         else setPick(pick === i ? null : i);
                       }}>
-                      <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: id != null ? '#FFFFFF' : '#B5A99F' }}>{id != null ? nameOf(id) ?? '?' : '+'}</T>
+                      <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: blank ? '#C9BDB3' : id != null ? '#FFFFFF' : '#B5A99F' }}>{blank ? 'blank' : id != null ? `${nameOf(id) ?? '?'}${span === 2 ? ' · big' : ''}` : '+'}</T>
                     </Pressable>
                   );
                 })}
@@ -122,11 +153,12 @@ export default function TableLayoutCard() {
             ))}
           </View>
           {pick != null ? (() => {
-            const taken = new Set([...placedElsewhere(edit.id), ...edit.cells.filter((c): c is number => c != null)]);
+            const taken = new Set([...placedElsewhere(edit.id), ...areaTables(edit)]);
             const free = tables.filter((t) => !taken.has(t.id));
             return (
               <View style={{ gap: 6 }}>
                 <T w="semibold" style={{ fontSize: 12.5 }}>Put which table here?</T>
+                <Chip label="▢ Blank space (no table)" onPress={() => { const cells = [...edit.cells]; cells[pick] = BLANK; setEdit({ ...edit, cells }); setPick(null); }} />
                 {free.length ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {free.map((t) => <Chip key={t.id} label={t.name} onPress={() => { const cells = [...edit.cells]; cells[pick] = t.id; setEdit({ ...edit, cells }); setPick(null); }} />)}
@@ -159,7 +191,7 @@ function MiniGrid({ a }: { a: LayoutArea }) {
     <View style={{ gap: 2 }}>
       {Array.from({ length: Math.min(a.rows, 5) }, (_, r) => (
         <View key={r} style={{ flexDirection: 'row', gap: 2 }}>
-          {Array.from({ length: Math.min(a.cols, 6) }, (_, c) => <View key={c} style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: a.cells[r * a.cols + c] != null ? C.brand1 : '#E5DDD6' }} />)}
+          {Array.from({ length: Math.min(a.cols, 6) }, (_, c) => <View key={c} style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: a.cells[r * a.cols + c] == null ? '#E5DDD6' : a.cells[r * a.cols + c] === BLANK ? 'transparent' : C.brand1 }} />)}
         </View>
       ))}
     </View>
@@ -171,6 +203,8 @@ const st = StyleSheet.create({
   plan: { backgroundColor: C.surface2, borderRadius: 14, padding: 8, gap: 6 },
   planRow: { flexDirection: 'row', gap: 6 },
   spot: { flex: 1, height: 44, borderRadius: 10, backgroundColor: '#ECE5DF', borderWidth: 1, borderColor: '#E0D6CE', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
+  wide: { flexGrow: 2, flexBasis: 6 },
+  blank: { backgroundColor: 'transparent', borderColor: '#E6DDD5' },
   spotOn: { backgroundColor: C.brand1, borderColor: C.brand1, borderStyle: 'solid' },
   spotPick: { borderColor: C.accent, borderWidth: 2, backgroundColor: C.accentSoft },
   step: { width: 30, height: 30, borderRadius: 9, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },

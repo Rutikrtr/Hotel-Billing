@@ -126,11 +126,10 @@ function Info({ k, v }: { k: string; v: string }) {
   return <View style={{ flexDirection: 'row', gap: 10 }}><T style={{ color: C.muted, width: 70 }}>{k}</T><T w="semibold" style={{ flex: 1 }}>{v}</T></View>;
 }
 
-/** Bill details the owner may change (name and address are set by Techyverve). */
+/** Bill details the owner may change (name, address and phone are set by Techyverve). */
 function BillDetails() {
   const dispatch = useAppDispatch();
   const s = useAppSelector((x) => x.data.settings)!;
-  const [phone, setPhone] = useState(s.hotel_phone ?? '');
   const [gstOn, setGstOn] = useState(s.tax_rate_bp > 0);
   const [rate, setRate] = useState(s.tax_rate_bp > 0 ? String(+(s.tax_rate_bp / 100).toFixed(2)) : '5');
   const [gstin, setGstin] = useState(s.hotel_gstin ?? '');
@@ -143,7 +142,7 @@ function BillDetails() {
       if (gstOn && bp <= 0) throw new Error('Enter a GST rate, like 5, or turn GST off.');
       if (bp > 10000) throw new Error('GST rate can’t be more than 100%.');
       setBusy(true);
-      await q(sb.from('restaurants').update({ hotel_phone: phone.trim(), hotel_gstin: gstin.trim().toUpperCase(), tax_rate_bp: bp, quick_close: quick, kot_tables: kot }).eq('id', s.id));
+      await q(sb.from('restaurants').update({ hotel_gstin: gstin.trim().toUpperCase(), tax_rate_bp: bp, quick_close: quick, kot_tables: kot }).eq('id', s.id));
       await dispatch(reloadSettings());
       toast('Changes saved');
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
@@ -153,7 +152,7 @@ function BillDetails() {
       <T w="heavy" style={{ fontSize: 15 }}>Bill Details</T>
       <View style={st.locked}><T style={{ color: C.muted, fontSize: 12 }}>Restaurant name 🔒</T><T w="bold">{s.hotel_name}</T></View>
       {s.hotel_address ? <View style={st.locked}><T style={{ color: C.muted, fontSize: 12 }}>Address 🔒</T><T w="bold">{s.hotel_address}</T></View> : null}
-      <Field label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" maxLength={20} />
+      <View style={st.locked}><T style={{ color: C.muted, fontSize: 12 }}>Phone 🔒</T><T w="bold">{s.hotel_phone || '—'}</T></View>
       <ToggleRow label="Charge GST on bills" value={gstOn} onChange={setGstOn} />
       {gstOn ? (
         <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -164,7 +163,7 @@ function BillDetails() {
       <ToggleRow label="Print Bill clears the table" hint="Off: the table waits for payment after printing" value={quick} onChange={setQuick} />
       <ToggleRow label="Kitchen tickets (KOT) for tables" hint="Send to Kitchen prints new dishes for the cook" value={kot} onChange={setKot} />
       <Button title="Save Changes" onPress={save} busy={busy} />
-      <T style={{ color: C.muted, fontSize: 11.5 }}>To change the restaurant name or address, contact Techyverve.</T>
+      <T style={{ color: C.muted, fontSize: 11.5 }}>To change the restaurant name, address or phone, contact Techyverve.</T>
     </Card>
   );
 }

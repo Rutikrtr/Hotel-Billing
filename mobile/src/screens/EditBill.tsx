@@ -83,13 +83,13 @@ export function EditBillSheet({ open, onClose, onSaved, order, rate }: {
   );
 }
 
-/** Delete a paid bill: the owner types the word "delete" to confirm (a full copy stays in the change log). */
+/** Delete a paid bill: the owner types the delete password ("techyverve") to confirm (a full copy stays in the change log). */
 export function DeleteBillSheet({ open, onClose, onDeleted, orderId, billNo, total }: {
   open: boolean; onClose: () => void; onDeleted: () => void; orderId: number; billNo: string | null; total: number;
 }) {
   const [word, setWord] = useState('');
   const [busy, setBusy] = useState(false);
-  const ok = word.trim().toLowerCase() === 'delete';
+  const ok = word.trim().toLowerCase() === 'techyverve';
   const del = async () => {
     if (!ok) return;
     setBusy(true);
