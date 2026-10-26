@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, RefreshControl, SectionList, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Pressable, RefreshControl, SectionList, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { fmt, rs, toPaise } from '../money';
 import { useAppDispatch, useAppSelector } from '../store';
 import { patchMenuItem, reloadMenu } from '../store/data';
@@ -10,6 +10,7 @@ import { Button, Chip, Diet, Empty, Field, Header, SearchBox, Sheet, T, ToggleRo
 import { C, F } from '../ui/theme';
 import { toast } from '../ui/toast';
 import { MicButton } from '../ui/Mic';
+import { ask } from '../ui/dialog';
 import { findDishes } from '../match';
 
 const DEFAULT_CATEGORIES = ['Starters', 'Main Course', 'Breads', 'Rice', 'Beverages', 'Desserts', 'Others'];
@@ -64,7 +65,7 @@ export default function MenuScreen() {
   };
   const remove = () => {
     if (!draft?.id) return;
-    Alert.alert('Delete item', `Delete ${draft.name} from the menu? Past bills keep it.`, [
+    ask('Delete item', `Delete ${draft.name} from the menu? Past bills keep it.`, [
       { text: 'Cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => { if (await run(() => q(sb.from('menu_items').delete().eq('id', draft.id)), `${draft.name} deleted`)) setDraft(null); } },
     ]);

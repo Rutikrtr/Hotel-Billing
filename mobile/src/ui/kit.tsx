@@ -36,7 +36,7 @@ export function T({ style, children, w = 'regular', numberOfLines, adjustsFontSi
   return <Text numberOfLines={numberOfLines} adjustsFontSizeToFit={adjustsFontSizeToFit} style={[{ fontFamily: F[w], color: C.text, fontSize: 13.5 }, style]}>{children}</Text>;
 }
 
-type Kind = 'primary' | 'secondary' | 'dark' | 'danger' | 'green';
+type Kind = 'primary' | 'secondary' | 'dark' | 'danger' | 'green' | 'red';
 export function Button({ title, onPress, kind = 'primary', busy, disabled, style, small, icon }: {
   title: string; onPress: () => void; kind?: Kind; busy?: boolean; disabled?: boolean; style?: StyleProp<ViewStyle>; small?: boolean;
   icon?: (p: { color: string; size?: number }) => React.ReactElement;
@@ -51,7 +51,7 @@ export function Button({ title, onPress, kind = 'primary', busy, disabled, style
       hitSlop={6}
       style={({ pressed }) => [
         s.btn, small && s.btnSmall,
-        kind === 'secondary' && s.btnSecondary, kind === 'dark' && { backgroundColor: C.ink }, kind === 'green' && { backgroundColor: C.free }, kind === 'danger' && s.btnDanger,
+        kind === 'secondary' && s.btnSecondary, kind === 'dark' && { backgroundColor: C.ink }, kind === 'green' && { backgroundColor: C.free }, kind === 'red' && { backgroundColor: C.danger }, kind === 'danger' && s.btnDanger,
         { opacity: off ? 0.55 : 1, transform: [{ scale: pressed && !off ? 0.97 : 1 }] }, style,
       ]}
     >

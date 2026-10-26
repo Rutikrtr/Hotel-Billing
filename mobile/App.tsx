@@ -9,6 +9,7 @@ import Root from './src/Root';
 import { restoreFromPhone, store } from './src/store';
 import { start } from './src/store/auth';
 import { C } from './src/ui/theme';
+import { DialogHost } from './src/ui/dialog';
 import { ToastHost } from './src/ui/toast';
 
 // Smooth show/hide of parts of a screen (e.g. the floor plan switch) on Android.
@@ -63,6 +64,7 @@ export default function App() {
               <View style={{ flex: 1 }}>
                 <Root />
                 <ToastHost />
+                <DialogHost />
               </View>
             ) : <View style={{ flex: 1 }} />}
           </View>

@@ -1,7 +1,7 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { shortDate } from '../dates';
 import { computeBill, fmt, nightsBetween, rs, toPaise } from '../money';
 import { paperOf, printSlips } from '../printing';
@@ -11,6 +11,7 @@ import { q, sb } from '../supabase';
 import type { Stay } from '../types';
 import DateField from '../ui/DateField';
 import { Button, Card, Chip, Field, Sheet, T } from '../ui/kit';
+import { ask } from '../ui/dialog';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -74,7 +75,7 @@ export default function StayScreen() {
     if (!printer.bill) throw new Error('No printer set up on this phone. Open Settings → Printer Setup.');
     await printSlips(printer, [staySlip(paperOf(printer), stay, settings, rate)]);
   }, 'Printed');
-  const cancel = () => Alert.alert('Cancel check-in', `Cancel ${stay.guest_name}’s check-in? The room becomes free and nothing is billed.`, [
+  const cancel = () => ask('Cancel check-in', `Cancel ${stay.guest_name}’s check-in? The room becomes free and nothing is billed.`, [
     { text: 'Keep' },
     { text: 'Cancel Check-in', style: 'destructive', onPress: async () => {
       try { await q(sb.from('stays').delete().eq('id', stay.id)); roomsChanged.current = true; toast('Check-in cancelled'); nav.goBack(); } catch (err) { toast((err as Error).message, true); }

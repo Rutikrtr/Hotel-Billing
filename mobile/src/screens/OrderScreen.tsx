@@ -1,7 +1,7 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeBill, fmt, rs, rsShort, toPaise } from '../money';
 import { billSlip, kotSlip, parcelKitchenSlip, tokenNo } from '../printing/escpos';
@@ -17,6 +17,7 @@ import { C, F } from '../ui/theme';
 import { MicButton } from '../ui/Mic';
 import { findDishes } from '../match';
 import { toast } from '../ui/toast';
+import { ask } from '../ui/dialog';
 import type { Stack } from '../Root';
 
 type Method = 'Cash' | 'UPI' | 'Card';
@@ -121,7 +122,7 @@ export default function OrderScreen() {
   /** Run a step with a busy button; errors become a clear alert. */
   const run = async (name: string, fn: () => Promise<void>) => {
     setBusy(name);
-    try { await fn(); } catch (err) { Alert.alert('Couldn’t finish', (err as Error).message); } finally { setBusy(null); }
+    try { await fn(); } catch (err) { ask('Couldn’t finish', (err as Error).message); } finally { setBusy(null); }
   };
   const save = async () => {
     const saved = await dispatch(saveOrder(where)).unwrap();
@@ -133,7 +134,7 @@ export default function OrderScreen() {
   const onSave = () => run('save', async () => { await save(); toast(`${label} saved`); setSheet(false); nav.goBack(); });
 
   /** Dishes added by mistake: remove the whole order (nothing billed). Not for a printed bill. */
-  const onClear = () => Alert.alert(`Clear ${label}?`, 'All dishes on this order will be removed. This can’t be undone.', [
+  const onClear = () => ask(`Clear ${label}?`, 'All dishes on this order will be removed. This can’t be undone.', [
     { text: 'Keep', style: 'cancel' },
     { text: 'Clear', style: 'destructive', onPress: () => run('clear', async () => {
       if (order) await q(sb.from('orders').delete().eq('id', order.id).eq('status', 'open'));
@@ -409,7 +410,7 @@ function DiscountRow({ value, onChange }: { value: number; onChange: (p: number 
       <T style={{ color: C.muted }}>Discount (₹)</T>
       <TextInput
         value={text} onChangeText={setText} keyboardType="decimal-pad" placeholder="0" style={st.discount} accessibilityLabel="Discount in rupees"
-        onEndEditing={() => { try { onChange(toPaise(text)); } catch { Alert.alert('Discount', 'Enter an amount like 50 or 20.50'); } }}
+        onEndEditing={() => { try { onChange(toPaise(text)); } catch { ask('Discount', 'Enter an amount like 50 or 20.50'); } }}
       />
     </View>
   );

@@ -17,6 +17,7 @@ export const C = {
   billed: '#6D28D9',
   billedSoft: '#F2ECFF',
   danger: '#B91C1C',
+  dangerSoft: '#FDECEC',
   veg: '#15803D',
   nonveg: '#B91C1C',
 };

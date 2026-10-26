@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { rs, toPaise } from '../money';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -13,6 +13,7 @@ import { q, sb } from '../supabase';
 import type { Room, Table } from '../types';
 import { Button, Card, Chip, Field, Header, initials, Pill, Sheet, T, ToggleRow } from '../ui/kit';
 import { Icon } from '../ui/icons';
+import { ask } from '../ui/dialog';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -53,7 +54,7 @@ export default function SettingsScreen() {
   const unsaved = Object.values(carts).filter(hasPending).length;
   const out = () => {
     const go = () => dispatch(signOut());
-    Alert.alert('Sign out', unsaved ? `${unsaved} order(s) on this phone are not saved yet. Sign out anyway?` : 'Sign out of Master Bill on this phone?', [{ text: 'Cancel' }, { text: 'Sign Out', style: 'destructive', onPress: go }]);
+    ask('Sign out', unsaved ? `${unsaved} order(s) on this phone are not saved yet. Sign out anyway?` : 'Sign out of Master Bill on this phone?', [{ text: 'Cancel' }, { text: 'Sign Out', style: 'destructive', onPress: go }]);
   };
   const role = account?.role ?? 'staff';
 
@@ -184,7 +185,7 @@ function Tables({ tables }: { tables: Table[] }) {
       setEdit(null);
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
   };
-  const remove = (t: Table) => Alert.alert('Remove table', `Remove table ${t.name}?`, [{ text: 'Cancel' }, {
+  const remove = (t: Table) => ask('Remove table', `Remove table ${t.name}?`, [{ text: 'Cancel' }, {
     text: 'Remove', style: 'destructive', onPress: async () => {
       try { await q(sb.from('dining_tables').delete().eq('id', t.id)); await dispatch(reloadTables()); toast(`Table ${t.name} removed`); } catch (err) { toast((err as Error).message, true); }
     },
@@ -225,7 +226,7 @@ function Rooms() {
       setEdit(null); load();
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
   };
-  const remove = (r: Room) => Alert.alert('Remove room', `Remove room ${r.number}?`, [{ text: 'Cancel' }, {
+  const remove = (r: Room) => ask('Remove room', `Remove room ${r.number}?`, [{ text: 'Cancel' }, {
     text: 'Remove', style: 'destructive', onPress: async () => {
       try { await q(sb.from('lodging_rooms').delete().eq('id', r.id)); toast(`Room ${r.number} removed`); setEdit(null); load(); } catch (err) { toast((err as Error).message, true); }
     },
@@ -280,7 +281,7 @@ function StaffLogins({ staff, limit, reload }: { staff: Member[]; limit: number;
     try { await q(sb.rpc('owner_reset_staff_password', { p_email: pw!.m.email, p_password: pw!.password })); setMade({ name: nameOf(pw!.m), login: loginName(pw!.m.email), password: pw!.password }); setPw(null); }
     catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
   };
-  const remove = (m: Member) => Alert.alert('Remove login', `Remove ${nameOf(m)}? They won’t be able to sign in.`, [{ text: 'Cancel' }, {
+  const remove = (m: Member) => ask('Remove login', `Remove ${nameOf(m)}? They won’t be able to sign in.`, [{ text: 'Cancel' }, {
     text: 'Remove', style: 'destructive', onPress: async () => { try { await q(sb.from('staff').delete().eq('email', m.email)); toast('Login removed'); reload(); } catch (err) { toast((err as Error).message, true); } },
   }]);
   return (

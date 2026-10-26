@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
+import { LayoutAnimation, Pressable, StyleSheet, View } from 'react-native';
 import { useAppDispatch, useAppSelector } from '../store';
 import { reloadSettings } from '../store/data';
 import { q, sb } from '../supabase';
 import { BLANK, areaTables, cellSpan } from '../types';
 import type { LayoutArea, Table, TableLayout } from '../types';
 import { Button, Card, Chip, Field, Sheet, T, ToggleRow } from '../ui/kit';
+import { ask, closeAsk } from '../ui/dialog';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 
@@ -59,7 +60,7 @@ export default function TableLayoutCard() {
   const [on, setOn] = useState(layout.on);
   useEffect(() => setOn(layout.on), [layout.on]);
   const toggle = (next: boolean) => {
-    Alert.alert(next ? 'Turn on table layout?' : 'Turn off table layout?',
+    ask(next ? 'Turn on table layout?' : 'Turn off table layout?',
       next ? 'Tables will show by area (Hall, Garden…) in the places you set. Everyone on staff sees it.' : 'Tables go back to one simple list. Your areas are kept for later.',
       [{ text: 'Cancel', style: 'cancel' }, {
         text: next ? 'Turn On' : 'Turn Off', onPress: async () => {
@@ -82,7 +83,7 @@ export default function TableLayoutCard() {
   };
   const removeArea = () => {
     if (!edit) return;
-    Alert.alert('Remove area', `Remove ${edit.name}? Its tables stay; they move to “Other tables”.`, [{ text: 'Cancel' }, {
+    ask('Remove area', `Remove ${edit.name}? Its tables stay; they move to “Other tables”.`, [{ text: 'Cancel' }, {
       text: 'Remove', style: 'destructive', onPress: async () => { if (await save({ ...layout, areas: layout.areas.filter((a) => a.id !== edit.id) }, 'Area removed')) setEdit(null); },
     }]);
   };
@@ -118,7 +119,7 @@ export default function TableLayoutCard() {
               <Stepper label="Down" n={edit.rows} onChange={(n) => setEdit(resize(edit, edit.cols, n))} />
             </View>
           </View>
-          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table or a blank space there. Tap a table to make it big (2 spots) or take it off.</T>
+          <T style={{ color: C.muted, fontSize: 12 }}>Tap a grey spot to put a table or a blank space there. Tap a table to make it bigger (up to 4 spots) or take it off.</T>
           <View style={st.plan}>
             {Array.from({ length: edit.rows }, (_, r) => (
               <View key={r} style={st.planRow}>
@@ -130,22 +131,36 @@ export default function TableLayoutCard() {
                   const blank = id === BLANK;
                   const put = (changes: [number, number | null][]) => { const cells = [...edit.cells]; changes.forEach(([k, v]) => { cells[k] = v; }); setEdit({ ...edit, cells }); setPick(null); };
                   const tapTable = (tid: number) => {
-                    const canGrow = span === 1 && c + 1 < edit.cols && edit.cells[i + 1] == null;
-                    Alert.alert(nameOf(tid) ?? 'Table', span === 2 ? 'Big table · 2 spots' : undefined, [
-                      ...(span === 2 ? [{ text: 'Make normal (1 spot)', onPress: () => put([[i + 1, null]]) }] : []),
-                      ...(canGrow ? [{ text: 'Make big (2 spots)', onPress: () => put([[i + 1, tid]]) }] : []),
-                      { text: 'Take off', style: 'destructive' as const, onPress: () => put(span === 2 ? [[i, null], [i + 1, null]] : [[i, null]]) },
-                      { text: 'Cancel', style: 'cancel' as const },
-                    ]);
+                    // Sizes this table can take here: its own spots plus free (grey) spots to its right, up to 4.
+                    let max = span;
+                    while (max < 4 && c + max < edit.cols && edit.cells[i + max] == null) max++;
+                    const resizeTo = (k: number) => put([...Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null]), ...Array.from({ length: k }, (_, j): [number, number | null] => [i + j, tid])]);
+                    ask(nameOf(tid) ?? 'Table', max > 1 ? 'How many spots across should this table take? Bigger tables suit families and groups.' : 'There is no free spot to its right, so it stays 1 spot.', [
+                      { text: 'Take off the plan', style: 'destructive', onPress: () => put(Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null])) },
+                      { text: 'Done', style: 'cancel' },
+                    ], max > 1 ? (
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, alignSelf: 'stretch' }}>
+                        {[1, 2, 3, 4].map((k) => {
+                          const can = k <= max;
+                          return (
+                            <Pressable key={k} disabled={!can} onPress={() => { closeAsk(); resizeTo(k); }} accessibilityRole="button" accessibilityLabel={`${k} spots`}
+                              style={({ pressed }) => [st.size, k === span && st.sizeOn, !can && { opacity: 0.35 }, pressed && { transform: [{ scale: 0.96 }] }]}>
+                              <View style={{ flexDirection: 'row', gap: 2 }}>{Array.from({ length: k }, (_, j) => <View key={j} style={[st.sizeDot, k === span && { backgroundColor: '#FFFFFF' }]} />)}</View>
+                              <T w="heavy" style={{ fontSize: 12, color: k === span ? '#FFFFFF' : C.text }}>{k === 1 ? '1 spot' : `${k} spots`}</T>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : null, 'info');
                   };
                   return (
-                    <Pressable key={c} style={[st.spot, span === 2 && st.wide, id != null && !blank && st.spotOn, blank && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
+                    <Pressable key={c} style={[st.spot, span > 1 && { flexGrow: span, flexBasis: 6 * (span - 1) }, id != null && !blank && st.spotOn, blank && st.blank, pick === i && st.spotPick]} accessibilityRole="button"
                       onPress={() => {
                         if (blank) put([[i, null]]);
                         else if (id != null) tapTable(id);
                         else setPick(pick === i ? null : i);
                       }}>
-                      <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: blank ? '#C9BDB3' : id != null ? '#FFFFFF' : '#B5A99F' }}>{blank ? 'blank' : id != null ? `${nameOf(id) ?? '?'}${span === 2 ? ' · big' : ''}` : '+'}</T>
+                      <T w="heavy" numberOfLines={1} style={{ fontSize: edit.cols > 4 ? 10.5 : 12, color: blank ? '#C9BDB3' : id != null ? '#FFFFFF' : '#B5A99F' }}>{blank ? 'blank' : id != null ? `${nameOf(id) ?? '?'}${span > 1 ? ` · ${span} wide` : ''}` : '+'}</T>
                     </Pressable>
                   );
                 })}
@@ -203,7 +218,9 @@ const st = StyleSheet.create({
   plan: { backgroundColor: C.surface2, borderRadius: 14, padding: 8, gap: 6 },
   planRow: { flexDirection: 'row', gap: 6 },
   spot: { flex: 1, height: 44, borderRadius: 10, backgroundColor: '#ECE5DF', borderWidth: 1, borderColor: '#E0D6CE', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  wide: { flexGrow: 2, flexBasis: 6 },
+  size: { flex: 1, alignItems: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
+  sizeOn: { backgroundColor: C.accent, borderColor: C.accent },
+  sizeDot: { width: 8, height: 8, borderRadius: 2, backgroundColor: C.accent },
   blank: { backgroundColor: 'transparent', borderColor: '#E6DDD5' },
   spotOn: { backgroundColor: C.brand1, borderColor: C.brand1, borderStyle: 'solid' },
   spotPick: { borderColor: C.accent, borderWidth: 2, backgroundColor: C.accentSoft },

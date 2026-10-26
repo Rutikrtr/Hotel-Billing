@@ -28,12 +28,15 @@ export interface LayoutArea { id: string; name: string; cols: number; rows: numb
 export const BLANK = 0;
 /** Table ids placed in an area, each once (a big table fills two cells). */
 export const areaTables = (a: LayoutArea) => [...new Set(a.cells.filter((c): c is number => c != null && c !== BLANK))];
-/** How a grid cell draws: skip the second half of a big table; span 2 for the first half. */
+/** How many spots across a cell draws: 0 for the later spots of a big table, else 1–4 (a table can fill up to 4 spots side by side). */
 export const cellSpan = (a: LayoutArea, r: number, c: number) => {
-  const id = a.cells[r * a.cols + c];
+  const at = (k: number) => a.cells[r * a.cols + k];
+  const id = at(c);
   if (id == null || id === BLANK) return 1;
-  if (c > 0 && a.cells[r * a.cols + c - 1] === id) return 0;
-  return c + 1 < a.cols && a.cells[r * a.cols + c + 1] === id ? 2 : 1;
+  if (c > 0 && at(c - 1) === id) return 0;
+  let n = 1;
+  while (c + n < a.cols && at(c + n) === id) n++;
+  return n;
 };
 export interface TableLayout { on: boolean; areas: LayoutArea[] }
 
