@@ -131,11 +131,23 @@ export default function TableLayoutCard() {
                   const blank = id === BLANK;
                   const put = (changes: [number, number | null][]) => { const cells = [...edit.cells]; changes.forEach(([k, v]) => { cells[k] = v; }); setEdit({ ...edit, cells }); setPick(null); };
                   const tapTable = (tid: number) => {
-                    // Sizes this table can take here: its own spots plus free (grey) spots to its right, up to 4.
-                    let max = span;
-                    while (max < 4 && c + max < edit.cols && edit.cells[i + max] == null) max++;
-                    const resizeTo = (k: number) => put([...Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null]), ...Array.from({ length: k }, (_, j): [number, number | null] => [i + j, tid])]);
-                    ask(nameOf(tid) ?? 'Table', max > 1 ? 'How many spots across should this table take? Bigger tables suit families and groups.' : 'There is no free spot to its right, so it stays 1 spot.', [
+                    // A table grows into free (grey) spots on its right first, then on its left, so a table at
+                    // the end of a row or in a corner can still be made bigger. Up to 4 spots across.
+                    const free = (k: number) => k >= 0 && k < edit.cols && edit.cells[r * edit.cols + k] == null;
+                    let lo = c, hi = c + span - 1;   // columns the table covers now
+                    const startFor: number[] = [];   // left column for each size 1..4
+                    startFor[span] = c;
+                    for (let k = span + 1; k <= 4; k++) {
+                      if (free(hi + 1)) hi++; else if (free(lo - 1)) lo--; else break;
+                      startFor[k] = lo;
+                    }
+                    for (let k = span - 1; k >= 1; k--) startFor[k] = c;   // smaller: keep the left edge
+                    const max = startFor.length - 1;
+                    const resizeTo = (k: number) => {
+                      const s = r * edit.cols + startFor[k];
+                      put([...Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null]), ...Array.from({ length: k }, (_, j): [number, number | null] => [s + j, tid])]);
+                    };
+                    ask(nameOf(tid) ?? 'Table', max > 1 ? 'How many spots across should this table take? Bigger tables suit families and groups.' : 'There is no free spot next to it in this row. Free a spot beside it (or make the area wider) to make it bigger.', [
                       { text: 'Take off the plan', style: 'destructive', onPress: () => put(Array.from({ length: span }, (_, j): [number, number | null] => [i + j, null])) },
                       { text: 'Done', style: 'cancel' },
                     ], max > 1 ? (
