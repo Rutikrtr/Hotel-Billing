@@ -16,6 +16,7 @@ import { Icon } from '../ui/icons';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
+import TableLayoutCard from './TableLayoutCard';
 
 const WEB = 'https://hotel-billing-v1.pages.dev';
 const ROLE = { owner: 'Owner', manager: 'Manager', staff: 'Waiter' } as const;
@@ -88,6 +89,7 @@ export default function SettingsScreen() {
         </Card>
       ) : null}
       {owner && settings ? <BillDetails /> : null}
+      {owner && feat('tables') && settings ? <TableLayoutCard /> : null}
       {owner && feat('tables') ? <Tables tables={tables} /> : null}
       {owner && feat('rooms') ? <Rooms /> : null}
       {owner ? <StaffLogins staff={staff} limit={settings?.staff_limit ?? 2} reload={loadStaff} /> : null}
@@ -174,6 +176,7 @@ function Tables({ tables }: { tables: Table[] }) {
   const save = async () => {
     const name = edit!.name.trim();
     if (!name) return toast('Enter a table name, like T1.', true);
+    if (tables.some((t) => t.id !== edit!.id && t.name.trim().toLowerCase() === name.toLowerCase())) return toast(`There is already a table called ${name}. Each table needs its own name.`, true);
     setBusy(true);
     try {
       await q(edit!.id ? sb.from('dining_tables').update({ name }).eq('id', edit!.id) : sb.from('dining_tables').insert({ name, sort: tables.length + 1 }));

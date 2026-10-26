@@ -19,7 +19,12 @@ export interface Settings {
   quick_close: boolean | null;
   kot_tables: boolean;
   staff_limit?: number | null;
+  table_layout?: TableLayout | null;
 }
+
+/** Optional floor plan: areas (Hall 1, Garden…) each with a grid; cells hold a table id or null (an empty spot). */
+export interface LayoutArea { id: string; name: string; cols: number; rows: number; cells: (number | null)[] }
+export interface TableLayout { on: boolean; areas: LayoutArea[] }
 
 export interface MenuItem {
   id: number;

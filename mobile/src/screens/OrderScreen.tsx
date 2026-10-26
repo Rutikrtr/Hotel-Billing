@@ -8,7 +8,9 @@ import { billSlip, kotSlip, parcelKitchenSlip, tokenNo } from '../printing/escpo
 import { paperOf, printSlips } from '../printing';
 import { generateBill, markKot, saveOrder, settle, store, useAppDispatch, useAppSelector, type Payment, type Where } from '../store';
 import { loginName } from '../store/auth';
-import { change, hasPending, mergeLines, setDiscount, type Line } from '../store/cart';
+import { change, clearCart, hasPending, mergeLines, setDiscount, type Line } from '../store/cart';
+import { orderClosed } from '../store/data';
+import { q, sb } from '../supabase';
 import { parcelKey, tableKey, type Order } from '../types';
 import { Button, Chip, Diet, SearchBox, T } from '../ui/kit';
 import { C, F } from '../ui/theme';
@@ -129,6 +131,19 @@ export default function OrderScreen() {
   const paper = paperOf(printer);
 
   const onSave = () => run('save', async () => { await save(); toast(`${label} saved`); setSheet(false); nav.goBack(); });
+
+  /** Dishes added by mistake: remove the whole order (nothing billed). Not for a printed bill. */
+  const onClear = () => Alert.alert(`Clear ${label}?`, 'All dishes on this order will be removed. This can’t be undone.', [
+    { text: 'Keep', style: 'cancel' },
+    { text: 'Clear', style: 'destructive', onPress: () => run('clear', async () => {
+      if (order) await q(sb.from('orders').delete().eq('id', order.id).eq('status', 'open'));
+      if (order) dispatch(orderClosed(key));
+      dispatch(clearCart(key));
+      setSheet(false);
+      toast(`${label} cleared`);
+      nav.goBack();
+    }) },
+  ]);
 
   const onKitchen = () => run('kot', async () => {
     const saved = await save();
@@ -308,10 +323,15 @@ export default function OrderScreen() {
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {canBill ? (order?.billed_at && settings?.quick_close === false
                     ? <Button kind="secondary" title="Receive Payment" onPress={() => setPayFor(order)} style={{ flex: 1 }} disabled={!!busy || pending} />
-                    : <Button kind="secondary" title="Print Bill" onPress={onPrintBill} busy={busy === 'bill'} disabled={!!busy && busy !== 'bill'} style={{ flex: 1 }} />) : null}
+                    : <Button kind="green" title="Print Bill" onPress={onPrintBill} busy={busy === 'bill'} disabled={!!busy && busy !== 'bill'} style={{ flex: 1 }} />) : null}
                   <Button title={pending ? 'Save Order' : 'Saved ✓'} onPress={onSave} busy={busy === 'save'} disabled={!pending || (!!busy && busy !== 'save')} style={{ flex: 1.4 }} />
                 </View>
                 {!canBill ? <T style={{ color: C.muted, fontSize: 12.5, textAlign: 'center' }}>The manager prints the bill and takes payment.</T> : null}
+                {!order?.bill_no && (order || pending) ? (
+                  <Pressable onPress={onClear} disabled={!!busy} hitSlop={6} style={st.clear} accessibilityRole="button">
+                    <T w="bold" style={{ color: C.danger, fontSize: 13 }}>{busy === 'clear' ? 'Clearing…' : `Clear ${parcel ? 'Parcel' : 'Table'} · remove all dishes`}</T>
+                  </Pressable>
+                ) : null}
               </View>
             </>
           )}
@@ -411,6 +431,7 @@ const st = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, marginBottom: 10 },
   line: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },
   totals: { padding: 16, paddingTop: 10, gap: 3 },
+  clear: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 12 },
   addSection: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: C.accentSoft },
   secTab: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, minWidth: 92 },
   secOn: { backgroundColor: C.ink, borderColor: C.ink },

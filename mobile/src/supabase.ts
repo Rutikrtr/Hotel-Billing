@@ -47,5 +47,6 @@ export function friendly(message: string): string {
   if (/Network request failed|Failed to fetch/i.test(m)) return 'No internet connection. Check Wi-Fi or mobile data.';
   if (/Invalid login credentials/i.test(m)) return 'Wrong Login ID or password.';
   if (/JWT expired|session/i.test(m)) return 'Please sign in again.';
+  if (/dining_tables_unique_name/i.test(m)) return 'There is already a table with this name. Each table needs its own name.';
   return m;
 }
