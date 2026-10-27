@@ -14,6 +14,11 @@ const DEVA_CONS = { क: 'k', ख: 'kh', ग: 'g', घ: 'gh', ङ: 'n', च: 'ch
 const DEVA_VOWELS = { अ: 'a', आ: 'a', इ: 'i', ई: 'i', उ: 'u', ऊ: 'u', ऋ: 'ri', ए: 'e', ऐ: 'ai', ओ: 'o', औ: 'au', ऑ: 'o', ॲ: 'e' };
 const DEVA_SIGNS = { 'ा': 'a', 'ि': 'i', 'ी': 'i', 'ु': 'u', 'ू': 'u', 'ृ': 'ri', 'े': 'e', 'ै': 'ai', 'ो': 'o', 'ौ': 'au', 'ॉ': 'o', 'ॅ': 'e' };
 const DEVA_DIGITS = '०१२३४५६७८९';
+// Load the Marathi font early so the first bill drawn as a picture already uses it.
+document.fonts?.load?.('700 34px "Noto Sans Devanagari"', 'क').catch(() => {});
+
+/** True when the text has Marathi/Hindi letters (needs printing as a picture to keep them). */
+export const hasDevanagari = (text) => /[\u0900-\u097F]/.test(String(text ?? ''));
 function toLatin(text) {
   if (!/[\u0900-\u097F]/.test(text)) return text;
   const chars = [...text];
@@ -89,6 +94,47 @@ export class Slip {
     return this.line(l + ' '.repeat(Math.max(width - l.length - r.length, 1)) + r);
   }
   rule(ch = '-') { return this.line(ch.repeat(this.width)); }
+  /**
+   * Text the printer has no font for (Marathi/Hindi) printed as a picture: the browser draws it with its own
+   * fonts, centred and wrapped to the paper, and the dots are sent as an ESC/POS raster image (GS v 0).
+   * px is the text height in printer dots (8 dots per mm).
+   */
+  picture(text, { px = 26, bold = false } = {}) {
+    const dots = this.width >= 48 ? 576 : 384;
+    const c = document.createElement('canvas');
+    const g = c.getContext('2d');
+    const font = `${bold ? '700' : '500'} ${px}px "Noto Sans Devanagari", "Mangal", "Nirmala UI", sans-serif`;
+    g.font = font;
+    // Wrap at spaces to the paper width.
+    const lines = [];
+    let cur = '';
+    for (const word of String(text).split(/\s+/)) {
+      const next = cur ? `${cur} ${word}` : word;
+      if (cur && g.measureText(next).width > dots - 8) { lines.push(cur); cur = word; } else cur = next;
+    }
+    if (cur) lines.push(cur);
+    const lineH = Math.round(px * 1.45);
+    c.width = dots;
+    c.height = lines.length * lineH + 4;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#000'; g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+    lines.forEach((l, i) => g.fillText(l, dots / 2, i * lineH + lineH / 2 + 2));
+    const { data } = g.getImageData(0, 0, c.width, c.height);
+    const wBytes = dots / 8;
+    const out = [GS, 0x76, 0x30, 0, wBytes & 0xff, wBytes >> 8, c.height & 0xff, c.height >> 8];
+    for (let y = 0; y < c.height; y++) {
+      for (let xb = 0; xb < wBytes; xb++) {
+        let b = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const i = (y * dots + xb * 8 + bit) * 4;
+          if (data[i + 3] > 0 && (data[i] + data[i + 1] + data[i + 2]) / 3 < 140) b |= 0x80 >> bit;
+        }
+        out.push(b);
+      }
+    }
+    this.out.push(...out);
+    return this;
+  }
   feed(n = 1) { return this.raw(ESC, 0x64, n); }
   /** Feed a little blank paper (set per phone, 2 lines by default) and cut; printers without a cutter ignore the cut. */
   cut() { return this.feed(feedLines()).raw(GS, 0x56, 0x42, 0x00); }

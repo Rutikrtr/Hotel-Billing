@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
 import {
-  Slip, bluetoothRemembers, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
+  Slip, bluetoothRemembers, hasDevanagari, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
   feedLines, getPrinter, isApple, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
 } from './printer.js';
 
@@ -938,8 +938,17 @@ async function tableView(token, tableId, sectionArg, parcelId) {
 /** Shop name, address and phone at the top of a slip. */
 function slipHeader(slip, settings, rate) {
   // Compact: tall (not wide) name, one line for address and phone, so bills use less paper.
-  slip.align('center').bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
+  slip.align('center');
+  // Marathi/Hindi name or address: printed as a picture so the letters come out as written.
+  if (hasDevanagari(settings.hotel_name)) slip.picture(settings.hotel_name, { px: slip.width >= 48 ? 40 : 34, bold: true });
+  else slip.bold(true).size(1, 2).wrap(settings.hotel_name).size(1, 1).bold(false);
   const phone = settings.hotel_phone ? `Ph ${settings.hotel_phone}` : '';
+  if (hasDevanagari(settings.hotel_address)) {
+    slip.picture(settings.hotel_address, { px: 24 });
+    if (phone) slip.line(phone);
+    if (settings.hotel_gstin && rate > 0) slip.line(`GSTIN ${settings.hotel_gstin}`);
+    return slip.align('left').rule();
+  }
   const both = [settings.hotel_address, phone].filter(Boolean).join(', ');
   if (both.length <= slip.width) { if (both) slip.line(both); } else { slip.wrap(settings.hotel_address); if (phone) slip.line(phone); }
   if (settings.hotel_gstin && rate > 0) slip.line(`GSTIN ${settings.hotel_gstin}`);
