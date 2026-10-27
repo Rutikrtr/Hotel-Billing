@@ -64,6 +64,13 @@ export default function BillsScreen() {
     <Pressable onPress={() => setPicking(true)} hitSlop={8} style={st.dateChip} accessibilityRole="button" accessibilityLabel="Choose date">
       <Icon.calendar color="#FFFFFF" size={14} />
       <T w="bold" style={{ color: '#FFFFFF', fontSize: 12 }}>{isToday ? 'Today' : shortDay(day)}</T>
+      {Platform.OS === 'web' ? React.createElement('input', {
+        // Web app: an invisible browser date picker over the chip (iPhone Safari and computers).
+        type: 'date', value: day, max: localDay(new Date()), 'aria-label': 'Choose date',
+        onClick: (e: { currentTarget: { showPicker?: () => void } }) => { try { e.currentTarget.showPicker?.(); } catch { /* opens anyway */ } },
+        onChange: (e: { target: { value: string } }) => { if (e.target.value) setDay(e.target.value); },
+        style: { position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: 'pointer', border: 0 },
+      }) : null}
     </Pressable>
   );
 

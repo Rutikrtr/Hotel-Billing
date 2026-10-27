@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { paperOf, printSlips } from '../printing';
 import { scan, stopScan } from '../printing/ble';
 import { testSlip } from '../printing/escpos';
@@ -79,6 +79,27 @@ export default function PrinterScreen() {
       </View>
     );
   };
+
+  if (Platform.OS === 'web') {
+    // Web app: the browser prints (AirPrint on iPhone, any printer on a computer); only the paper size is set here.
+    return (
+      <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }}>
+        <Card style={{ gap: 8 }}>
+          <T w="heavy" style={{ fontSize: 15 }}>Printing from the browser</T>
+          <T style={{ color: C.muted, lineHeight: 19 }}>Bills open in the print window of this browser. On iPhone choose an AirPrint printer; on a computer choose any installed printer (thermal printers work when installed on the computer). Marathi names print as written.</T>
+          <T style={{ color: C.muted, lineHeight: 19 }}>For Bluetooth thermal printers on Android, use the Master Bill Android app.</T>
+        </Card>
+        <Card style={{ gap: 10 }}>
+          <T w="heavy" style={{ fontSize: 15 }}>Paper</T>
+          <View style={{ flexDirection: 'row' }}>
+            <Chip label="58 mm" on={p.paper === 58} onPress={() => dispatch(setPrinter({ paper: 58 }))} />
+            <Chip label="80 mm" on={p.paper === 80} onPress={() => dispatch(setPrinter({ paper: 80 }))} />
+          </View>
+        </Card>
+        <Button title="Print Test" onPress={test} busy={testing === 'all'} />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">

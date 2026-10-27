@@ -1,5 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
 import { SUPABASE_KEY, SUPABASE_URL } from './config';
@@ -25,7 +26,11 @@ function appLock<R>(name: string, _timeout: number, fn: () => Promise<R>): Promi
 }
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false, lock: appLock },
+  auth: {
+    storage: AsyncStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false, lock: appLock,
+    // Web app 2.0 lives next to the old web app on the same site: keep its sign-in separate. (Phones keep the default.)
+    ...(Platform.OS === 'web' ? { storageKey: 'master-bill-2-auth' } : {}),
+  },
   global: { fetch: fetchWithTimeout },
 });
 

@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { addDays, daysBetween, hourLabel, localDay, shortDate, startOf, WEEKDAYS } from '../dates';
 import { rsShort } from '../money';
 import { useAppSelector } from '../store';
@@ -186,8 +186,18 @@ export default function AnalyticsScreen() {
         ['Dish', 'Category', 'Quantity', 'Sales'],
         ...report.dishes.filter((x) => Number(x.qty) > 0).map((x) => { const m = x.menu_item_id != null ? menuById.get(x.menu_item_id) : undefined; return [m?.name ?? x.name, m?.category ?? 'Other', x.qty, rupees(x.revenue)]; }),
       ];
+      const csv = `\ufeff${rows.map((r) => r.map(cell).join(',')).join('\n')}`;
+      if (Platform.OS === 'web') {
+        // Web app: the browser downloads the file.
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = `sales-${from}-to-${to}.csv`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+        return;
+      }
       const path = `${FileSystem.cacheDirectory}sales-${from}-to-${to}.csv`;
-      await FileSystem.writeAsStringAsync(path, `\ufeff${rows.map((r) => r.map(cell).join(',')).join('\n')}`);
+      await FileSystem.writeAsStringAsync(path, csv);
       await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'Sales report', UTI: 'public.comma-separated-values-text' });
     } catch (err) { toast((err as Error).message, true); }
   };

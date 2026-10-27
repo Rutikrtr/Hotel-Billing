@@ -20,36 +20,48 @@ export function ascii(text: unknown): string {
 
 export type Target = 'bill' | 'kitchen';
 
+/** What a slip shows, line by line, for printing from a browser (web app), where text keeps its own letters. */
+export type Row =
+  | { kind: 'text'; text: string; align: 'left' | 'center' | 'right'; bold: boolean; big: boolean }
+  | { kind: 'cols'; left: string; right: string; bold: boolean; big: boolean }
+  | { kind: 'rule'; ch: string };
+
 export class Slip {
   out: number[] = [ESC, 0x40];
+  rows: Row[] = [];
+  private st = { align: 'left' as 'left' | 'center' | 'right', bold: false, big: false };
   constructor(public width = 32, public target: Target = 'bill', private feedLines = 2) {}
   raw(...bytes: number[]) { this.out.push(...bytes); return this; }
-  align(where: 'left' | 'center' | 'right') { return this.raw(ESC, 0x61, { left: 0, center: 1, right: 2 }[where]); }
-  bold(on: boolean) { return this.raw(ESC, 0x45, on ? 1 : 0); }
-  size(w = 1, h = 1) { return this.raw(GS, 0x21, ((w - 1) << 4) | (h - 1)); }
+  align(where: 'left' | 'center' | 'right') { this.st.align = where; return this.raw(ESC, 0x61, { left: 0, center: 1, right: 2 }[where]); }
+  bold(on: boolean) { this.st.bold = on; return this.raw(ESC, 0x45, on ? 1 : 0); }
+  size(w = 1, h = 1) { this.st.big = w > 1 || h > 1; return this.raw(GS, 0x21, ((w - 1) << 4) | (h - 1)); }
   /** Extra space between letters (ESC SP n), for headings. */
   spacing(n = 0) { return this.raw(ESC, 0x20, n); }
   text(s: string) { for (const ch of ascii(s)) this.out.push(ch.charCodeAt(0)); return this; }
-  line(s = '') { return this.text(s).raw(0x0a); }
+  private emit(s: string) { return this.text(s).raw(0x0a); }
+  private row(text: string) { this.rows.push({ kind: 'text', text, ...this.st }); }
+  line(s = '') { this.row(s); return this.emit(s); }
   wrap(s: string, width = this.width) {
+    this.row(s);
     let rest = ascii(s);
-    if (!rest) return this.line('');
+    if (!rest) return this.emit('');
     while (rest.length > width) {
       let cut = rest.lastIndexOf(' ', width);
       if (cut <= 0) cut = width;
-      this.line(rest.slice(0, cut));
+      this.emit(rest.slice(0, cut));
       rest = rest.slice(cut).trimStart();
     }
-    return this.line(rest);
+    return this.emit(rest);
   }
   cols(left: string, right: string, width = this.width) {
+    this.rows.push({ kind: 'cols', left, right, bold: this.st.bold, big: this.st.big });
     const r = ascii(right);
     let l = ascii(left);
     const room = width - r.length - 1;
     if (l.length > room) l = l.slice(0, Math.max(room, 0));
-    return this.line(l + ' '.repeat(Math.max(width - l.length - r.length, 1)) + r);
+    return this.emit(l + ' '.repeat(Math.max(width - l.length - r.length, 1)) + r);
   }
-  rule(ch = '-') { return this.line(ch.repeat(this.width)); }
+  rule(ch = '-') { this.rows.push({ kind: 'rule', ch }); return this.emit(ch.repeat(this.width)); }
   cut() { return this.raw(ESC, 0x64, this.feedLines).raw(GS, 0x56, 0x42, 0x00); }
   bytes() { return Uint8Array.from(this.out); }
 }
@@ -78,8 +90,12 @@ export function kotSlip(p: Paper, label: string, changes: { name: string; quanti
 function header(s: Slip, settings: Settings, rate: number) {
   const name = ascii(settings.hotel_name).toUpperCase();
   s.align('center').bold(true);
+  const mark = s.rows.length;
   if (name.length * 2 <= s.width) s.size(2, 2).spacing(0).wrap(name, Math.floor(s.width / 2)).size(1, 1);
   else s.size(1, 2).spacing(1).wrap(name, Math.floor(s.width / 2)).spacing(0).size(1, 1);
+  // Browser printing keeps the name as written (e.g. Marathi).
+  const head = s.rows[mark];
+  if (head?.kind === 'text') head.text = settings.hotel_name;
   s.bold(false);
   if (settings.hotel_address) s.wrap(settings.hotel_address);
   if (settings.hotel_phone) s.line(`Ph: ${settings.hotel_phone}`);
@@ -106,6 +122,7 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   for (const l of b.lines) {
     const left = ascii(`${l.quantity} ${l.name}`);
     const amt = fmt(l.quantity * l.unitPrice);
+    const mark = s.rows.length;
     if (left.length <= nameW - 1) s.cols(left, amt);
     else {
       let rest = left;
@@ -117,6 +134,9 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
       }
       s.cols(rest, amt);
     }
+    // Browser printing shows the name as written (Marathi stays Marathi) on one row; the browser wraps it.
+    s.rows.length = mark;
+    s.rows.push({ kind: 'cols', left: `${l.quantity} ${l.name}`, right: amt, bold: false, big: false });
   }
   s.rule();
   // Subtotal only when something is added or taken off; otherwise straight to the total.

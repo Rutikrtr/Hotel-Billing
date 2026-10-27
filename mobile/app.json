@@ -78,6 +78,19 @@
       "translucent": true,
       "backgroundColor": "#00000000",
       "barStyle": "dark-content"
+    },
+    "web": {
+      "name": "Master Bill 2.0",
+      "shortName": "Master Bill",
+      "themeColor": "#C2410C",
+      "backgroundColor": "#FAF6F2",
+      "favicon": "./assets/icon.png",
+      "output": "single",
+      "bundler": "metro",
+      "display": "standalone"
+    },
+    "experiments": {
+      "baseUrl": "/v2"
     }
   }
 }

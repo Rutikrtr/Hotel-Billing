@@ -57,8 +57,9 @@ export default function App() {
   return (
     <Guard>
       <Provider store={store}>
-        <SafeAreaProvider style={{ backgroundColor: C.bg }}>
-          <View style={{ flex: 1 }}>
+        <SafeAreaProvider style={{ backgroundColor: Platform.OS === 'web' ? '#EFE7E0' : C.bg }}>
+          {/* Web app on a computer: a centred app column on a soft background, like a phone-width window. */}
+          <View style={Platform.OS === 'web' ? { flex: 1, width: '100%', maxWidth: 640, alignSelf: 'center', backgroundColor: C.bg, boxShadow: '0 0 40px rgba(124,45,18,0.10)' } as object : { flex: 1 }}>
             <StatusBar style="dark" translucent backgroundColor="transparent" />
             {fontsReady && ready ? (
               <View style={{ flex: 1 }}>

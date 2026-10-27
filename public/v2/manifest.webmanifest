@@ -1,0 +1,17 @@
+{
+  "name": "Master Bill 2.0",
+  "short_name": "Master Bill",
+  "start_url": "/v2/",
+  "scope": "/v2/",
+  "display": "standalone",
+  "background_color": "#FAF6F2",
+  "theme_color": "#C2410C",
+  "icons": [
+    {
+      "src": "/v2/icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

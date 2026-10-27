@@ -1,12 +1,15 @@
+import { Platform } from 'react-native';
 import type { Device, PrinterState } from '../store/printer';
 import { joinSlips, printBytes } from './ble';
 import type { Slip } from './escpos';
 import { printTcp } from './wifi';
+import { printInBrowser } from './web';
 
 export const paperOf = (p: PrinterState) => ({ width: p.paper === 80 ? 48 : 32, feed: Math.min(4, Math.max(1, p.feed || 2)) });
 
 /** Send slips to this phone's printers: kitchen tickets to the kitchen printer when one is set. Returns failures. */
 export async function printSlips(p: PrinterState, slips: Slip[]): Promise<string[]> {
+  if (Platform.OS === 'web') { printInBrowser(slips, p.paper); return []; }
   if (!p.bill) throw new Error('No printer set up on this phone. Open Settings → Printer.');
   // Each slip goes to its printer (kitchen tickets to the kitchen printer when one is set), Bluetooth or Wi-Fi.
   const groups = new Map<string, { dev: Device; slips: Slip[] }>();

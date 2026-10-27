@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { rs, toPaise } from '../money';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -14,6 +14,7 @@ import type { Room, Table } from '../types';
 import { Button, Card, Chip, Field, Header, initials, Pill, Sheet, T, ToggleRow } from '../ui/kit';
 import { Icon } from '../ui/icons';
 import { ask } from '../ui/dialog';
+import { shareText } from '../ui/share';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -101,7 +102,7 @@ export default function SettingsScreen() {
           <T style={{ color: C.muted, fontSize: 12.5, alignSelf: 'flex-start' }}>Show this to customers. They scan it with the phone camera to see the menu.</T>
           <View style={{ padding: 12, backgroundColor: '#FFFFFF', borderRadius: 12 }}><QRCode value={qr} size={190} color={C.ink} /></View>
           <View style={{ flexDirection: 'row', gap: 8, alignSelf: 'stretch' }}>
-            <Button kind="secondary" title="Share Link" style={{ flex: 1 }} onPress={() => Share.share({ message: `${settings?.hotel_name ?? ''} menu: ${qr}` })} />
+            <Button kind="secondary" title="Share Link" style={{ flex: 1 }} onPress={() => shareText(`${settings?.hotel_name ?? ''} menu: ${qr}`)} />
             <Button kind="secondary" title="Open Menu" style={{ flex: 1 }} onPress={() => Linking.openURL(qr)} />
           </View>
         </Card>
@@ -335,7 +336,7 @@ function StaffLogins({ staff, limit, reload }: { staff: Member[]; limit: number;
             <Info k="Login ID" v={made.login} />
             <Info k="Password" v={made.password} />
           </View>
-          <Button title="Share" onPress={() => Share.share({ message: `Master Bill login\nLogin ID: ${made.login}\nPassword: ${made.password}` })} />
+          <Button title="Share" onPress={() => shareText(`Master Bill login\nLogin ID: ${made.login}\nPassword: ${made.password}`)} />
           <Button kind="secondary" title="Done" onPress={() => setMade(null)} />
         </>) : null}
       </Sheet>
