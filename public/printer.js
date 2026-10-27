@@ -17,22 +17,59 @@ const DEVA_DIGITS = '०१२३४५६७८९';
 // Load the Marathi font early so the first bill drawn as a picture already uses it.
 document.fonts?.load?.('700 34px "Noto Sans Devanagari"', 'क').catch(() => {});
 
-/** A picture (e.g. the Techyverve logo) drawn centred on a paper-wide white canvas, h dots tall, for Slip.raster. */
-export function loadPicture(url, paperWidth, h = 120) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const dots = paperWidth >= 48 ? 576 : 384;
-      const w = Math.round((img.naturalWidth / img.naturalHeight) * h) || h;
-      const c = Object.assign(document.createElement('canvas'), { width: dots, height: h + 8 });
-      const g = c.getContext('2d');
-      g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
-      g.drawImage(img, (dots - w) / 2, 4, w, h);
-      resolve(c);
-    };
-    img.onerror = () => reject(new Error('Logo not found'));
-    img.src = url;
-  });
+/**
+ * Techyverve visiting card for the test print: one paper-wide picture with a rounded frame, the logo,
+ * name, app, and contact lines with small drawn icons. Pure black on white so it prints crisply.
+ */
+export async function businessCard(paperWidth) {
+  const W = paperWidth >= 48 ? 576 : 384;
+  const k = W / 384;   // scale for 80 mm paper
+  const logo = await new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = 'icons/techyverve.svg'; });
+  const H = Math.round(432 * k);
+  const c = Object.assign(document.createElement('canvas'), { width: W, height: H });
+  const g = c.getContext('2d');
+  const font = (w, px) => `${w} ${Math.round(px * k)}px "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, Arial, sans-serif`;
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#000'; g.fillStyle = '#000'; g.lineJoin = 'round'; g.lineCap = 'round';
+  // Frame: a thick outer line and a thin inner line, rounded like a card.
+  const frame = (inset, r, lw) => { g.lineWidth = lw; g.beginPath(); g.roundRect(inset, inset, W - 2 * inset, H - 2 * inset, r); g.stroke(); };
+  frame(3 * k, 22 * k, 4 * k);
+  frame(11 * k, 15 * k, 1.5 * k);
+  const cx = W / 2;
+  let y = 30 * k;
+  if (logo) { const lh = 78 * k, lw = (logo.naturalWidth / logo.naturalHeight) * lh || lh; g.drawImage(logo, cx - lw / 2, y, lw, lh); y += lh + 14 * k; }
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  // TECHYVERVE with letter spacing.
+  g.font = font('800', 38);
+  const name = 'TECHYVERVE'; const sp = 3 * k;
+  const nw = [...name].reduce((n, ch) => n + g.measureText(ch).width, 0) + sp * (name.length - 1);
+  let x = cx - nw / 2; g.textAlign = 'left';
+  y += 34 * k;
+  for (const ch of name) { g.fillText(ch, x, y); x += g.measureText(ch).width + sp; }
+  g.textAlign = 'center';
+  y += 32 * k; g.font = font('700', 24); g.fillText('Master Bill', cx, y);
+  y += 24 * k; g.font = font('500', 17); g.fillText('Smart billing app for hotels', cx, y);
+  // Divider with a small diamond in the middle.
+  y += 22 * k; g.lineWidth = 2 * k;
+  g.beginPath(); g.moveTo(cx - 120 * k, y); g.lineTo(cx - 12 * k, y); g.moveTo(cx + 12 * k, y); g.lineTo(cx + 120 * k, y); g.stroke();
+  g.beginPath(); g.moveTo(cx, y - 6 * k); g.lineTo(cx + 6 * k, y); g.lineTo(cx, y + 6 * k); g.lineTo(cx - 6 * k, y); g.closePath(); g.fill();
+  // Contact lines: icon + text, the block centred, icons in one column.
+  const lines = [['phone', '9172523881'], ['phone', '9130690366'], ['web', 'www.techyverve.in'], ['pin', 'Kharadi, Pune']];
+  g.font = font('600', 20);
+  const iw = 22 * k, gap = 12 * k;
+  const bw = iw + gap + Math.max(...lines.map(([, s]) => g.measureText(s).width));
+  const bx = cx - bw / 2;
+  const icon = (kind, ix, iy) => {   // iy = centre line
+    const s = iw / 24; g.save(); g.translate(ix, iy - 12 * s); g.scale(s, s); g.lineWidth = 2.2; g.beginPath();
+    if (kind === 'phone') g.fill(new Path2D('M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z'));
+    else if (kind === 'web') { g.arc(12, 12, 9, 0, Math.PI * 2); g.moveTo(3, 12); g.lineTo(21, 12); g.moveTo(12, 3); g.bezierCurveTo(7, 8, 7, 16, 12, 21); g.moveTo(12, 3); g.bezierCurveTo(17, 8, 17, 16, 12, 21); g.stroke(); }
+    else { g.fill(new Path2D('M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z')); }
+    g.restore();
+  };
+  y += 22 * k;
+  g.textAlign = 'left'; g.textBaseline = 'middle';
+  for (const [kind, text] of lines) { y += 30 * k; icon(kind, bx, y); g.fillText(text, bx + iw + gap, y + 1 * k); }
+  return c;
 }
 
 /** True when the text has Marathi/Hindi letters (needs printing as a picture to keep them). */
