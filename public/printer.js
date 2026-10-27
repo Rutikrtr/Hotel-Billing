@@ -17,6 +17,24 @@ const DEVA_DIGITS = '०१२३४५६७८९';
 // Load the Marathi font early so the first bill drawn as a picture already uses it.
 document.fonts?.load?.('700 34px "Noto Sans Devanagari"', 'क').catch(() => {});
 
+/** A picture (e.g. the Techyverve logo) drawn centred on a paper-wide white canvas, h dots tall, for Slip.raster. */
+export function loadPicture(url, paperWidth, h = 120) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const dots = paperWidth >= 48 ? 576 : 384;
+      const w = Math.round((img.naturalWidth / img.naturalHeight) * h) || h;
+      const c = Object.assign(document.createElement('canvas'), { width: dots, height: h + 8 });
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, (dots - w) / 2, 4, w, h);
+      resolve(c);
+    };
+    img.onerror = () => reject(new Error('Logo not found'));
+    img.src = url;
+  });
+}
+
 /** True when the text has Marathi/Hindi letters (needs printing as a picture to keep them). */
 export const hasDevanagari = (text) => /[\u0900-\u097F]/.test(String(text ?? ''));
 function toLatin(text) {
@@ -119,7 +137,12 @@ export class Slip {
     g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
     g.fillStyle = '#000'; g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
     lines.forEach((l, i) => g.fillText(l, dots / 2, i * lineH + lineH / 2 + 2));
-    const { data } = g.getImageData(0, 0, c.width, c.height);
+    return this.raster(c);
+  }
+  /** A drawn canvas (full paper width) as an ESC/POS raster image (GS v 0): dark pixels print. */
+  raster(c) {
+    const dots = c.width;
+    const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
     const wBytes = dots / 8;
     const out = [GS, 0x76, 0x30, 0, wBytes & 0xff, wBytes >> 8, c.height & 0xff, c.height >> 8];
     for (let y = 0; y < c.height; y++) {

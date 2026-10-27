@@ -2,7 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { computeBill, fmt, nightsBetween, orderBill, plain, toPaise } from './billing.js';
 import {
-  Slip, bluetoothRemembers, hasDevanagari, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
+  Slip, bluetoothRemembers, hasDevanagari, loadPicture, bluetoothSupported, chooseBluetooth, connectBluetooth, directPrinting, forgetBluetooth,
   feedLines, getPrinter, isApple, isConnected, paperWidth, printSlips, reconnectSaved, setPrinter,
 } from './printer.js';
 
@@ -1159,10 +1159,20 @@ function printerDialog() {
       } catch (err) { draw(friendly(err)); }
     }
     if (t.dataset.test !== undefined) {
-      const test = (target, title) => new Slip(paperWidth(), target).align('center').bold(true).size(2, 2).line(title).size(1, 1).bold(false)
-        .line('Printer is working').line(dateTime(new Date().toISOString())).rule().line('1234567890'.repeat(5).slice(0, paperWidth())).cut();
+      // Test slip with the Techyverve logo and contact, everything centred.
+      const logo = await loadPicture('icons/techyverve.svg', paperWidth(), 110).catch(() => null);
+      const test = (target) => {
+        const s = new Slip(paperWidth(), target).align('center');
+        if (logo) s.raster(logo);
+        return s.bold(true).size(2, 2).line('TECHYVERVE').size(1, 1).bold(false)
+          .line('Smart billing for hotels').rule()
+          .picture('✔ TEST PRINT – OK', { px: 26, bold: true }).rule()
+          .line('Thank you for using').bold(true).line('Master Bill!').bold(false)
+          .line('For help or a new setup, call:').bold(true).line('9172523881').line('9130690366').bold(false)
+          .cut();
+      };
       const p = getPrinter();
-      const slips = [test('bill', 'BILL PRINTER'), ...(p.method === 'bluetooth' && p.kitchen.separate ? [test('kitchen', 'KITCHEN')] : [])];
+      const slips = [test('bill'), ...(p.method === 'bluetooth' && p.kitchen.separate ? [test('kitchen')] : [])];
       try {
         const failed = await printSlips(slips, { pick: true });
         draw(failed.length ? `The ${failed[0].slot} printer didn’t print: ${friendly(failed[0].error)}` : 'Test sent. If nothing printed, try the other paper width or RawBT.');
