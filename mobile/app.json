@@ -12,6 +12,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#FAF6F2"
     },
+    "ios": {
+      "bundleIdentifier": "in.techyverve.masterbill",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Master Bill connects to your Bluetooth receipt printer to print bills and kitchen tickets.",
+        "NSBluetoothPeripheralUsageDescription": "Master Bill connects to your Bluetooth receipt printer to print bills and kitchen tickets.",
+        "NSLocalNetworkUsageDescription": "Master Bill sends bills to your Wi-Fi receipt printer on this network.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
     "android": {
       "package": "in.techyverve.masterbill",
       "versionCode": 22,
