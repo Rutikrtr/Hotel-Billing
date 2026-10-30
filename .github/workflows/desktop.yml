@@ -13,6 +13,11 @@ on:
 permissions:
   contents: write
 
+# One build at a time, so an older build can never replace a newer .exe in the release.
+concurrency:
+  group: desktop-release
+  cancel-in-progress: true
+
 jobs:
   windows:
     runs-on: windows-latest
