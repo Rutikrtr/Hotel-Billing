@@ -44,11 +44,11 @@ export function AppSideBar({ pages, current, onGo, mini, onFold }: { pages: Side
   return (
     <Animated.View style={[st.side, { width }]}>
       <View {...({ dataSet: { drag: '1' } } as object)} style={[st.brand, !labels && { justifyContent: 'center', paddingHorizontal: 0 }]}>
-        <TechyverveLogo size={30} />
+        <TechyverveLogo size={30} color="#FFFFFF" />
         {labels ? (
           <View style={{ flex: 1 }}>
             <T w="heavy" numberOfLines={1} style={{ fontSize: 17, letterSpacing: -0.3, color: '#FFFFFF' }}>Master Bill</T>
-            <T w="semibold" numberOfLines={1} style={{ fontSize: 11, color: '#9AA3C7' }}>by Techyverve</T>
+            <T w="semibold" numberOfLines={1} style={{ fontSize: 11, color: '#9CA3AF' }}>by Techyverve</T>
           </View>
         ) : null}
       </View>
@@ -59,10 +59,9 @@ export function AppSideBar({ pages, current, onGo, mini, onFold }: { pages: Side
           const Ico = ICONS[pg.name] ?? Icon.tables;
           return (
             <Pressable key={pg.name} onPress={() => onGo(pg.name)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={pg.label}
-              style={(x) => [st.item, !labels && st.itemMini, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
-              {on ? <Gradient radius={12} /> : null}
-              <View><Ico color={on ? '#FFFFFF' : '#AEB5D3'} size={20} /></View>
-              {labels ? <T w={on ? 'heavy' : 'semibold'} numberOfLines={1} style={{ fontSize: 14.5, color: on ? '#FFFFFF' : '#D5D9EC' }}>{pg.label}</T> : null}
+              style={(x) => [st.item, !labels && st.itemMini, on && st.itemOn, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
+              <View><Ico color={on ? '#0E1016' : '#9CA3AF'} size={20} /></View>
+              {labels ? <T w={on ? 'heavy' : 'semibold'} numberOfLines={1} style={{ fontSize: 14.5, color: on ? '#0E1016' : '#D1D5DB' }}>{pg.label}</T> : null}
             </Pressable>
           );
         })}
@@ -71,15 +70,15 @@ export function AppSideBar({ pages, current, onGo, mini, onFold }: { pages: Side
       {labels ? (
         <View style={st.hotel}>
           <T w="heavy" numberOfLines={2} style={{ fontSize: 15.5, lineHeight: 20, color: '#FFFFFF' }}>{hotel}</T>
-          <T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: '#9AA3C7', marginTop: 2 }}>{account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : ''}</T>
+          <T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>{account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : ''}</T>
         </View>
       ) : null}
       <Pressable onPress={onFold} accessibilityRole="button" accessibilityLabel={mini ? 'Open the side menu' : 'Fold the side menu'}
         style={(x) => [st.fold, (x as { hovered?: boolean }).hovered && st.foldHover]}>
         {(state) => { const x = state as { hovered?: boolean }; return (
           <>
-            <T w="heavy" style={{ color: x.hovered ? '#FFFFFF' : '#D5D9EC', fontSize: 16 }}>{mini ? '»' : '«'}</T>
-            {labels ? <T w="semibold" style={{ color: x.hovered ? '#FFFFFF' : '#AEB5D3', fontSize: 12.5 }}>Fold menu</T> : null}
+            <T w="heavy" style={{ color: x.hovered ? '#FFFFFF' : '#D1D5DB', fontSize: 16 }}>{mini ? '»' : '«'}</T>
+            {labels ? <T w="semibold" style={{ color: x.hovered ? '#FFFFFF' : '#9CA3AF', fontSize: 12.5 }}>Fold menu</T> : null}
           </>
         ); }}
       </Pressable>
@@ -130,11 +129,12 @@ function Dock({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 const st = StyleSheet.create({
-  side: { backgroundColor: '#151A33', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 14, overflow: 'hidden' },
+  itemOn: { backgroundColor: '#FFFFFF' },
+  side: { backgroundColor: '#0E1016', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 14, overflow: 'hidden' },
   itemHover: { backgroundColor: 'rgba(255,255,255,0.08)' },
   foldHover: { backgroundColor: 'rgba(255,255,255,0.14)' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, minHeight: 48 },
-  group: { color: '#6E77A0', fontSize: 10.5, letterSpacing: 1.2, marginTop: 22, marginLeft: 10 },
+  group: { color: '#6B7280', fontSize: 10.5, letterSpacing: 1.2, marginTop: 22, marginLeft: 10 },
   itemMini: { justifyContent: 'center', paddingHorizontal: 0 },
   hotelDot: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   fold: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 40, borderRadius: 10, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
