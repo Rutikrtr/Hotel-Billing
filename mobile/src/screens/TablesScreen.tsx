@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutAnimation, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, LayoutAnimation, Platform, useWindowDimensions, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { computeBill, rsShort } from '../money';
 import { tokenNo } from '../printing/escpos';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -11,6 +11,7 @@ import { areaTables, fixtureKind, tableKey, type LayoutArea, type Order, type Ta
 import { Icon } from '../ui/icons';
 import { Button, Chip, Gradient, HotelHeader, T } from '../ui/kit';
 import PlanGrid from '../ui/PlanGrid';
+import { useWide } from '../ui/wide';
 import { DotFloor, FixtureBlock } from '../ui/PlanArt';
 import { C, shadow } from '../ui/theme';
 import type { Stack } from '../Root';
@@ -22,6 +23,10 @@ const since = (iso: string) => {
 
 export default function TablesScreen() {
   const [area, setArea] = useState('all');
+  // Computer: as many table columns as fit (about 190 px each); phones keep 3.
+  const wide = useWide();
+  const { width } = useWindowDimensions();
+  const cols = wide ? Math.max(4, Math.min(8, Math.floor((width - 260) / 190))) : 3;
   const y = useRef(new Animated.Value(0)).current;   // scroll position, drives the card shrinking and the slim bar
   const nav = useNavigation<NativeStackNavigationProp<Stack>>();
   const dispatch = useAppDispatch();
@@ -180,7 +185,7 @@ export default function TablesScreen() {
     };
     return (
       <View style={{ flex: 1 }}>
-      <Animated.ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
+      <Animated.ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: 30 }}
         onScroll={onScroll} scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => dispatch(loadAll())} colors={[C.brand1]} />}>
         {header}
@@ -200,7 +205,7 @@ export default function TablesScreen() {
                 <T w="heavy" style={{ fontSize: 15, flex: 1 }}>{a.name}</T>
                 <T w="semibold" style={{ fontSize: 11.5, color: C.muted }}>{s.busy} of {s.tables} busy</T>
               </View>
-              <PlanGrid area={a} rowH={compact ? 64 : 84} render={(x) => {
+              <PlanGrid area={a} rowH={wide ? 96 : compact ? 64 : 84} render={(x) => {
                 const tb = x.kind === 'table' ? byId.get(x.id!) : undefined;
                 if (tb) return tile(tb.table, tb.orders, compact, true, x.h > 1 ? 'tall' : x.w > 1 ? 'wide' : false);
                 if (x.kind === 'fixture') return <FixtureBlock kind={fixtureKind(x.id!)} compact={compact} />;
@@ -237,14 +242,15 @@ export default function TablesScreen() {
     <Animated.FlatList
       onScroll={onScroll} scrollEventThrottle={16}
       style={{ backgroundColor: 'transparent' }}
-      contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
+      contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: 30 }}
       data={tiles}
-      numColumns={3}
+      key={`cols${cols}`}
+      numColumns={cols}
       keyExtractor={(x) => String(x.table.id)}
       columnWrapperStyle={{ gap: 8 }}
       ListHeaderComponent={header}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => dispatch(loadAll())} colors={[C.brand1]} />}
-      renderItem={({ item }) => tile(item.table, item.orders)}
+      renderItem={({ item }) => (wide ? <View style={{ width: `${100 / cols - 1}%` as `${number}%`, marginBottom: 8 }}>{tile(item.table, item.orders, false, true)}</View> : tile(item.table, item.orders))}
     />
     {miniBar}
     </View>

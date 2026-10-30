@@ -1,7 +1,7 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { computeBill, fmt, rs, rsShort, toPaise } from '../money';
 import { billSlip, kotSlip, parcelKitchenSlip, tokenNo } from '../printing/escpos';
@@ -15,6 +15,7 @@ import { parcelKey, tableKey, type Order } from '../types';
 import { Button, Chip, Diet, SearchBox, T } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { MicButton } from '../ui/Mic';
+import { useWide } from '../ui/wide';
 import { findDishes } from '../match';
 import { toast } from '../ui/toast';
 import { ask } from '../ui/dialog';
@@ -29,6 +30,9 @@ export default function OrderScreen() {
   const { params } = useRoute<RouteProp<Stack, 'Order'>>();
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
+  const wide = useWide();
+  const { width } = useWindowDimensions();
+  const cols = width >= 1400 ? 3 : 2;   // dish columns on a computer (the order panel takes 420 px)
   const parcel = params.parcelId !== undefined;
   const [parcelId, setParcelId] = useState<number | null>(params.parcelId ?? null);
   const section = params.section ?? 'A';
@@ -248,8 +252,8 @@ export default function OrderScreen() {
     );
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: C.bg }}>
+  // Search, section tabs and category chips above the dishes.
+  const tools = (
       <View style={st.tools}>
         {multi ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 6 }}>
@@ -272,6 +276,86 @@ export default function OrderScreen() {
           {categories.map((c) => <Chip key={c} label={c} on={!search && filter === c} onPress={() => { setSearch(''); setFilter(c); }} />)}
         </ScrollView>
       </View>
+  );
+  // The order's lines, totals and buttons: in the sheet on phones, in the right-hand panel on computers.
+  const orderBody = (
+    <>
+              <ScrollView style={wide ? { flex: 1 } : { maxHeight: 330 }} contentContainerStyle={{ paddingHorizontal: 16 }}>
+                {lines.map((l) => <OrderLine key={`${l.menuId}-${l.name}`} l={l} kotOn={kotOn} onTap={(d) => l.menuId && tap(l.menuId, d)} />)}
+              </ScrollView>
+              <View style={st.totals}>
+                <Row k="Subtotal" v={fmt(bill.subtotal)} />
+                {canBill ? <DiscountRow value={discount} onChange={(p) => dispatch(setDiscount({ key, discount: p }))} /> : null}
+                {bill.tax ? <><Row k={`CGST ${rate / 200}%`} v={fmt(bill.cgst)} /><Row k={`SGST ${rate / 200}%`} v={fmt(bill.sgst)} /></> : null}
+                {bill.roundOff ? <Row k="Round off" v={fmt(bill.roundOff)} /> : null}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                  <T w="heavy" style={{ fontSize: 20 }}>Total</T><T w="heavy" style={{ fontSize: 20, color: C.accent }}>{rs(bill.total)}</T>
+                </View>
+                {canBill && settings?.quick_close !== false && !order?.billed_at ? <PayPicker value={payment} onChange={setPayment} total={bill.total} /> : null}
+              </View>
+              <View style={{ paddingHorizontal: 16, gap: 8 }}>
+                {kotOn && toKitchen.length ? <Button kind="dark" title={`Send to Kitchen · ${toKitchen.reduce((n, l) => n + Math.abs(l.quantity - l.kotQty), 0)} items`} onPress={onKitchen} busy={busy === 'kot'} disabled={!!busy && busy !== 'kot'} /> : null}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {canBill ? (order?.billed_at && settings?.quick_close === false
+                    ? <Button kind="secondary" title="Receive Payment" onPress={() => setPayFor(order)} style={{ flex: 1 }} disabled={!!busy || pending} />
+                    : <Button kind="green" title="Print Bill" onPress={onPrintBill} busy={busy === 'bill'} disabled={!!busy && busy !== 'bill'} style={{ flex: 1 }} />) : null}
+                  <Button title={pending ? 'Save Order' : 'Saved ✓'} onPress={onSave} busy={busy === 'save'} disabled={!pending || (!!busy && busy !== 'save')} style={{ flex: 1.4 }} />
+                </View>
+                {!canBill ? <T style={{ color: C.muted, fontSize: 12.5, textAlign: 'center' }}>The manager prints the bill and takes payment.</T> : null}
+                {!order?.bill_no && (order || pending) ? (
+                  <Pressable onPress={onClear} disabled={!!busy} hitSlop={6} style={st.clear} accessibilityRole="button">
+                    <T w="bold" style={{ color: C.danger, fontSize: 13 }}>{busy === 'clear' ? 'Clearing…' : `Clear ${parcel ? 'Parcel' : 'Table'} · remove all dishes`}</T>
+                  </Pressable>
+                ) : null}
+              </View>
+    </>
+  );
+
+  if (wide) {
+    // Computer: dishes on the left (grid), the order always open on the right, like a billing counter.
+    return (
+      <View style={{ flex: 1, flexDirection: 'row', backgroundColor: C.bg }}>
+        <View style={{ flex: 1 }}>
+          {tools}
+          <FlatList
+            key={`cols${cols}`} numColumns={cols} data={shown} keyExtractor={(m) => String(m.id)}
+            renderItem={(x) => <View style={{ flex: 1 / cols, padding: 4 }}>{renderDish(x)}</View>}
+            contentContainerStyle={{ padding: 12 }} keyboardShouldPersistTaps="handled" initialNumToRender={30}
+          />
+        </View>
+        <View style={st.side}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: C.line }}>
+            <T w="heavy" style={{ fontSize: 19 }}>{label}</T>
+            <T style={{ color: C.muted, fontSize: 12.5 }}>{lines.length ? `${bill.itemCount} items${pending ? ' · not saved' : ''}` : 'No dishes yet'}</T>
+          </View>
+          {lines.length ? <View style={{ flex: 1, paddingTop: 8, paddingBottom: 12 }}>{orderBody}</View> : (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 6 }}>
+              <T style={{ fontSize: 34 }}>🍽️</T>
+              <T w="bold" style={{ color: C.muted, textAlign: 'center' }}>Click a dish on the left to add it to this order.</T>
+            </View>
+          )}
+        </View>
+        <Modal visible={!!payFor} transparent animationType="fade" onRequestClose={() => setPayFor(null)}>
+          <Pressable style={st.backdrop} onPress={() => { if (!busy) setPayFor(null); }} />
+          <View style={st.payBox}>
+            <T w="heavy" style={{ fontSize: 19 }}>Receive payment</T>
+            {payFor ? (
+              <View style={{ gap: 10, marginTop: 8 }}>
+                <T w="heavy" style={{ fontSize: 30, textAlign: 'center' }}>{rs(computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total)}</T>
+                <PayPicker value={payment} onChange={setPayment} total={computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total} />
+                <Button title="Mark as Paid" onPress={pay} busy={busy === 'pay'} />
+                <Button kind="secondary" title="Cancel" onPress={() => setPayFor(null)} />
+              </View>
+            ) : null}
+          </View>
+        </Modal>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      {tools}
       <FlatList
         data={shown} keyExtractor={(m) => String(m.id)} renderItem={renderDish}
         contentContainerStyle={{ padding: 12, paddingBottom: 110 }} keyboardShouldPersistTaps="handled"
@@ -304,38 +388,7 @@ export default function OrderScreen() {
               <PayPicker value={payment} onChange={setPayment} total={computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total} />
               <Button title="Mark as Paid" onPress={pay} busy={busy === 'pay'} />
             </View>
-          ) : (
-            <>
-              <ScrollView style={{ maxHeight: 330 }} contentContainerStyle={{ paddingHorizontal: 16 }}>
-                {lines.map((l) => <OrderLine key={`${l.menuId}-${l.name}`} l={l} kotOn={kotOn} onTap={(d) => l.menuId && tap(l.menuId, d)} />)}
-              </ScrollView>
-              <View style={st.totals}>
-                <Row k="Subtotal" v={fmt(bill.subtotal)} />
-                {canBill ? <DiscountRow value={discount} onChange={(p) => dispatch(setDiscount({ key, discount: p }))} /> : null}
-                {bill.tax ? <><Row k={`CGST ${rate / 200}%`} v={fmt(bill.cgst)} /><Row k={`SGST ${rate / 200}%`} v={fmt(bill.sgst)} /></> : null}
-                {bill.roundOff ? <Row k="Round off" v={fmt(bill.roundOff)} /> : null}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                  <T w="heavy" style={{ fontSize: 20 }}>Total</T><T w="heavy" style={{ fontSize: 20, color: C.accent }}>{rs(bill.total)}</T>
-                </View>
-                {canBill && settings?.quick_close !== false && !order?.billed_at ? <PayPicker value={payment} onChange={setPayment} total={bill.total} /> : null}
-              </View>
-              <View style={{ paddingHorizontal: 16, gap: 8 }}>
-                {kotOn && toKitchen.length ? <Button kind="dark" title={`Send to Kitchen · ${toKitchen.reduce((n, l) => n + Math.abs(l.quantity - l.kotQty), 0)} items`} onPress={onKitchen} busy={busy === 'kot'} disabled={!!busy && busy !== 'kot'} /> : null}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {canBill ? (order?.billed_at && settings?.quick_close === false
-                    ? <Button kind="secondary" title="Receive Payment" onPress={() => setPayFor(order)} style={{ flex: 1 }} disabled={!!busy || pending} />
-                    : <Button kind="green" title="Print Bill" onPress={onPrintBill} busy={busy === 'bill'} disabled={!!busy && busy !== 'bill'} style={{ flex: 1 }} />) : null}
-                  <Button title={pending ? 'Save Order' : 'Saved ✓'} onPress={onSave} busy={busy === 'save'} disabled={!pending || (!!busy && busy !== 'save')} style={{ flex: 1.4 }} />
-                </View>
-                {!canBill ? <T style={{ color: C.muted, fontSize: 12.5, textAlign: 'center' }}>The manager prints the bill and takes payment.</T> : null}
-                {!order?.bill_no && (order || pending) ? (
-                  <Pressable onPress={onClear} disabled={!!busy} hitSlop={6} style={st.clear} accessibilityRole="button">
-                    <T w="bold" style={{ color: C.danger, fontSize: 13 }}>{busy === 'clear' ? 'Clearing…' : `Clear ${parcel ? 'Parcel' : 'Table'} · remove all dishes`}</T>
-                  </Pressable>
-                ) : null}
-              </View>
-            </>
-          )}
+          ) : orderBody}
         </View>
       </Modal>
     </View>
@@ -428,6 +481,8 @@ const st = StyleSheet.create({
   bar: { position: 'absolute', left: 10, right: 10, flexDirection: 'row', alignItems: 'center', backgroundColor: C.ink, borderRadius: 16, padding: 8, paddingLeft: 16, elevation: 10 },
   barBtn: { backgroundColor: C.brand1, borderRadius: 12, paddingHorizontal: 14, height: 42, justifyContent: 'center' },
   backdrop: { flex: 1, backgroundColor: 'rgba(31,22,17,0.45)' },
+  side: { width: 420, backgroundColor: C.surface, borderLeftWidth: 1, borderLeftColor: C.line },
+  payBox: { position: 'absolute', alignSelf: 'center', top: '20%', width: 420, backgroundColor: C.surface, borderRadius: 20, padding: 20 },
   sheet: { backgroundColor: C.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 8 },
   grabber: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: C.line, marginBottom: 10 },
   line: { flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: C.line },

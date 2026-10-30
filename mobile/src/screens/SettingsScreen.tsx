@@ -16,6 +16,7 @@ import { Icon } from '../ui/icons';
 import { ask } from '../ui/dialog';
 import { shareText } from '../ui/share';
 import { isDesktop } from '../desktop';
+import { useWide } from '../ui/wide';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -30,6 +31,7 @@ const newPassword = () => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; return 
 const nameOf = (m: Member) => m.display_name || (m.role === 'owner' ? 'Hotel owner' : loginName(m.email));
 
 export default function SettingsScreen() {
+  const wide = useWide();   // computer: Bills and Analytics are in the sidebar
   const nav = useNavigation<NativeStackNavigationProp<Stack>>();
   const dispatch = useAppDispatch();
   const { email, account } = useAppSelector((s) => s.auth);
@@ -87,7 +89,7 @@ export default function SettingsScreen() {
         {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
       </Card>
 
-      {account?.can_bill ? (
+      {account?.can_bill && !wide ? (
         <Card style={{ gap: 2, paddingVertical: 4 }}>
           <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
           {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}

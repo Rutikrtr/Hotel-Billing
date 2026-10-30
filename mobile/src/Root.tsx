@@ -25,6 +25,7 @@ import { Icon } from './ui/icons';
 import { TechyverveLogo } from './ui/TechyverveLogo';
 import TabBar from './ui/TabBar';
 import TopGlow from './ui/TopGlow';
+import { useWide } from './ui/wide';
 import { C, F } from './ui/theme';
 
 export type Stack = {
@@ -43,22 +44,43 @@ const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: C
 
 /** Each tab draws on its own page background with the soft orange glow at the top. */
 // The glow also runs under the phone's status bar, so the top of the screen is one smooth colour.
-const glow = (Screen: React.ComponentType) => function Glowing() {
+// On a computer (wide): pages get a comfortable reading width (Tables uses the full width); Bills and
+// Analytics, which have no heading of their own there, get a page title.
+const glow = (Screen: React.ComponentType, title?: string, full = false) => function Glowing() {
   const insets = useSafeAreaInsets();
+  const wide = useWide();
+  if (wide) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <TopGlow />
+        <View style={{ flex: 1, width: '100%', maxWidth: full ? undefined : 1080, alignSelf: 'center' }}>
+          {title ? <T w="heavy" style={{ fontSize: 26, letterSpacing: -0.5, paddingHorizontal: 12, paddingTop: 22, paddingBottom: 4 }}>{title}</T> : null}
+          <Screen />
+        </View>
+      </View>
+    );
+  }
   return <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}><TopGlow /><Screen /></View>;
 };
-const G = { Rooms: glow(RoomsScreen), Tables: glow(TablesScreen), Menu: glow(MenuScreen), Settings: glow(SettingsScreen) };
+const G = {
+  Rooms: glow(RoomsScreen), Tables: glow(TablesScreen, undefined, true), Menu: glow(MenuScreen), Settings: glow(SettingsScreen),
+  Bills: glow(BillsScreen, 'Bills'), Analytics: glow(AnalyticsScreen, 'Analytics'),
+};
 
 function Tabs() {
   const account = useAppSelector((s) => s.auth.account);
   const feat = (k: string) => account?.features?.[k] === true;
   const bill = account?.can_bill === true;
   const owner = account?.role === 'owner';
+  const wide = useWide();
   return (
-    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg } }}>
+    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg }, tabBarPosition: wide ? 'left' : 'bottom' }}>
       {feat('tables') || !feat('rooms') ? <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} /> : null}
       {bill && feat('rooms') ? <Tab.Screen name="Rooms" component={G.Rooms} options={{ tabBarIcon: Icon.tables }} /> : null}
       {owner ? <Tab.Screen name="Menu" component={G.Menu} options={{ tabBarIcon: Icon.menu }} /> : null}
+      {/* Computer: Bills and Analytics sit in the sidebar (on phones they open from Settings). */}
+      {wide && bill ? <Tab.Screen name="Bills" component={G.Bills} /> : null}
+      {wide && bill && feat('trending') ? <Tab.Screen name="Analytics" component={G.Analytics} /> : null}
       <Tab.Screen name="Settings" component={G.Settings} options={{ tabBarIcon: Icon.settings }} />
     </Tab.Navigator>
   );
