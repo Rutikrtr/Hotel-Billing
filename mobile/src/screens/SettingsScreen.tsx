@@ -90,10 +90,10 @@ export default function SettingsScreen() {
         {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
       </Card>
 
-      {account?.can_bill && (!wide || feat('trending')) ? (
+      {account?.can_bill ? (
         <Card style={{ gap: 2, paddingVertical: 4 }}>
-          {wide ? null : <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />}
-          {feat('trending') ? <>{wide ? null : <View style={st.sep} />}<Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
+          <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
+          {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
         </Card>
       ) : null}
       {qr ? (
@@ -159,10 +159,10 @@ export default function SettingsScreen() {
         {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
       </Card>
 
-      {account?.can_bill && (!wide || feat('trending')) ? (
+      {account?.can_bill ? (
         <Card style={{ gap: 2, paddingVertical: 4 }}>
-          {wide ? null : <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />}
-          {feat('trending') ? <>{wide ? null : <View style={st.sep} />}<Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
+          <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
+          {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
         </Card>
       ) : null}
       {owner && settings ? <BillDetails /> : null}

@@ -1,4 +1,4 @@
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -53,6 +53,19 @@ export default function BillsScreen() {
     if (loadedAt.current && (billsChanged.current || Date.now() - loadedAt.current > 60000)) { billsChanged.current = false; } else return;
     load().then(() => { loadedAt.current = Date.now(); });
   }, [load]));
+
+  // A table or parcel bill closed (here or on another phone): its order leaves the open list, so read the
+  // bills again – now if this page is on screen, otherwise when it is next opened.
+  const focused = useIsFocused();
+  const openIds = useRef(Object.keys(orders));
+  useEffect(() => {
+    const ids = Object.keys(orders);
+    const closed = openIds.current.some((id) => !ids.includes(id));
+    openIds.current = ids;
+    if (!closed) return;
+    if (focused) load().then(() => { loadedAt.current = Date.now(); });
+    else billsChanged.current = true;
+  }, [orders]);
 
   const waiting = Object.values(orders).filter((o) => o.billed_at);
   const tableName = (id: number | null) => tables.find((t) => t.id === id)?.name ?? '';

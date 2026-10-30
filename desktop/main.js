@@ -70,7 +70,7 @@ app.whenReady().then(() => {
     title: 'Master Bill', backgroundColor: '#FAF6F2', autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.png'),
     // No black Windows title bar: the page header is the title bar, with the window buttons floating on it.
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#F3F4F6', symbolColor: '#111318', height: 44 },
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#F6F5F3', symbolColor: '#1C1917', height: 44 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, devTools: !app.isPackaged, spellcheck: false },
   });
   // Never leave the app's own pages; web links (QR menu, website) open in the normal browser.

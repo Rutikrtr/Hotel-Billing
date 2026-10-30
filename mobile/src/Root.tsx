@@ -110,14 +110,14 @@ function useLive(enabled: boolean) {
 
 const navRef = createNavigationContainerRef<Stack & { Main: { screen?: string } | undefined }>();
 // Screens opened over the tabs belong to a sidebar page (Order → Tables, Printer Setup → Settings…).
-const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Bills', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Settings', Bills: 'Bills' };
+const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Settings', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Settings', Bills: 'Settings' };
 function sidePage(state: NavigationState | undefined): string {
   const top = state?.routes[state.index];
   if (!top) return 'Tables';
   if (top.name === 'Main') {
     const tabs = top.state as NavigationState | undefined;
     const name = tabs ? tabs.routes[tabs.index ?? 0]?.name : undefined;
-    return name === 'Analytics' ? 'Settings' : name ?? 'Tables';
+    return name === 'Analytics' || name === 'Bills' ? 'Settings' : name ?? 'Tables';
   }
   return PARENT[top.name] ?? 'Tables';
 }
@@ -181,7 +181,6 @@ export default function Root() {
     ...(feat('tables') || !feat('rooms') ? [{ name: 'Tables', label: 'Tables' }] : []),
     ...(account?.can_bill && feat('rooms') ? [{ name: 'Rooms', label: 'Rooms' }] : []),
     ...(account?.role === 'owner' ? [{ name: 'Menu', label: 'Menu' }] : []),
-    ...(account?.can_bill ? [{ name: 'Bills', label: 'Bills' }] : []),
     { name: 'Settings', label: 'Settings' },
   ];
   const go = (name: string) => { if (navRef.isReady()) navRef.navigate('Main', { screen: name } as never); };
