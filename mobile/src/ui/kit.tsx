@@ -6,6 +6,8 @@ import {
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Icon } from './icons';
 import { C, F, shadow } from './theme';
+import { useWide } from './wide';
+import { isDesktop } from '../desktop';
 
 /** Brand gradient fill behind any box (rounded to the box's own corners). */
 let gradientIds = 0;
@@ -87,6 +89,7 @@ export function Diet({ veg }: { veg: boolean }) {
 }
 
 export const s = StyleSheet.create({
+  pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingLeft: 24, paddingRight: isDesktop ? 160 : 24, paddingVertical: 10, backgroundColor: C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
   btn: { minHeight: 44, borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: C.brand1 },
   btnSmall: { minHeight: 34, borderRadius: 10, paddingHorizontal: 12 },
   btnSecondary: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
@@ -106,11 +109,29 @@ export const s = StyleSheet.create({
 
 /** Page title with a small line above it and an optional button on the right (same as the web app). */
 export function Header({ eyebrow, title, right }: { eyebrow?: string; title: string; right?: React.ReactNode }) {
+  // Computer: the page title is in the fixed page header (PageHeader); keep only the buttons here.
+  if (useWide()) return right ? <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>{right}</View> : null;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 4, marginBottom: 10, gap: 10 }}>
       <View style={{ flex: 1 }}>
         {eyebrow ? <T w="heavy" numberOfLines={1} style={{ color: C.accent, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>{eyebrow}</T> : null}
         <T w="heavy" style={{ fontSize: 21, letterSpacing: -0.4 }}>{title}</T>
+      </View>
+      {right}
+    </View>
+  );
+}
+
+/**
+ * Computer: the fixed header of a page – title and a short line under it on the left, actions on the right.
+ * It is also where the desktop window is dragged, and leaves room for the window's own buttons on the right.
+ */
+export function PageHeader({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+  return (
+    <View {...({ dataSet: { drag: '1' } } as object)} style={s.pageHead}>
+      <View style={{ flex: 1 }}>
+        <T w="heavy" style={{ fontSize: 22, letterSpacing: -0.4 }}>{title}</T>
+        {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}
       </View>
       {right}
     </View>

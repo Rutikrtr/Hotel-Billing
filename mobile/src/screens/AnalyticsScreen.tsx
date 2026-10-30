@@ -10,6 +10,7 @@ import { toast } from '../ui/toast';
 import { Icon } from '../ui/icons';
 import { Card, Chip, Diet, Empty, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
+import { useWide } from '../ui/wide';
 
 interface Report {
   totals: { sales: number; bills: number; items: number; discount: number; tax: number; parcels: number; parcel_sales: number; dine_in_minutes: number | null };
@@ -33,7 +34,22 @@ const METHOD_COLOR: Record<string, string> = { Cash: '#15803D', UPI: '#6D28D9', 
 const money = (p: number) => rsShort(Number(p));
 
 /** Sales for a date range: one sales_report request, same numbers as the web app's Analytics. */
+/** Computer: two sections side by side with equal heights; phone: one under the other. */
+function Pair({ wide, children }: { wide: boolean; children: React.ReactNode }) {
+  return wide ? <View style={{ flexDirection: 'row', gap: 16, alignItems: 'stretch' }}>{children}</View> : <>{children}</>;
+}
+/** One titled section; on a computer it fills its half and its card stretches to the row's height. */
+function Section({ wide, title, right, card, children }: { wide: boolean; title: string; right?: React.ReactNode; card?: object; children: React.ReactNode }) {
+  return (
+    <View style={wide ? { flex: 1, minWidth: 0 } : undefined}>
+      <SectionTitle right={right}>{title}</SectionTitle>
+      <Card style={[card, wide && { flex: 1 }]}>{children}</Card>
+    </View>
+  );
+}
+
 export default function AnalyticsScreen() {
+  const wide = useWide();
   const menu = useAppSelector((s) => s.data.menu);
   const [range, setRange] = useState('week');
   const [sort, setSort] = useState<'qty' | 'revenue'>('qty');
@@ -109,18 +125,20 @@ export default function AnalyticsScreen() {
       <>
         <View style={st.kpis}>
           {kpis.map(([k, v, tr]) => (
-            <View key={k} style={st.kpi}>
+            <View key={k} style={[st.kpi, wide && { width: '24.2%' }]}>
               <T style={{ color: C.muted, fontSize: 11.5 }}>{k}</T>
               <T w="heavy" style={{ fontSize: 14 }}>{v}{tr ? <T w="bold" style={{ fontSize: 12, color: billsTrend.color }}>{`  ${tr}`}</T> : null}</T>
             </View>
           ))}
         </View>
 
-        {days > 1 ? (<><SectionTitle>Sales by day</SectionTitle><Card><Columns rows={dayRows} /></Card></>) : null}
-        {hourRows.length > 1 ? (<><SectionTitle>Busy hours</SectionTitle><Card><Columns rows={hourRows} peak={peak?.label} every={hourRows.length > 10 ? 2 : 1} /></Card></>) : null}
+        <Pair wide={wide}>
+          {days > 1 ? <Section wide={wide} title="Sales by day"><Columns rows={dayRows} /></Section> : null}
+          {hourRows.length > 1 ? <Section wide={wide} title="Busy hours"><Columns rows={hourRows} peak={peak?.label} every={hourRows.length > 10 ? 2 : 1} /></Section> : null}
+        </Pair>
 
-        <SectionTitle>Payments</SectionTitle>
-        <Card style={{ gap: 10 }}>
+        <Pair wide={wide}>
+          <Section wide={wide} title="Payments" card={{ gap: 10 }}>
           <View style={st.split}>
             {report.methods.map((m) => <View key={m.method} style={{ flex: Number(m.sales) || 0.0001, backgroundColor: METHOD_COLOR[m.method] ?? C.muted }} />)}
           </View>
@@ -136,12 +154,12 @@ export default function AnalyticsScreen() {
               </View>
             ))}
           </View>
-        </Card>
+          </Section>
+          {days >= 7 ? <Section wide={wide} title="By weekday" card={{ gap: 8 }}><Bars rows={wk.map((w) => ({ name: w.name, value: w.value, text: money(w.value) }))} /></Section> : null}
+        </Pair>
 
-        {days >= 7 ? (<><SectionTitle>By weekday</SectionTitle><Card style={{ gap: 8 }}><Bars rows={wk.map((w) => ({ name: w.name, value: w.value, text: money(w.value) }))} /></Card></>) : null}
-
-        <SectionTitle right={<View style={{ flexDirection: 'row' }}><Chip label="Quantity" on={sort === 'qty'} onPress={() => setSort('qty')} /><Chip label="Sales ₹" on={sort === 'revenue'} onPress={() => setSort('revenue')} /></View>}>Top dishes</SectionTitle>
-        <Card style={{ gap: 12 }}>
+        <Pair wide={wide}>
+          <Section wide={wide} title="Top dishes" card={{ gap: 12 }} right={<View style={{ flexDirection: 'row' }}><Chip label="Quantity" on={sort === 'qty'} onPress={() => setSort('qty')} /><Chip label="Sales ₹" on={sort === 'revenue'} onPress={() => setSort('revenue')} /></View>}>
           {shown.map((r, i) => (
             <View key={r.name} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
               <View style={[st.rank, i < 3 && { backgroundColor: C.accentSoft }]}><T w="heavy" style={{ fontSize: 12, color: i < 3 ? C.accent : C.muted }}>{i + 1}</T></View>
@@ -161,9 +179,9 @@ export default function AnalyticsScreen() {
           {sold.length > 10 ? (
             <Pressable onPress={() => setAll(!all)} hitSlop={8}><T w="bold" style={{ color: C.accent, textAlign: 'center' }}>{all ? 'Show top 10' : `Show all ${sold.length} dishes`}</T></Pressable>
           ) : null}
-        </Card>
-
-        {catList.length > 1 ? (<><SectionTitle>By category</SectionTitle><Card style={{ gap: 8 }}><Bars rows={catList.map((c) => ({ name: c.name, value: metric(c), text: sort === 'qty' ? String(c.qty) : money(c.revenue) }))} /></Card></>) : null}
+          </Section>
+          {catList.length > 1 ? <Section wide={wide} title="By category" card={{ gap: 8 }}><Bars rows={catList.map((c) => ({ name: c.name, value: metric(c), text: sort === 'qty' ? String(c.qty) : money(c.revenue) }))} /></Section> : null}
+        </Pair>
       </>
     );
   };
@@ -205,7 +223,7 @@ export default function AnalyticsScreen() {
   const t = report?.totals;
   const tr = t ? change(t.sales, report!.prev.sales) : null;
   return (
-    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, paddingBottom: 30 }}
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: 30 }}
       refreshControl={<RefreshControl refreshing={loading && !!report} onRefresh={load} colors={[C.brand1]} />}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>
         {Object.entries(RANGES).map(([k, [label]]) => <Chip key={k} label={label} on={range === k} onPress={() => setRange(k)} />)}

@@ -9,7 +9,7 @@ import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
 import { areaTables, fixtureKind, tableKey, type LayoutArea, type Order, type Table } from '../types';
 import { Icon } from '../ui/icons';
-import { Button, Chip, Gradient, HotelHeader, T } from '../ui/kit';
+import { Button, Chip, Gradient, HotelHeader, PageHeader, T } from '../ui/kit';
 import PlanGrid from '../ui/PlanGrid';
 import { useWide } from '../ui/wide';
 import { DotFloor, FixtureBlock } from '../ui/PlanArt';
@@ -120,11 +120,11 @@ export default function TablesScreen() {
 
   const header = (
     <View>
-      <HotelHeader
+      {wide ? null : <HotelHeader
         name={settings?.hotel_name ?? account?.hotel ?? 'Master Bill'}
         subtitle={`Tables · ${new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`}
         right={canBill ? <Button title="Parcel" icon={Icon.bag} small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null}
-      />
+      />}
       <Animated.View style={[st.hero, shadow, {
         opacity: y.interpolate({ inputRange: [0, 110], outputRange: [1, 0.35], extrapolate: 'clamp' }),
         transform: [{ scale: y.interpolate({ inputRange: [-60, 0, 110], outputRange: [1, 1, 0.94], extrapolate: 'clamp' }) }],
@@ -149,8 +149,8 @@ export default function TablesScreen() {
           <T w="heavy" style={st.section}>PARCELS · {parcels.length}</T>
           {parcels.map((o) => (
             <Pressable key={o.id} style={st.parcel} onPress={() => nav.navigate('Order', { parcelId: o.id })}>
-              <T w="bold" style={{ flex: 1 }}>Parcel{o.bill_no ? ` #${tokenNo(o.bill_no)}` : ''} · {o.items.reduce((n, i) => n + i.quantity, 0)} items</T>
-              <T w="heavy">{rsShort(totalOf(o))}</T>
+              <T w="heavy" style={{ flex: 1, fontSize: 16 }}>Parcel{o.bill_no ? ` #${tokenNo(o.bill_no)}` : ''} <T w="semibold" style={{ fontSize: 13, color: C.muted }}>· {o.items.reduce((n, i) => n + i.quantity, 0)} items</T></T>
+              <T w="heavy" style={{ fontSize: 16 }}>{rsShort(totalOf(o))}</T>
             </Pressable>
           ))}
         </View>
@@ -170,6 +170,12 @@ export default function TablesScreen() {
       </T>
     </Animated.View>
   );
+  // Computer: hotel name, date and Parcel stay fixed at the top; the tables scroll below.
+  const pageHead = wide ? (
+    <PageHeader title={settings?.hotel_name ?? account?.hotel ?? 'Master Bill'}
+      sub={`Tables · ${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`}
+      right={canBill ? <Button title="New Parcel" icon={Icon.bag} small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null} />
+  ) : null;
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y } } }], { useNativeDriver: true });
 
   // Floor plan (Settings → Table layout): areas with a grid; no extra requests, it comes with the settings.
@@ -185,6 +191,7 @@ export default function TablesScreen() {
     };
     return (
       <View style={{ flex: 1 }}>
+      {pageHead}
       <Animated.ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: 30 }}
         onScroll={onScroll} scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => dispatch(loadAll())} colors={[C.brand1]} />}>
@@ -232,13 +239,14 @@ export default function TablesScreen() {
           </View>
         ) : null}
       </Animated.ScrollView>
-      {miniBar}
+      {wide ? null : miniBar}
       </View>
     );
   }
 
   return (
     <View style={{ flex: 1 }}>
+    {pageHead}
     <Animated.FlatList
       onScroll={onScroll} scrollEventThrottle={16}
       style={{ backgroundColor: 'transparent' }}
@@ -252,7 +260,7 @@ export default function TablesScreen() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => dispatch(loadAll())} colors={[C.brand1]} />}
       renderItem={({ item }) => (wide ? <View style={{ width: `${100 / cols - 1}%` as `${number}%`, marginBottom: 8 }}>{tile(item.table, item.orders, false, true)}</View> : tile(item.table, item.orders))}
     />
-    {miniBar}
+    {wide ? null : miniBar}
     </View>
   );
 }
@@ -272,18 +280,18 @@ const st = StyleSheet.create({
   parcel: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, padding: 12, marginBottom: 6 },
   tile: { flex: 1, maxWidth: '32.2%', minHeight: 72, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 9, marginBottom: 8 },
   // Each hall is drawn as a floor plan (dotted paper, see DotFloor); white tables stand out on it.
-  area: { borderRadius: 18, borderWidth: 1, borderColor: '#E6DCD2', padding: 10, marginBottom: 12 },
+  area: { borderRadius: 18, borderWidth: 1, borderColor: C.floorLine, padding: 10, marginBottom: 12 },
   gridRow: { flexDirection: 'row', gap: 6, marginBottom: 6 },
   cell: { flex: 1 },
   blank: { backgroundColor: 'transparent', borderWidth: 0 },
-  empty: { flex: 1, minHeight: 84, borderRadius: 11, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#DCD2C9', borderStyle: 'dashed' },
+  empty: { flex: 1, minHeight: 84, borderRadius: 11, backgroundColor: 'transparent', borderWidth: 1.5, borderColor: C.spotLine, borderStyle: 'dashed' },
   tileInGrid: { flex: 1, maxWidth: '100%', minHeight: 0, marginBottom: 0, borderColor: '#FFFFFF', shadowColor: '#7C2D12', shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
   tileBig: { alignItems: 'center', justifyContent: 'center', gap: 4, padding: 8 },
   tileWide: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12 },
   tileCompact: { minHeight: 0, padding: 7, marginBottom: 0, borderRadius: 11 },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  tileBusy: { backgroundColor: '#FFF6EF', borderColor: '#F0C2A4' },
-  tileBilled: { backgroundColor: '#F7F2FF', borderColor: '#D5C2FF' },
+  tileBusy: { backgroundColor: C.busyTile, borderColor: C.busyLine },
+  tileBilled: { backgroundColor: C.billedTile, borderColor: C.billedLine },
   pill: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2 },
   unsavedDot: { position: 'absolute', right: 7, bottom: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: C.brand1 },
 });

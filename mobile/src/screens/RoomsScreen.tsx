@@ -135,6 +135,6 @@ function CheckInSheet({ room, onClose, onDone }: { room: Room; onClose: () => vo
 
 const s = StyleSheet.create({
   tile: { flex: 1, maxWidth: '32.2%', minHeight: 72, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 9, marginBottom: 8 },
-  busy: { backgroundColor: '#FFF6EF', borderColor: '#F0C2A4' },
-  due: { backgroundColor: '#F7F2FF', borderColor: '#D5C2FF' },
+  busy: { backgroundColor: C.busyTile, borderColor: C.busyLine },
+  due: { backgroundColor: C.billedTile, borderColor: C.billedLine },
 });

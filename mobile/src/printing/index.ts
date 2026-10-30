@@ -3,12 +3,30 @@ import type { Device, PrinterState } from '../store/printer';
 import { joinSlips, printBytes } from './ble';
 import type { Slip } from './escpos';
 import { printTcp } from './wifi';
-import { printInBrowser } from './web';
+import { printInBrowser, slipsHtml } from './web';
+import { desktopApi } from '../desktop';
 
 export const paperOf = (p: PrinterState) => ({ width: p.paper === 80 ? 48 : 32, feed: Math.min(4, Math.max(1, p.feed || 2)) });
 
 /** Send slips to this phone's printers: kitchen tickets to the kitchen printer when one is set. Returns failures. */
 export async function printSlips(p: PrinterState, slips: Slip[]): Promise<string[]> {
+  const desk = desktopApi();
+  if (desk) {
+    // Desktop app: straight to the chosen Windows printers (kitchen tickets to the kitchen printer when set).
+    if (!p.bill) throw new Error('No printer chosen yet. Open Settings → Printer Setup.');
+    const groups = new Map<string, Slip[]>();
+    for (const s of slips) {
+      const dev = s.target === 'kitchen' && p.separateKitchen && p.kitchen ? p.kitchen : p.bill;
+      groups.set(dev.id, [...(groups.get(dev.id) ?? []), s]);
+    }
+    const failed: string[] = [];
+    for (const [deviceName, group] of groups) {
+      try { await desk.print({ html: slipsHtml(group, p.paper), deviceName, paper: p.paper }); }
+      catch (err) { failed.push(`${deviceName}: ${(err as Error).message}`); }
+    }
+    if (failed.length === groups.size) throw new Error(failed[0]);
+    return failed;
+  }
   if (Platform.OS === 'web') { printInBrowser(slips, p.paper); return []; }
   if (!p.bill) throw new Error('No printer set up on this phone. Open Settings → Printer.');
   // Each slip goes to its printer (kitchen tickets to the kitchen printer when one is set), Bluetooth or Wi-Fi.

@@ -1,7 +1,7 @@
 {
   "name": "master-bill-desktop",
   "productName": "Master Bill",
-  "version": "2.5.1",
+  "version": "2.5.2",
   "description": "Master Bill 2.5 \u2013 hotel billing for Windows by Techyverve",
   "author": "Techyverve",
   "private": true,
@@ -22,6 +22,7 @@
     "artifactName": "Master-Bill-2.5-${version}.exe",
     "files": [
       "main.js",
+      "preload.js",
       "app/**/*",
       "package.json"
     ],

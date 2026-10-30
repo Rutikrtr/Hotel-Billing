@@ -16,6 +16,7 @@ import { Button, Chip, Diet, SearchBox, T } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { MicButton } from '../ui/Mic';
 import { useWide } from '../ui/wide';
+import { isDesktop } from '../desktop';
 import { findDishes } from '../match';
 import { toast } from '../ui/toast';
 import { ask } from '../ui/dialog';
@@ -97,7 +98,7 @@ export default function OrderScreen() {
     nav.setOptions({
       title: parcel ? `Parcel${order?.bill_no ? ` #${tokenNo(order.bill_no)}` : ''}` : label,
       headerRight: parcel || !hasItems ? undefined : () => (
-        <Pressable onPress={addSection} hitSlop={8} style={st.addSection} accessibilityRole="button" accessibilityLabel="Add a section for another group">
+        <Pressable onPress={addSection} hitSlop={8} style={[st.addSection, isDesktop && { marginRight: 150 }]} accessibilityRole="button" accessibilityLabel="Add a section for another group">
           <T w="bold" style={{ color: C.accent, fontSize: 13 }}>＋ Section</T>
         </Pressable>
       ),
@@ -473,7 +474,7 @@ const st = StyleSheet.create({
   tools: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, backgroundColor: C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
   search: { minHeight: 42, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 14, fontSize: 15, fontFamily: F.regular, color: C.text },
   dish: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 13, padding: 10, paddingLeft: 12, marginBottom: 7, minHeight: 56 },
-  dishOn: { borderColor: '#EFB08A', backgroundColor: '#FFF7F1' },
+  dishOn: { borderColor: C.dishLine, backgroundColor: C.dishTile },
   add: { minWidth: 72, height: 36, borderRadius: 10, borderWidth: 1.5, borderColor: C.accent, alignItems: 'center', justifyContent: 'center', backgroundColor: C.surface },
   stepper: { flexDirection: 'row', alignItems: 'center', height: 36, borderRadius: 10, backgroundColor: C.brand1 },
   stepBtn: { width: 34, height: 36, alignItems: 'center', justifyContent: 'center' },

@@ -142,6 +142,6 @@ const st = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderColor: C.line, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },
   first: { borderTopWidth: 1, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
   last: { borderBottomLeftRadius: 14, borderBottomRightRadius: 14 },
-  edit: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#F5C7AC', backgroundColor: '#FFF7F2' },
+  edit: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: C.editLine, backgroundColor: '#FFF7F2' },
   fab: { position: 'absolute', left: 12, right: 12, bottom: 12 },
 });

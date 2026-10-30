@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useWide } from './wide';
+import { isDesktop } from '../desktop';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 /**
@@ -8,6 +9,7 @@ import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop 
  * (plate, cutlery, a steaming bowl) behind the page title. Drawn, not a photo, so it stays sharp and light.
  */
 export default function TopGlow() {
+  if (isDesktop) return null;   // desktop app: clean pages under a fixed header
   // The drawing is 400 × 300; on wide screens (tablet, computer) it grows with the width so it is never cut off.
   const { width } = useWindowDimensions();
   // Computer (full-width pages): the wash spans the page and the drawing sits at its normal size on the right.

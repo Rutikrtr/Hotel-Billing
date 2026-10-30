@@ -8,6 +8,8 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setPrinter, type Device } from '../store/printer';
 import { Button, Card, Chip, Field, Sheet, T, ToggleRow } from '../ui/kit';
 import { C } from '../ui/theme';
+import { desktopApi, isDesktop, type WinPrinter } from '../desktop';
+import { useWide } from '../ui/wide';
 import { toast } from '../ui/toast';
 
 type Slot = 'bill' | 'kitchen';
@@ -80,6 +82,7 @@ export default function PrinterScreen() {
     );
   };
 
+  if (isDesktop) return <DesktopPrinters test={test} testing={testing === 'all'} />;
   if (Platform.OS === 'web') {
     // Web app: the browser prints (AirPrint on iPhone, any printer on a computer); only the paper size is set here.
     return (
@@ -144,6 +147,87 @@ export default function PrinterScreen() {
           <Button kind="secondary" title="Save without test" onPress={() => saveWifi(false)} />
         </>) : null}
       </Sheet>
+    </ScrollView>
+  );
+}
+
+/**
+ * Desktop app: every printer installed on Windows – USB/wired, Bluetooth printers paired in Windows, network
+ * printers. The chosen ones are remembered on this computer and used for every bill until changed.
+ */
+function DesktopPrinters({ test, testing }: { test: () => void; testing: boolean }) {
+  const dispatch = useAppDispatch();
+  const p = useAppSelector((s) => s.printer);
+  const wide = useWide();
+  const [list, setList] = useState<WinPrinter[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = () => {
+    setError(null);
+    desktopApi()?.printers().then(setList, (e) => setError((e as Error).message));
+  };
+  useEffect(load, []);
+  const pick = (slot: Slot, w: WinPrinter) => {
+    dispatch(setPrinter(slot === 'bill' ? { bill: { id: w.name, name: w.displayName } } : { kitchen: { id: w.name, name: w.displayName } }));
+    toast(`${SLOT_NAME[slot]}: ${w.displayName}`);
+  };
+  const chosen = (slot: Slot) => (slot === 'bill' ? p.bill : p.kitchen);
+  const slotCard = (slot: Slot) => {
+    const d = chosen(slot);
+    const missing = d && list && !list.some((w) => w.name === d.id);
+    return (
+      <View style={st.current}>
+        <View style={[st.badge, { backgroundColor: d ? C.accentSoft : C.surface2 }]}><T w="heavy" style={{ fontSize: 16, color: d ? C.accent : C.muted }}>🖨</T></View>
+        <View style={{ flex: 1 }}>
+          <T w="bold">{d ? d.name : 'Not chosen'}</T>
+          <T style={{ color: missing ? C.danger : C.muted, fontSize: 12 }}>{missing ? 'Not found on this computer – switch it on or choose another' : d ? 'Saved on this computer · used for every print' : 'Choose a printer from the list'}</T>
+        </View>
+        {d ? <Button kind="secondary" small title="Remove" onPress={() => dispatch(setPrinter(slot === 'bill' ? { bill: null } : { kitchen: null }))} /> : null}
+      </View>
+    );
+  };
+  return (
+    <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: wide ? 24 : 12, gap: 14, paddingBottom: 30 }}>
+      <View style={{ flexDirection: wide ? 'row' : 'column', gap: 14, alignItems: 'stretch' }}>
+        <View style={{ flex: 1, gap: 14 }}>
+          <Card style={{ gap: 10 }}>
+            <T w="heavy" style={{ fontSize: 15 }}>Bill printer</T>
+            {slotCard('bill')}
+          </Card>
+          <Card style={{ gap: 10 }}>
+            <ToggleRow label="Separate kitchen printer" hint={p.separateKitchen ? 'Kitchen tickets and parcel kitchen copies print here' : 'Off: kitchen tickets print on the bill printer'}
+              value={p.separateKitchen} onChange={(v) => dispatch(setPrinter({ separateKitchen: v }))} />
+            {p.separateKitchen ? slotCard('kitchen') : null}
+          </Card>
+          <Card style={{ gap: 10 }}>
+            <T w="heavy" style={{ fontSize: 15 }}>Paper</T>
+            <View style={{ flexDirection: 'row' }}>
+              <Chip label="58 mm" on={p.paper === 58} onPress={() => dispatch(setPrinter({ paper: 58 }))} />
+              <Chip label="80 mm" on={p.paper === 80} onPress={() => dispatch(setPrinter({ paper: 80 }))} />
+            </View>
+          </Card>
+          <Button title="Print Test" onPress={test} busy={testing} disabled={!p.bill} />
+        </View>
+        <Card style={{ flex: 1, gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <T w="heavy" style={{ fontSize: 15, flex: 1 }}>Printers on this computer</T>
+            <Button kind="secondary" small title="Refresh" onPress={load} />
+          </View>
+          <T style={{ color: C.muted, fontSize: 12, lineHeight: 17 }}>USB printers, Bluetooth printers paired in Windows Settings → Bluetooth & devices, and network printers all show here once Windows has their driver.</T>
+          {error ? <T style={{ color: C.danger }}>{error}</T> : null}
+          {list === null ? <T style={{ color: C.muted }}>Looking for printers…</T> : list.length === 0 ? <T style={{ color: C.muted }}>No printers found. Install the printer in Windows, then tap Refresh.</T> : list.map((w) => (
+            <View key={w.name} style={st.found}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <T w="bold" style={{ flex: 1 }} numberOfLines={1}>{w.displayName}</T>
+                {w.isDefault ? <T w="bold" style={{ fontSize: 11, color: C.muted }}>Windows default</T> : null}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <Button kind={p.bill?.id === w.name ? 'primary' : 'secondary'} small style={{ flex: 1 }} title={p.bill?.id === w.name ? '✓ Bill printer' : 'Use for bills'} onPress={() => pick('bill', w)} />
+                {p.separateKitchen ? <Button kind={p.kitchen?.id === w.name ? 'primary' : 'secondary'} small style={{ flex: 1 }} title={p.kitchen?.id === w.name ? '✓ Kitchen printer' : 'Use for kitchen'} onPress={() => pick('kitchen', w)} /> : null}
+              </View>
+            </View>
+          ))}
+        </Card>
+      </View>
     </ScrollView>
   );
 }

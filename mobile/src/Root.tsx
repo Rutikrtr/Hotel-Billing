@@ -20,12 +20,13 @@ import { recheck, signOut } from './store/auth';
 import { loadAll, refreshOrders, resetData, syncIfChanged } from './store/data';
 import { sb } from './supabase';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, T } from './ui/kit';
+import { Button, PageHeader, T } from './ui/kit';
 import { Icon } from './ui/icons';
 import { TechyverveLogo } from './ui/TechyverveLogo';
 import TabBar from './ui/TabBar';
 import TopGlow from './ui/TopGlow';
 import { useWide } from './ui/wide';
+import { isDesktop } from './desktop';
 import { C, F } from './ui/theme';
 
 export type Stack = {
@@ -46,25 +47,27 @@ const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: C
 // The glow also runs under the phone's status bar, so the top of the screen is one smooth colour.
 // On a computer (wide): pages get a comfortable reading width (Tables uses the full width); Bills and
 // Analytics, which have no heading of their own there, get a page title.
-const glow = (Screen: React.ComponentType, title?: string, full = false) => function Glowing() {
+const glow = (Screen: React.ComponentType, title?: string, sub?: () => string) => function Glowing() {
   const insets = useSafeAreaInsets();
   const wide = useWide();
   if (wide) {
+    // Computer: a fixed page header, then the page scrolling below it, across the full width.
     return (
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <TopGlow />
-        <View style={{ flex: 1, width: '100%', maxWidth: full ? undefined : 1080, alignSelf: 'center' }}>
-          {title ? <T w="heavy" style={{ fontSize: 26, letterSpacing: -0.5, paddingHorizontal: 12, paddingTop: 22, paddingBottom: 4 }}>{title}</T> : null}
-          <Screen />
-        </View>
+        {title ? <PageHeader title={title} sub={sub?.()} /> : null}
+        <View style={{ flex: 1 }}><Screen /></View>
       </View>
     );
   }
   return <View style={{ flex: 1, backgroundColor: C.bg, paddingTop: insets.top }}><TopGlow /><Screen /></View>;
 };
+const today = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 const G = {
-  Rooms: glow(RoomsScreen), Tables: glow(TablesScreen, undefined, true), Menu: glow(MenuScreen), Settings: glow(SettingsScreen),
-  Bills: glow(BillsScreen, 'Bills'), Analytics: glow(AnalyticsScreen, 'Analytics'),
+  Rooms: glow(RoomsScreen, 'Rooms', today), Tables: glow(TablesScreen), Menu: glow(MenuScreen, 'Menu', () => 'Dishes, prices, favourites and sold-out'),
+  Settings: glow(SettingsScreen, 'Settings', () => 'Printer, hotel details, tables, staff'),
+  Bills: glow(BillsScreen, 'Bills', () => 'Paid bills by day, waiting for payment, edit and reprint'),
+  Analytics: glow(AnalyticsScreen, 'Analytics', () => 'Sales, busy hours, top dishes'),
 };
 
 function Tabs() {
@@ -157,7 +160,7 @@ export default function Root() {
   }
   return (
     <NavigationContainer theme={theme}>
-      <S.Navigator screenOptions={{ headerTitleStyle: { fontFamily: F.heavy }, headerShadowVisible: false, headerStyle: { backgroundColor: C.bg }, animation: 'slide_from_right' }}>
+      <S.Navigator screenOptions={{ headerTitleStyle: { fontFamily: F.heavy }, headerShadowVisible: false, headerStyle: { backgroundColor: C.bg, ...(isDesktop ? { height: 64 } : {}) } as object, animation: 'slide_from_right' }}>
         <S.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
         <S.Screen name="Order" component={OrderScreen} options={{ title: '' }} />
         <S.Screen name="Bill" component={BillScreen} options={{ title: 'Bill' }} />

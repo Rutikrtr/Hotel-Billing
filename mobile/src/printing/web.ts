@@ -11,9 +11,10 @@ function rowHtml(r: Row) {
   return `<div class="${cls}" style="text-align:${r.align}">${esc(r.text) || '&nbsp;'}</div>`;
 }
 
-export function printInBrowser(slips: Slip[], paper: 58 | 80) {
+/** The slips as one printable page (each slip on its own page), text as written. */
+export function slipsHtml(slips: Slip[], paper: 58 | 80) {
   const mm = paper === 80 ? 72 : 48;
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bill</title>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Bill</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@500;700&display=block">
 <style>
   @page { margin: 3mm; }
@@ -24,6 +25,10 @@ export function printInBrowser(slips: Slip[], paper: 58 | 80) {
   .cols { display: flex; justify-content: space-between; gap: 8px; } .cols span:last-child { white-space: nowrap; }
   hr { border: 0; border-top: 1px dashed #000; margin: 3px 0; }
 </style></head><body>${slips.map((s) => `<div class="slip">${s.rows.map(rowHtml).join('')}</div>`).join('')}</body></html>`;
+}
+
+export function printInBrowser(slips: Slip[], paper: 58 | 80) {
+  const html = slipsHtml(slips, paper);
   const frame = document.createElement('iframe');
   frame.setAttribute('aria-hidden', 'true');
   Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Pattern, Rect, Stop } from 'react-native-svg';
 import { FIXTURES, type FixtureKind } from '../types';
+import { C } from './theme';
 
 /** Android sizes a "100%" SVG before the box is laid out, so draw at the box's measured size. */
 function useBox() {
@@ -14,15 +15,15 @@ function useBox() {
 export function DotFloor() {
   const [box, onLayout] = useBox();
   return (
-    <View pointerEvents="none" onLayout={onLayout} style={[StyleSheet.absoluteFill, { borderRadius: 18, overflow: 'hidden', backgroundColor: '#F7F2ED' }]}>
+    <View pointerEvents="none" onLayout={onLayout} style={[StyleSheet.absoluteFill, { borderRadius: 18, overflow: 'hidden', backgroundColor: C.floorBottom }]}>
       {box ? <Svg width={box.w} height={box.h}>
         <Defs>
           <Pattern id="dots" width="14" height="14" patternUnits="userSpaceOnUse">
-            <Circle cx="2" cy="2" r="1.1" fill="#D9CCC0" />
+            <Circle cx="2" cy="2" r="1.1" fill={C.floorDot} />
           </Pattern>
           <LinearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#FBF7F3" />
-            <Stop offset="1" stopColor="#F4EDE6" />
+            <Stop offset="0" stopColor={C.floorTop} />
+            <Stop offset="1" stopColor={C.floorBottom} />
           </LinearGradient>
         </Defs>
         <Rect width={box.w} height={box.h} fill="url(#floor)" />

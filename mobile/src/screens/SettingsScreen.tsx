@@ -62,12 +62,13 @@ export default function SettingsScreen() {
   };
   const role = account?.role ?? 'staff';
 
-  return (
-    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
-      <Header eyebrow="My account" title="Settings" />
+  // Phone: one column. Computer: two columns – your account, printer and links on the left; the hotel's
+  // setup (bill details, table layout, tables, staff) on the right.
+  const left = (
+    <>
       <Card style={{ gap: 8 }}>
-        <T w="heavy" style={{ fontSize: 15 }}>Printer & this phone</T>
-        <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : 'No printer set up on this phone'}</T>
+        <T w="heavy" style={{ fontSize: 15 }}>{isDesktop ? 'Printer & this computer' : 'Printer & this phone'}</T>
+        <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : (isDesktop ? 'No printer chosen on this computer' : 'No printer set up on this phone')}</T>
         {account?.can_bill || settings?.kot_tables ? <Button title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
         {isDesktop ? null : (
           <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
@@ -89,10 +90,79 @@ export default function SettingsScreen() {
         {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
       </Card>
 
-      {account?.can_bill && !wide ? (
+      {account?.can_bill && (!wide || feat('trending')) ? (
         <Card style={{ gap: 2, paddingVertical: 4 }}>
-          <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
-          {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
+          {wide ? null : <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />}
+          {feat('trending') ? <>{wide ? null : <View style={st.sep} />}<Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
+        </Card>
+      ) : null}
+      {qr ? (
+        <Card style={{ gap: 10, alignItems: 'center' }}>
+          <T w="heavy" style={{ fontSize: 16, alignSelf: 'flex-start' }}>QR Menu</T>
+          <T style={{ color: C.muted, fontSize: 12.5, alignSelf: 'flex-start' }}>Show this to customers. They scan it with the phone camera to see the menu.</T>
+          <View style={{ padding: 12, backgroundColor: '#FFFFFF', borderRadius: 12 }}><QRCode value={qr} size={190} color={C.ink} /></View>
+          <View style={{ flexDirection: 'row', gap: 8, alignSelf: 'stretch' }}>
+            <Button kind="secondary" title="Share Link" style={{ flex: 1 }} onPress={() => shareText(`${settings?.hotel_name ?? ''} menu: ${qr}`)} />
+            <Button kind="secondary" title="Open Menu" style={{ flex: 1 }} onPress={() => Linking.openURL(qr)} />
+          </View>
+        </Card>
+      ) : null}
+
+      <Button kind="danger" title="Sign Out" onPress={out} />
+      <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill {isDesktop ? '2.5' : '2.0'} · Techyverve Solution Limited</T>
+    </>
+  );
+  const right = (
+    <>
+      {owner && settings ? <BillDetails /> : null}
+      {owner && feat('tables') && settings ? <TableLayoutCard /> : null}
+      {owner && feat('tables') ? <Tables tables={tables} /> : null}
+      {owner && feat('rooms') ? <Rooms /> : null}
+      {owner ? <StaffLogins staff={staff} limit={settings?.staff_limit ?? 2} reload={loadStaff} /> : null}
+
+    </>
+  );
+  if (wide) {
+    return (
+      <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <View style={{ flexDirection: 'row', gap: 20, alignItems: 'flex-start' }}>
+          <View style={{ flex: 2, gap: 14, minWidth: 0 }}>{left}</View>
+          <View style={{ flex: 3, gap: 14, minWidth: 0 }}>{right}</View>
+        </View>
+      </ScrollView>
+    );
+  }
+  return (
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
+      <Header eyebrow="My account" title="Settings" />
+      <Card style={{ gap: 8 }}>
+        <T w="heavy" style={{ fontSize: 15 }}>{isDesktop ? 'Printer & this computer' : 'Printer & this phone'}</T>
+        <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : (isDesktop ? 'No printer chosen on this computer' : 'No printer set up on this phone')}</T>
+        {account?.can_bill || settings?.kot_tables ? <Button title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
+        {isDesktop ? null : (
+          <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
+        )}
+      </Card>
+      <Card style={{ gap: 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={[st.avatar, { backgroundColor: ROLE_COLOR[role][1] }]}><T w="heavy" style={{ color: ROLE_COLOR[role][0], fontSize: 15 }}>{initials(myName) || '?'}</T></View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><T w="heavy" style={{ fontSize: 16, flexShrink: 1 }} numberOfLines={1}>{myName}</T><Pill label={ROLE[role]} color={ROLE_COLOR[role][0]} bg={ROLE_COLOR[role][1]} /></View>
+            <T style={{ color: C.muted, fontSize: 12.5 }}>{email.endsWith(STAFF_DOMAIN) ? `Login ID ${loginName(email)}` : email}</T>
+          </View>
+        </View>
+        <View style={st.info}>
+          <Info k="Hotel" v={settings?.hotel_name ?? account?.hotel ?? ''} />
+          {settings?.hotel_address ? <Info k="Address" v={settings.hotel_address} /> : null}
+          {settings?.hotel_phone ? <Info k="Phone" v={settings.hotel_phone} /> : null}
+        </View>
+        {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
+      </Card>
+
+      {account?.can_bill && (!wide || feat('trending')) ? (
+        <Card style={{ gap: 2, paddingVertical: 4 }}>
+          {wide ? null : <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />}
+          {feat('trending') ? <>{wide ? null : <View style={st.sep} />}<Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
         </Card>
       ) : null}
       {owner && settings ? <BillDetails /> : null}
@@ -114,7 +184,7 @@ export default function SettingsScreen() {
       ) : null}
 
       <Button kind="danger" title="Sign Out" onPress={out} />
-      <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill 2.0 · Techyverve Solution Limited</T>
+      <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill {isDesktop ? '2.5' : '2.0'} · Techyverve Solution Limited</T>
     </ScrollView>
   );
 }
