@@ -1,7 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
+import { createNavigationContainerRef, DefaultTheme, NavigationContainer, type NavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
 import { warmUp } from './printing/ble';
 import AnalyticsScreen from './screens/AnalyticsScreen';
@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, PageHeader, T } from './ui/kit';
 import { Icon } from './ui/icons';
 import { TechyverveLogo } from './ui/TechyverveLogo';
-import TabBar from './ui/TabBar';
+import TabBar, { AppSideBar, type SidePage } from './ui/TabBar';
 import TopGlow from './ui/TopGlow';
 import { useWide } from './ui/wide';
 import { isDesktop } from './desktop';
@@ -64,7 +64,7 @@ const glow = (Screen: React.ComponentType, title?: string, sub?: () => string) =
 };
 const today = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
 const G = {
-  Rooms: glow(RoomsScreen, 'Rooms', today), Tables: glow(TablesScreen), Menu: glow(MenuScreen, 'Menu', () => 'Dishes, prices, favourites and sold-out'),
+  Rooms: glow(RoomsScreen, 'Rooms', today), Tables: glow(TablesScreen), Menu: glow(MenuScreen),   // Menu draws its own header (with Add Item) on a computer
   Settings: glow(SettingsScreen, 'Settings', () => 'Printer, hotel details, tables, staff'),
   Bills: glow(BillsScreen, 'Bills', () => 'Paid bills by day, waiting for payment, edit and reprint'),
   Analytics: glow(AnalyticsScreen, 'Analytics', () => 'Sales, busy hours, top dishes'),
@@ -108,7 +108,25 @@ function useLive(enabled: boolean) {
   }, [enabled]);
 }
 
+const navRef = createNavigationContainerRef<Stack & { Main: { screen?: string } | undefined }>();
+// Screens opened over the tabs belong to a sidebar page (Order → Tables, Printer Setup → Settings…).
+const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Bills', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Settings', Bills: 'Bills' };
+function sidePage(state: NavigationState | undefined): string {
+  const top = state?.routes[state.index];
+  if (!top) return 'Tables';
+  if (top.name === 'Main') {
+    const tabs = top.state as NavigationState | undefined;
+    const name = tabs ? tabs.routes[tabs.index ?? 0]?.name : undefined;
+    return name === 'Analytics' ? 'Settings' : name ?? 'Tables';
+  }
+  return PARENT[top.name] ?? 'Tables';
+}
+let foldedOnce = false;   // the sidebar stays folded or open while the app is open
+
 export default function Root() {
+  const wide = useWide();
+  const [page, setPage] = useState('Tables');
+  const [mini, setMini] = useState(foldedOnce);
   const dispatch = useAppDispatch();
   const { status, account } = useAppSelector((s) => s.auth);
   const loaded = useAppSelector((s) => s.data.loadedAt > 0);
@@ -158,8 +176,35 @@ export default function Root() {
       </Centered>
     );
   }
+  const feat = (k: string) => account?.features?.[k] === true;
+  const pages: SidePage[] = [
+    ...(feat('tables') || !feat('rooms') ? [{ name: 'Tables', label: 'Tables' }] : []),
+    ...(account?.can_bill && feat('rooms') ? [{ name: 'Rooms', label: 'Rooms' }] : []),
+    ...(account?.role === 'owner' ? [{ name: 'Menu', label: 'Menu' }] : []),
+    ...(account?.can_bill ? [{ name: 'Bills', label: 'Bills' }] : []),
+    { name: 'Settings', label: 'Settings' },
+  ];
+  const go = (name: string) => { if (navRef.isReady()) navRef.navigate('Main', { screen: name } as never); };
+  const fold = () => { foldedOnce = !mini; setMini(!mini); };
   return (
-    <NavigationContainer theme={theme}>
+    <NavigationContainer theme={theme} ref={navRef} onStateChange={(s) => setPage(sidePage(s))}>
+      {wide ? (
+        // Computer: the sidebar stays beside every screen, including while taking an order.
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <AppSideBar pages={pages} current={page} onGo={go} mini={mini} onFold={fold} />
+          <View style={{ flex: 1 }}>
+          <S.Navigator screenOptions={{ headerTitleStyle: { fontFamily: F.heavy }, headerShadowVisible: false, headerStyle: { backgroundColor: C.bg, ...(isDesktop ? { height: 64 } : {}) } as object, animation: 'slide_from_right' }}>
+            <S.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
+            <S.Screen name="Order" component={OrderScreen} options={{ title: '' }} />
+            <S.Screen name="Bill" component={BillScreen} options={{ title: 'Bill' }} />
+            <S.Screen name="Stay" component={StayScreen} options={{ title: 'Room' }} />
+            <S.Screen name="Bills" component={BillsScreen} options={{ title: 'Bills' }} />
+            <S.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
+            <S.Screen name="Printer" component={PrinterScreen} options={{ title: 'Printer Setup' }} />
+          </S.Navigator>
+          </View>
+        </View>
+      ) : (
       <S.Navigator screenOptions={{ headerTitleStyle: { fontFamily: F.heavy }, headerShadowVisible: false, headerStyle: { backgroundColor: C.bg, ...(isDesktop ? { height: 64 } : {}) } as object, animation: 'slide_from_right' }}>
         <S.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
         <S.Screen name="Order" component={OrderScreen} options={{ title: '' }} />
@@ -169,6 +214,7 @@ export default function Root() {
         <S.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
         <S.Screen name="Printer" component={PrinterScreen} options={{ title: 'Printer Setup' }} />
       </S.Navigator>
+      )}
     </NavigationContainer>
   );
 }

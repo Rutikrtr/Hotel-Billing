@@ -125,6 +125,40 @@ export default function TablesScreen() {
         subtitle={`Tables · ${new Date().toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}`}
         right={canBill ? <Button title="Parcel" icon={Icon.bag} small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null}
       />}
+      {wide ? (
+        // Computer: a shorter bar with the big New Parcel button right beside it.
+        <View style={{ flexDirection: 'row', gap: 14, alignItems: 'stretch', marginBottom: 14 }}>
+          <Animated.View style={[st.hero, shadow, wide && st.heroWide, {
+            opacity: y.interpolate({ inputRange: [0, 110], outputRange: [1, 0.35], extrapolate: 'clamp' }),
+            transform: [{ scale: y.interpolate({ inputRange: [-60, 0, 110], outputRange: [1, 1, 0.94], extrapolate: 'clamp' }) }],
+          }]}>
+            <Gradient radius={18} />
+            <View style={{ flex: 1 }}>
+              <T w="semibold" style={{ color: '#FFFFFF', opacity: 0.88, fontSize: 11.5 }}>On tables now</T>
+              <T w="heavy" numberOfLines={1} adjustsFontSizeToFit style={{ color: '#FFFFFF', fontSize: wide ? 30 : 24, letterSpacing: -0.5, fontVariant: ['tabular-nums'] }}>{rsShort(onTables)}</T>
+            </View>
+            <View style={st.facts}>
+              {[[running, 'Running', C.accentStrong], [tables.length - running, 'Free', C.free], [parcels.length, 'Parcels', C.billed]].map(([v, l, col]) => (
+                <View key={l as string} style={st.fact}>
+                  <T w="heavy" style={{ fontSize: 15, color: col as string, fontVariant: ['tabular-nums'] }}>{v}</T>
+                  <T w="semibold" style={{ fontSize: 10, color: C.muted }}>{l}</T>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+          {canBill ? (
+            <Pressable onPress={() => nav.navigate('Order', { parcelId: null })} accessibilityRole="button" accessibilityLabel="New parcel"
+              style={(x) => [st.parcelBtn, shadow, (x as { hovered?: boolean }).hovered && { transform: [{ translateY: -2 }] }]}>
+              <Gradient radius={18} />
+              <View><Icon.bag color="#FFFFFF" size={26} /></View>
+              <View>
+                <T w="heavy" style={{ color: '#FFFFFF', fontSize: 18 }}>New Parcel</T>
+                <T w="semibold" style={{ color: '#FFFFFF', opacity: 0.85, fontSize: 12 }}>Takeaway order</T>
+              </View>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
       <Animated.View style={[st.hero, shadow, {
         opacity: y.interpolate({ inputRange: [0, 110], outputRange: [1, 0.35], extrapolate: 'clamp' }),
         transform: [{ scale: y.interpolate({ inputRange: [-60, 0, 110], outputRange: [1, 1, 0.94], extrapolate: 'clamp' }) }],
@@ -143,6 +177,7 @@ export default function TablesScreen() {
           ))}
         </View>
       </Animated.View>
+      )}
       {error ? <T style={{ color: C.danger, marginBottom: 8 }}>{error}</T> : null}
       {parcels.length ? (
         <View style={{ marginBottom: 12 }}>
@@ -174,7 +209,7 @@ export default function TablesScreen() {
   const pageHead = wide ? (
     <PageHeader title={settings?.hotel_name ?? account?.hotel ?? 'Master Bill'}
       sub={`Tables · ${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`}
-      right={canBill ? <Button title="New Parcel" icon={Icon.bag} small onPress={() => nav.navigate('Order', { parcelId: null })} /> : null} />
+      />
   ) : null;
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { y } } }], { useNativeDriver: true });
 
@@ -270,6 +305,8 @@ const st = StyleSheet.create({
   eyebrow: { fontSize: 11, color: C.accent, letterSpacing: 0.8, textTransform: 'uppercase' },
   h1: { fontSize: 24, letterSpacing: -0.5 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 18, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 12 },
+  heroWide: { flex: 1, maxWidth: 760, marginBottom: 0, paddingVertical: 20, paddingHorizontal: 22 },
+  parcelBtn: { width: 250, flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 18, paddingHorizontal: 26 },
   facts: { flexDirection: 'row', gap: 5 },
   fact: { minWidth: 54, alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: 11, paddingVertical: 5, paddingHorizontal: 6 },
   mini: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: C.line, shadowColor: '#7C2D12', shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },

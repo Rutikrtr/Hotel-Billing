@@ -6,7 +6,9 @@ import { patchMenuItem, reloadMenu } from '../store/data';
 import { q, sb } from '../supabase';
 import type { MenuItem } from '../types';
 import { Icon } from '../ui/icons';
-import { Button, Chip, Diet, Empty, Field, Header, SearchBox, Sheet, T, ToggleRow } from '../ui/kit';
+import { Button, Chip, Diet, Empty, Field, Header, PageHeader, SearchBox, Sheet, T, ToggleRow } from '../ui/kit';
+import { useWide } from '../ui/wide';
+import { isDesktop } from '../desktop';
 import { C, F } from '../ui/theme';
 import { toast } from '../ui/toast';
 import { MicButton } from '../ui/Mic';
@@ -18,6 +20,7 @@ type Draft = { id?: number; name: string; category: string; newCategory: string;
 
 /** Owner's menu: add, edit, delete, favourite and sold-out, like the web app's Menu screen. */
 export default function MenuScreen() {
+  const wide = useWide();
   const dispatch = useAppDispatch();
   const menu = useAppSelector((s) => s.data.menu);
   const [search, setSearch] = useState('');
@@ -71,28 +74,9 @@ export default function MenuScreen() {
     ]);
   };
 
-  return (
-    <View style={{ flex: 1 }}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(m) => String(m.id)}
-        stickySectionHeadersEnabled={false}
-        contentContainerStyle={{ padding: 12, paddingBottom: 90 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[C.brand1]} />}
-        ListHeaderComponent={
-          <View>
-            <Header eyebrow={`${menu.length} item${menu.length === 1 ? '' : 's'}`} title="Menu" />
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <SearchBox value={search} onChange={setSearch} placeholder="Search or tap the mic" style={st.search} />
-              <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
-            </View>
-            <T style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>Tap ★ to show a dish first when taking orders. Switch off a dish when it is sold out.</T>
-          </View>
-        }
-        ListEmptyComponent={<View style={{ marginTop: 14 }}><Empty icon="📋" text={search ? 'No dish matches your search.' : 'Your menu is empty. Tap “Add Item” to add your first dish.'} /></View>}
-        renderSectionHeader={({ section }) => <T w="heavy" style={st.cat}>{section.title.toUpperCase()} · {section.data.length}</T>}
-        renderItem={({ item: m, index, section }) => (
-          <View style={[st.row, index === 0 && st.first, index === section.data.length - 1 && st.last]}>
+  // One dish: diet mark, name and price (tap to edit), Edit, favourite star, available switch.
+  const dishRow = (m: MenuItem) => (
+    <>
             <Diet veg={m.is_veg} />
             <Pressable style={{ flex: 1 }} onPress={() => openEdit(m)} accessibilityRole="button" accessibilityLabel={`Edit ${m.name}`}>
               <T w="bold" style={{ opacity: m.available ? 1 : 0.5 }}>{m.name}</T>
@@ -106,10 +90,41 @@ export default function MenuScreen() {
               {m.is_favorite ? <Icon.star color="#F59E0B" /> : <Icon.starOff color="#C9BBB0" />}
             </Pressable>
             <Switch value={m.available} onValueChange={(v) => { quick(m, { available: v }); }} trackColor={{ true: C.free, false: '#D6CCC4' }} thumbColor="#FFFFFF" />
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      {wide ? <PageHeader title="Menu" sub={`${menu.length} dish${menu.length === 1 ? '' : 'es'} · tap ★ to show a dish first, switch off when sold out`} right={<Button title="＋ Add Item" small onPress={openNew} style={{ paddingHorizontal: 18 }} />} /> : null}
+      <SectionList
+        sections={wide ? sections.map((sec) => ({ ...sec, count: sec.data.length, data: pairs(sec.data) as unknown as MenuItem[] })) : sections}
+        keyExtractor={(m) => (Array.isArray(m) ? (m as MenuItem[]).map((x) => x.id).join('-') : String(m.id))}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: wide ? 30 : 90 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[C.brand1]} />}
+        ListHeaderComponent={
+          <View>
+            <Header eyebrow={`${menu.length} item${menu.length === 1 ? '' : 's'}`} title="Menu" />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <SearchBox value={search} onChange={setSearch} placeholder={isDesktop ? 'Search dishes' : 'Search or tap the mic'} style={st.search} />
+              <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
+            </View>
+            {wide ? null : <T style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>Tap ★ to show a dish first when taking orders. Switch off a dish when it is sold out.</T>}
           </View>
-        )}
+        }
+        ListEmptyComponent={<View style={{ marginTop: 14 }}><Empty icon="📋" text={search ? 'No dish matches your search.' : 'Your menu is empty. Tap “Add Item” to add your first dish.'} /></View>}
+        renderSectionHeader={({ section }) => <T w="heavy" style={st.cat}>{section.title.toUpperCase()} · {(section as { count?: number }).count ?? section.data.length}</T>}
+        renderItem={({ item: row, index, section }) => (wide ? (
+          // Computer: two dishes per row, each its own card.
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 10 }}>
+            {(row as unknown as MenuItem[]).map((m) => <View key={m.id} style={[st.row, st.card]}>{dishRow(m)}</View>)}
+            {(row as unknown as MenuItem[]).length === 1 ? <View style={{ flex: 1 }} /> : null}
+          </View>
+        ) : (
+          <View style={[st.row, index === 0 && st.first, index === section.data.length - 1 && st.last]}>{dishRow(row)}</View>
+        ))}
       />
-      <View style={st.fab}><Button title="＋ Add Item" onPress={openNew} /></View>
+      {wide ? null : <View style={st.fab}><Button title="＋ Add Item" onPress={openNew} /></View>}
 
       <Sheet open={!!draft} onClose={() => setDraft(null)} title={draft?.id ? 'Edit Item' : 'Add Item'}>
         {draft ? (
@@ -136,7 +151,11 @@ export default function MenuScreen() {
   );
 }
 
+/** [a, b, c] → [[a, b], [c]]: two dishes per row on a computer. */
+const pairs = <X,>(xs: X[]) => Array.from({ length: Math.ceil(xs.length / 2) }, (_, i) => xs.slice(i * 2, i * 2 + 2));
+
 const st = StyleSheet.create({
+  card: { flex: 1, borderWidth: 1, borderRadius: 14, borderColor: C.line },
   search: { height: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 15, color: C.text },
   cat: { fontSize: 12, color: C.muted, letterSpacing: 0.5, marginTop: 16, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderColor: C.line, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },

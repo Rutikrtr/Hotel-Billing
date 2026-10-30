@@ -130,7 +130,7 @@ export function PageHeader({ title, sub, right }: { title: string; sub?: string;
   return (
     <View {...({ dataSet: { drag: '1' } } as object)} style={s.pageHead}>
       <View style={{ flex: 1 }}>
-        <T w="heavy" style={{ fontSize: 22, letterSpacing: -0.4 }}>{title}</T>
+        <T w="heavy" numberOfLines={1} style={{ fontSize: 24, letterSpacing: -0.5 }}>{title}</T>
         {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}
       </View>
       {right}

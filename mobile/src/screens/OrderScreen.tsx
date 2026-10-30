@@ -270,7 +270,7 @@ export default function OrderScreen() {
           </ScrollView>
         ) : null}
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <SearchBox value={search} onChange={setSearch} placeholder="Search or tap the mic and say a dish" style={st.search} />
+          <SearchBox value={search} onChange={setSearch} placeholder={isDesktop ? 'Search dishes' : 'Search or tap the mic and say a dish'} style={st.search} />
           <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }} keyboardShouldPersistTaps="handled">

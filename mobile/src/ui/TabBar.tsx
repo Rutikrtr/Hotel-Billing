@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './icons';
 import { Gradient, T } from './kit';
@@ -19,72 +19,71 @@ const GAP = 6;   // space between the sliding pill and the sides of its slot
  * in an orange gradient pill (icon and name in white) that slides to the tapped tab; icons pop slightly.
  */
 export default function TabBar(props: BottomTabBarProps) {
-  return useWide() ? <SideBar {...props} /> : <Dock {...props} />;
+  // Computer: Root draws the sidebar beside every screen instead of a tab bar.
+  return useWide() ? null : <Dock {...props} />;
 }
 
-// Pages reached from Settings on a computer, not listed in the sidebar (Settings stays highlighted).
-const IN_SETTINGS = new Set(['Analytics']);
-let collapsedOnce = false;   // remembered while the app is open
+export interface SidePage { name: string; label: string }
 
 /**
- * Computer: a dark sidebar with the brand, the pages and the hotel. The « button folds it to icons only
- * (more room for tables and orders); » opens it again.
+ * Computer: the app's sidebar, drawn by Root beside every screen (also while taking an order), so it never
+ * disappears. The « button folds it to icons only and » opens it again; the width slides between the two.
  */
-function SideBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export function AppSideBar({ pages, current, onGo, mini, onFold }: { pages: SidePage[]; current: string; onGo: (name: string) => void; mini: boolean; onFold: () => void }) {
   const settings = useAppSelector((s) => s.data.settings);
   const account = useAppSelector((s) => s.auth.account);
-  const [mini, setMini] = useState(collapsedOnce);
-  const fold = () => { collapsedOnce = !mini; setMini(!mini); };
-  const current = state.routes[state.index]?.name;
   const hotel = settings?.hotel_name ?? account?.hotel ?? '';
+  const width = useRef(new Animated.Value(mini ? 76 : 248)).current;
+  const [labels, setLabels] = useState(!mini);
+  useEffect(() => {
+    // Folding: labels go first, then the width slides; opening: the width slides, then labels come back.
+    if (mini) setLabels(false);
+    Animated.timing(width, { toValue: mini ? 76 : 248, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: false })
+      .start(() => { if (!mini) setLabels(true); });
+  }, [mini]);
   return (
-    <View style={[st.side, mini && st.sideMini]}>
-      <View {...({ dataSet: { drag: '1' } } as object)} style={[st.brand, mini && { justifyContent: 'center', paddingHorizontal: 0 }]}>
-        <View style={st.brandIcon}><Gradient radius={12} /><View><TechyverveLogo size={22} color="#FFFFFF" /></View></View>
-        {mini ? null : (
+    <Animated.View style={[st.side, { width }]}>
+      <View {...({ dataSet: { drag: '1' } } as object)} style={[st.brand, !labels && { justifyContent: 'center', paddingHorizontal: 0 }]}>
+        <TechyverveLogo size={30} />
+        {labels ? (
           <View style={{ flex: 1 }}>
-            <T w="heavy" style={{ fontSize: 16.5, letterSpacing: -0.3, color: '#FFFFFF' }}>Master Bill</T>
-            <T w="semibold" style={{ fontSize: 11, color: '#9AA3C7' }}>by Techyverve</T>
+            <T w="heavy" numberOfLines={1} style={{ fontSize: 17, letterSpacing: -0.3, color: '#FFFFFF' }}>Master Bill</T>
+            <T w="semibold" numberOfLines={1} style={{ fontSize: 11, color: '#9AA3C7' }}>by Techyverve</T>
           </View>
-        )}
+        ) : null}
       </View>
-      {mini ? null : <T w="heavy" style={st.group}>MAIN</T>}
-      <View style={{ gap: 4, marginTop: mini ? 18 : 6 }}>
-        {state.routes.map((route) => {
-          if (IN_SETTINGS.has(route.name)) return null;
-          const on = route.name === current || (route.name === 'Settings' && IN_SETTINGS.has(current));
-          const label = descriptors[route.key].options.title ?? route.name;
-          const Ico = ICONS[route.name] ?? Icon.tables;
-          const press = () => {
-            const e = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (route.name !== current && !e.defaultPrevented) navigation.navigate(route.name);
-          };
+      {labels ? <T w="heavy" style={st.group}>MAIN</T> : null}
+      <View style={{ gap: 4, marginTop: labels ? 6 : 18 }}>
+        {pages.map((pg) => {
+          const on = pg.name === current;
+          const Ico = ICONS[pg.name] ?? Icon.tables;
           return (
-            <Pressable key={route.key} onPress={press} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={label}
-              style={({ hovered, pressed }: { hovered?: boolean; pressed: boolean }) => [st.item, mini && st.itemMini, !on && (hovered || pressed) && { backgroundColor: 'rgba(255,255,255,0.07)' }]}>
+            <Pressable key={pg.name} onPress={() => onGo(pg.name)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={pg.label}
+              style={(x) => [st.item, !labels && st.itemMini, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
               {on ? <Gradient radius={12} /> : null}
               <View><Ico color={on ? '#FFFFFF' : '#AEB5D3'} size={20} /></View>
-              {mini ? null : <T w={on ? 'heavy' : 'semibold'} style={{ fontSize: 14.5, color: on ? '#FFFFFF' : '#D5D9EC' }}>{label}</T>}
+              {labels ? <T w={on ? 'heavy' : 'semibold'} numberOfLines={1} style={{ fontSize: 14.5, color: on ? '#FFFFFF' : '#D5D9EC' }}>{pg.label}</T> : null}
             </Pressable>
           );
         })}
       </View>
       <View style={{ flex: 1 }} />
-      {mini ? null : (
+      {labels ? (
         <View style={st.hotel}>
-          <View style={st.hotelDot}><T w="heavy" style={{ color: '#FFFFFF', fontSize: 13 }}>{hotel.replace(/^(hotel|हॉटेल)\s+/i, '').slice(0, 1).toUpperCase() || 'H'}</T></View>
-          <View style={{ flex: 1 }}>
-            <T w="heavy" numberOfLines={1} style={{ fontSize: 13, color: '#FFFFFF' }}>{hotel}</T>
-            <T w="semibold" numberOfLines={1} style={{ fontSize: 11.5, color: '#9AA3C7' }}>{account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : ''}</T>
-          </View>
+          <T w="heavy" numberOfLines={2} style={{ fontSize: 15.5, lineHeight: 20, color: '#FFFFFF' }}>{hotel}</T>
+          <T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: '#9AA3C7', marginTop: 2 }}>{account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : ''}</T>
         </View>
-      )}
-      <Pressable onPress={fold} accessibilityRole="button" accessibilityLabel={mini ? 'Open the side menu' : 'Fold the side menu'}
-        style={(x) => [st.fold, (x as { hovered?: boolean }).hovered && { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-        <T w="heavy" style={{ color: '#D5D9EC', fontSize: 15 }}>{mini ? '»' : '«'}</T>
-        {mini ? null : <T w="semibold" style={{ color: '#AEB5D3', fontSize: 12.5 }}>Fold menu</T>}
+      ) : null}
+      <Pressable onPress={onFold} accessibilityRole="button" accessibilityLabel={mini ? 'Open the side menu' : 'Fold the side menu'}
+        style={(x) => [st.fold, (x as { hovered?: boolean }).hovered && st.foldHover]}>
+        {(state) => { const x = state as { hovered?: boolean }; return (
+          <>
+            <T w="heavy" style={{ color: x.hovered ? '#FFFFFF' : '#D5D9EC', fontSize: 16 }}>{mini ? '»' : '«'}</T>
+            {labels ? <T w="semibold" style={{ color: x.hovered ? '#FFFFFF' : '#AEB5D3', fontSize: 12.5 }}>Fold menu</T> : null}
+          </>
+        ); }}
       </Pressable>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -131,16 +130,17 @@ function Dock({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 const st = StyleSheet.create({
-  side: { width: 240, backgroundColor: '#151A33', paddingHorizontal: 14, paddingTop: 16, paddingBottom: 14 },
-  sideMini: { width: 76, paddingHorizontal: 12 },
+  side: { backgroundColor: '#151A33', paddingHorizontal: 12, paddingTop: 16, paddingBottom: 14, overflow: 'hidden' },
+  itemHover: { backgroundColor: 'rgba(255,255,255,0.08)' },
+  foldHover: { backgroundColor: 'rgba(255,255,255,0.14)' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6, minHeight: 48 },
   group: { color: '#6E77A0', fontSize: 10.5, letterSpacing: 1.2, marginTop: 22, marginLeft: 10 },
   itemMini: { justifyContent: 'center', paddingHorizontal: 0 },
   hotelDot: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  fold: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 38, borderRadius: 10, marginTop: 10 },
+  fold: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 40, borderRadius: 10, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
   brandIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 46, paddingHorizontal: 14, borderRadius: 12, overflow: 'hidden' },
-  hotel: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 10 },
+  hotel: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14 },
   wrap: { backgroundColor: C.bg, paddingHorizontal: 14, paddingTop: 6 },
   dock: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: 24, borderWidth: 1, borderColor: C.line, padding: 6,
     shadowColor: '#7C2D12', shadowOpacity: 0.12, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
