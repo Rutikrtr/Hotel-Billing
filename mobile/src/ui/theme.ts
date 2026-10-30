@@ -26,32 +26,36 @@ const MASALA = {
   dishTile: '#FFF7F1', dishLine: '#EFB08A', floorTop: '#FBF7F3', floorBottom: '#F4EDE6', floorDot: '#D9CCC0', floorLine: '#E6DCD2', spotLine: '#DCD2C9',
 };
 
-// Desktop app 2.5: "Ember" – a clean, bright orange (no pink) on a neutral light page with white cards and a
-// dark stone sidebar; status colours stay small (orange busy, violet billed, green free).
+// Desktop app 2.5: "Tangerine" – built from the owner's palettes: tangerine #FD6500 / #FF8D21 for buttons and
+// highlights, soft #FFF4DF / #FFE2C4 / #FFCD90 / #FFB76B shades, a warm off-white page, a light cream sidebar,
+// and slate #7F8DA3 for quiet text and the "billed" status.
 const SLATE: typeof MASALA = {
-  bg: '#F6F5F3',
+  bg: '#FBF6F1',
   surface: '#FFFFFF',
-  surface2: '#F2F0ED',
-  line: '#E7E4E0',
-  text: '#1C1917',
-  muted: '#78716C',
-  accent: '#EA580C',
-  accentStrong: '#C2410C',
-  accentSoft: '#FFF1E8',
-  brand1: '#F97316',
-  brand2: '#EA580C',
-  ink: '#1C1917',
+  surface2: '#FFF4DF',
+  line: '#F3E3D1',
+  text: '#2B1A0E',
+  muted: '#7F8DA3',
+  accent: '#FD6500',
+  accentStrong: '#D74100',
+  accentSoft: '#FFE2C4',
+  brand1: '#FF8D21',
+  brand2: '#FD6500',
+  ink: '#2B1A0E',
   free: '#16A34A',
   freeSoft: '#E8F7EE',
-  billed: '#7C3AED',
-  billedSoft: '#F3EEFF',
-  danger: '#DC2626',
-  dangerSoft: '#FDECEC',
+  billed: '#5E6B85',
+  billedSoft: '#EEF1F6',
+  danger: '#D93025',
+  dangerSoft: '#FDECEA',
   veg: '#15803D',
   nonveg: '#B91C1C',
-  busyTile: '#FFF5EE', busyLine: '#FDCBA6', billedTile: '#F8F5FF', billedLine: '#DDD2FD', editLine: '#FDD5BA',
-  dishTile: '#FFF7F1', dishLine: '#FBBF8F', floorTop: '#FBFAF9', floorBottom: '#F3F1EE', floorDot: '#D6D1CB', floorLine: '#E7E4E0', spotLine: '#D6D1CB',
+  busyTile: '#FFF4DF', busyLine: '#FFCD90', billedTile: '#F5F7FA', billedLine: '#C9D1DE', editLine: '#FFCD90',
+  dishTile: '#FFF4DF', dishLine: '#FFB76B', floorTop: '#FFFCF8', floorBottom: '#FFF5EA', floorDot: '#F0D2B2', floorLine: '#F3E3D1', spotLine: '#EDCDAB',
 };
+
+/** The desktop sidebar: light cream with tangerine for the selected page. */
+export const SIDEBAR = { bg: '#FFF4DF', line: '#F3E3D1', text: '#4A3626', icon: '#B07A52', soft: '#7F8DA3', hover: '#FFE2C4', card: '#FFE9CF' };
 
 export const C = isDesktop ? SLATE : MASALA;
 
@@ -64,4 +68,4 @@ export const F = {
 };
 
 /** Soft shadow tinted with the brand colour (never plain grey). */
-export const shadow = { shadowColor: isDesktop ? '#44260F' : '#7C2D12', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 3 };
+export const shadow = { shadowColor: isDesktop ? '#B45309' : '#7C2D12', shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 3 };
