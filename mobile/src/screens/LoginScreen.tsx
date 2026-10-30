@@ -18,7 +18,7 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TopGlow />
-      <ScrollView contentContainerStyle={st.wrap} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[st.wrap, { width: '100%', maxWidth: 460, alignSelf: 'center' }]} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: 'center', marginBottom: 22 }}>
           <Logo size={72} />
           <T w="heavy" style={st.title}>Master Bill</T>
