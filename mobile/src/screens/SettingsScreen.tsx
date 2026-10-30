@@ -15,6 +15,7 @@ import { Button, Card, Chip, Field, Header, initials, Pill, Sheet, T, ToggleRow 
 import { Icon } from '../ui/icons';
 import { ask } from '../ui/dialog';
 import { shareText } from '../ui/share';
+import { isDesktop } from '../desktop';
 import { C } from '../ui/theme';
 import { toast } from '../ui/toast';
 import type { Stack } from '../Root';
@@ -66,7 +67,9 @@ export default function SettingsScreen() {
         <T w="heavy" style={{ fontSize: 15 }}>Printer & this phone</T>
         <T style={{ color: C.muted }}>{printer.bill ? `Printer: ${printer.bill.name}${printer.separateKitchen && printer.kitchen ? ` · Kitchen: ${printer.kitchen.name}` : ''}` : 'No printer set up on this phone'}</T>
         {account?.can_bill || settings?.kot_tables ? <Button title="Printer Setup" onPress={() => nav.navigate('Printer')} /> : null}
-        <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
+        {isDesktop ? null : (
+          <ToggleRow label="Voice search" hint="Mic in dish search: say “chicken biryani” instead of typing" value={printer.voice !== false} onChange={(v) => dispatch(setPrinter({ voice: v }))} />
+        )}
       </Card>
       <Card style={{ gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

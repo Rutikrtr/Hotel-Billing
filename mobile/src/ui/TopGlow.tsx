@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 /**
@@ -7,9 +7,12 @@ import Svg, { Circle, Defs, G, LinearGradient, Path, RadialGradient, Rect, Stop 
  * (plate, cutlery, a steaming bowl) behind the page title. Drawn, not a photo, so it stays sharp and light.
  */
 export default function TopGlow() {
+  // The drawing is 400 × 300; on wide screens (tablet, computer) it grows with the width so it is never cut off.
+  const { width } = useWindowDimensions();
+  const h = Math.max(300, Math.round(Math.min(width, 640) * 0.75));   // 640: the app column's width on computers
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height: 300 }]}>
-      <Svg width="100%" height="300" viewBox="0 0 400 300" preserveAspectRatio="xMidYMin slice">
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { height: h }]}>
+      <Svg width="100%" height={h} viewBox="0 0 400 300" preserveAspectRatio="xMidYMin slice">
         <Defs>
           <LinearGradient id="wash" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor="#FFD9C2" stopOpacity="0.95" />

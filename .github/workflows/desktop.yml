@@ -1,0 +1,46 @@
+# Builds Master Bill 2.5, the Windows desktop app (desktop/), on GitHub's Windows servers: the 2.0 screens'
+# web build is packed inside an Electron app, giving one portable .exe (no installer). The .exe goes to the
+# "desktop-release" branch: https://github.com/Rutikrtr/Hotel-Billing/raw/desktop-release/Master-Bill-2.5.exe
+name: Build Master Bill desktop app (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['desktop/**', '.github/workflows/desktop.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            mobile/package-lock.json
+            desktop/package-lock.json
+      - name: Build the 2.0 screens for the web
+        working-directory: mobile
+        run: npm ci && npx tsc --noEmit && npx tsx --test tests/*.test.ts && npm run build:web
+      - name: Build the Windows app
+        working-directory: desktop
+        run: npm ci && npm run dist
+      - name: Publish the .exe to the desktop-release branch
+        run: |
+          mkdir out && cp desktop/dist/Master-Bill-2.5.exe out/
+          echo "$GITHUB_SHA" > out/SOURCE_COMMIT
+          cd out
+          git init -q -b desktop-release
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add . && git commit -q -m "Master Bill 2.5 desktop app from $GITHUB_SHA"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" desktop-release

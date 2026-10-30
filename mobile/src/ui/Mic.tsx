@@ -1,6 +1,7 @@
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import React, { useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet } from 'react-native';
+import { isDesktop } from '../desktop';
 import { useAppSelector } from '../store';
 import Svg, { Path } from 'react-native-svg';
 import { C } from './theme';
@@ -25,7 +26,8 @@ export function MicButton({ onText, hints }: { onText: (text: string) => void; h
     else if (e.error !== 'aborted') toast(`Voice search: ${e.message || e.error}`, true);
   });
 
-  if (!enabled) return null;
+  // Desktop app: speech recognition is not available there.
+  if (!enabled || isDesktop) return null;
   const start = async () => {
     if (listening) { ExpoSpeechRecognitionModule.stop(); return; }
     try {

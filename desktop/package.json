@@ -1,0 +1,28 @@
+{
+  "name": "master-bill-desktop",
+  "productName": "Master Bill",
+  "version": "2.5.0",
+  "description": "Master Bill 2.5 – hotel billing for Windows by Techyverve",
+  "author": "Techyverve",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "copy-app": "node scripts/copy-app.mjs",
+    "start": "npm run copy-app && electron .",
+    "dist": "npm run copy-app && electron-builder --win portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.9.2",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "in.techyverve.masterbill.desktop",
+    "productName": "Master Bill",
+    "copyright": "© Techyverve",
+    "artifactName": "Master-Bill-2.5-${version}.exe",
+    "files": ["main.js", "app/**/*", "package.json"],
+    "asar": true,
+    "win": { "target": ["portable"], "icon": "build/icon.png" },
+    "portable": { "artifactName": "Master-Bill-2.5.exe" }
+  }
+}
