@@ -45,7 +45,7 @@ app.whenReady().then(() => {
 
   Menu.setApplicationMenu(null);
   const win = new BrowserWindow({
-    width: 560, height: 900, minWidth: 380, minHeight: 600,
+    width: 1366, height: 820, minWidth: 980, minHeight: 640, show: false,
     title: 'Master Bill', backgroundColor: '#FAF6F2', autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, devTools: !app.isPackaged, spellcheck: false },
@@ -56,6 +56,8 @@ app.whenReady().then(() => {
   // The window keeps the desktop app's own name (the screens call themselves 2.0).
   win.on('page-title-updated', (e) => { e.preventDefault(); win.setTitle(`Master Bill ${app.getVersion()}`); });
   win.setTitle(`Master Bill ${app.getVersion()}`);
+  // Opens full screen (maximized), like desktop billing software.
+  win.once('ready-to-show', () => { win.maximize(); win.show(); });
   win.loadURL(START);
 });
 
