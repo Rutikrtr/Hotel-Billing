@@ -79,7 +79,9 @@ app.whenReady().then(() => {
     win.webContents.insertCSS(`
       [data-glass] { backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%); }
       [data-drag] { -webkit-app-region: drag; }
-      [data-drag] [role="button"], [data-drag] [role="tab"], [data-drag] input, [data-drag] a { -webkit-app-region: no-drag; }
+      /* Every control is clickable wherever it is: on Windows a drag area under another screen would otherwise
+         swallow clicks (no-drag always wins over drag). */
+      [role="button"], [role="tab"], [role="link"], [role="switch"], [role="checkbox"], button, a, input, textarea, select { -webkit-app-region: no-drag; }
       #mb-drag { position: fixed; top: 0; left: 0; right: 150px; height: 6px; -webkit-app-region: drag; z-index: 99999; }
     `);
     win.webContents.executeJavaScript(`if (!document.getElementById('mb-drag')) { const d = document.createElement('div'); d.id = 'mb-drag'; document.body.appendChild(d); }`);
