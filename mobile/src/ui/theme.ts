@@ -60,11 +60,11 @@ export const C = isDesktop ? SLATE : MASALA;
 
 // Inter: the font most phone apps use for numbers and small labels (clear digits, tabular figures).
 export const F = isDesktop ? {
-  // Desktop: Instrument Sans (calm, modern type); big page titles in Medium with tight spacing (F.light).
+  // Desktop: Instrument Sans (calm, modern type); page titles and big figures in Bold (F.heavy).
   regular: 'InstrumentSans_400Regular',
   semibold: 'InstrumentSans_500Medium',
   bold: 'InstrumentSans_600SemiBold',
-  heavy: 'InstrumentSans_600SemiBold',
+  heavy: 'InstrumentSans_700Bold',
   light: 'InstrumentSans_500Medium',
   mono: 'IBMPlexMono_500Medium',
 } : {

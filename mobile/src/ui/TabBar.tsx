@@ -31,88 +31,91 @@ const FEATHER: Record<string, React.ComponentProps<typeof Feather>['name']> = {
 };
 const MINI = 72, OPEN = 248;
 
+/** Web: the browser's own tooltip (shows a page's name over its icon while the sidebar is collapsed). */
+function useTitle(text: string | undefined) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    const el = ref.current as unknown as HTMLElement | null;
+    if (!el?.setAttribute) return;
+    if (text) el.setAttribute('title', text); else el.removeAttribute('title');
+  }, [text]);
+  return ref;
+}
+
 /**
- * Computer: the black sidebar, drawn by Root beside every screen (also while taking an order). It sits as a
- * slim strip of icons and slides open over the page while the mouse is on it; the pin keeps it open.
- * Bills, Analytics and Settings are grouped under Manage, which opens and closes.
+ * Computer: the black sidebar, drawn by Root beside every screen (also while taking an order). It always
+ * sits beside the page, never over it; Collapse shrinks it to icons (names show as tooltips) and opens it
+ * again. Bills, Analytics and Settings are grouped under Manage.
  */
 export function AppSideBar({ pages, current, onGo, mini, onFold, onSignOut }: { pages: SidePage[]; current: string; onGo: (name: string) => void; mini: boolean; onFold: () => void; onSignOut: () => void }) {
   const { account, email } = useAppSelector((s) => s.auth);
   const settings = useAppSelector((s) => s.data.settings);
   const hotel = settings?.hotel_name ?? account?.hotel ?? '';
-  const [hover, setHover] = useState(false);
-  const [manage, setManage] = useState(true);
-  const open = !mini || hover;
-  const width = useRef(new Animated.Value(open ? OPEN : MINI)).current;
+  const width = useRef(new Animated.Value(mini ? MINI : OPEN)).current;
   useEffect(() => {
-    Animated.timing(width, { toValue: open ? OPEN : MINI, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [open]);
-  // Opens a moment after the mouse arrives (so passing over it does nothing) and closes a moment after it leaves.
-  const timer = useRef<ReturnType<typeof setTimeout>>();
-  const enter = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setHover(true), 90); };
-  const leave = () => { clearTimeout(timer.current); timer.current = setTimeout(() => setHover(false), 160); };
-  useEffect(() => () => clearTimeout(timer.current), []);
+    Animated.timing(width, { toValue: mini ? MINI : OPEN, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [mini]);
   const fade = width.interpolate({ inputRange: [MINI, 170, OPEN], outputRange: [0, 0.5, 1] });
   const Label = ({ children, style }: { children: React.ReactNode; style?: object }) => (
     <Animated.View style={{ opacity: fade, width: 150 }} pointerEvents="none"><T numberOfLines={1} style={style}>{children}</T></Animated.View>
   );
-  const main = pages.filter((p) => !p.group);
-  const managed = pages.filter((p) => p.group === 'manage');
-  const item = (pg: SidePage, sub = false) => {
-    const on = pg.name === current;
-    return (
-      <Pressable key={pg.name} onPress={() => onGo(pg.name)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={pg.label}
-        style={(x) => [st.item, sub && st.sub, on && st.itemOn, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
-        <View style={st.ico}><Feather name={FEATHER[pg.name] ?? 'circle'} size={sub ? 16 : 18} color={on ? C.accent : SIDEBAR.icon} /></View>
-        <Label style={{ fontSize: sub ? 13.5 : 14.5, fontFamily: on ? F.bold : F.semibold, color: on ? '#FFFFFF' : sub ? SIDEBAR.soft : '#B4B4B8' }}>{pg.label}</Label>
-      </Pressable>
-    );
-  };
-  const role = account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : '';
-  return (
-    <View style={{ width: mini ? MINI : OPEN, zIndex: 50 }}>
-      <Animated.View {...({ onPointerEnter: enter, onPointerLeave: leave } as object)} style={[st.side, { width }, open && mini && st.sideFloat]}>
-        <View {...({ dataSet: { drag: '1' } } as object)} style={st.brand}>
-          <View style={st.logo}><Gradient radius={9} /><View><TechyverveLogo size={20} color="#FFFFFF" /></View></View>
-          <Animated.View style={{ opacity: fade, width: 160 }}>
-            <T w="bold" numberOfLines={1} style={{ fontSize: 15.5, color: SIDEBAR.text }}>Master Bill</T>
-            <T numberOfLines={1} style={{ fontSize: 11.5, color: SIDEBAR.soft }}>{hotel}</T>
-          </Animated.View>
-        </View>
-        <Label style={st.group}>SERVICE</Label>
-        <View style={{ gap: 2 }}>{main.map((p) => item(p))}</View>
-        {managed.length ? (
-          <View style={{ marginTop: 14, gap: 2 }}>
-            <Pressable onPress={() => setManage(!manage)} accessibilityRole="button" accessibilityLabel={manage ? 'Close Manage' : 'Open Manage'}
-              style={(x) => [st.item, (x as { hovered?: boolean }).hovered && st.itemHover]}>
-              <View style={st.ico}><Feather name="sliders" size={18} color={SIDEBAR.icon} /></View>
-              <Label style={{ fontSize: 14.5, fontFamily: F.semibold, color: '#E4E4E6' }}>Manage</Label>
-              <Animated.View style={{ opacity: fade, marginLeft: 'auto' }}><Feather name={manage ? 'chevron-down' : 'chevron-right'} size={16} color={SIDEBAR.soft} /></Animated.View>
-            </Pressable>
-            {manage ? <View style={{ gap: 2 }}>{managed.map((p) => item(p, true))}</View> : null}
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }} />
-        <Pressable onPress={onFold} accessibilityRole="button" accessibilityLabel={mini ? 'Keep the side menu open' : 'Open the side menu on mouse over only'}
-          style={(x) => [st.item, (x as { hovered?: boolean }).hovered && st.itemHover]}>
-          <View style={st.ico}><Feather name={mini ? 'chevrons-right' : 'chevrons-left'} size={17} color={SIDEBAR.icon} /></View>
-          <Label style={{ fontSize: 13, fontFamily: F.semibold, color: SIDEBAR.soft }}>{mini ? 'Keep menu open' : 'Open on mouse over'}</Label>
-        </Pressable>
-        <View style={st.me}>
-          <View style={st.avatar}><Feather name="user" size={16} color="#C9C9CC" /></View>
-          <Animated.View style={{ opacity: fade, width: 128 }}>
-            <T w="semibold" numberOfLines={1} style={{ fontSize: 13, color: SIDEBAR.text }}>{email ?? ''}</T>
-            <T numberOfLines={1} style={{ fontSize: 11.5, color: SIDEBAR.soft }}>{role}</T>
-          </Animated.View>
-          <Animated.View style={{ opacity: fade }}>
-            <Pressable onPress={onSignOut} hitSlop={6} accessibilityRole="button" accessibilityLabel="Sign out"
-              style={(x) => [st.out, (x as { hovered?: boolean }).hovered && st.itemHover]}>
-              <Feather name="log-out" size={16} color={SIDEBAR.icon} />
-            </Pressable>
-          </Animated.View>
-        </View>
-      </Animated.View>
+  const group = (name: string, list: SidePage[]) => (list.length ? (
+    <View style={{ gap: 2, marginBottom: 16 }}>
+      <View style={{ height: 22, justifyContent: 'center' }}>
+        {/* Collapsed: a thin line instead of the group's name. */}
+        {mini ? <View style={st.groupLine} /> : <Label style={st.group}>{name}</Label>}
+      </View>
+      {list.map((pg) => <Item key={pg.name} pg={pg} on={pg.name === current} mini={mini} onGo={onGo} fade={fade} />)}
     </View>
+  ) : null);
+  const role = account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : '';
+  const foldRef = useTitle(mini ? 'Open the menu' : undefined);
+  const outRef = useTitle('Sign out');
+  return (
+    <Animated.View style={[st.side, { width }]}>
+      <View {...({ dataSet: { drag: '1' } } as object)} style={st.brand}>
+        <View style={st.logo}><Gradient radius={9} /><View><TechyverveLogo size={20} color="#FFFFFF" /></View></View>
+        <Animated.View style={{ opacity: fade, width: 160 }}>
+          <T w="bold" numberOfLines={1} style={{ fontSize: 15.5, color: SIDEBAR.text }}>Master Bill</T>
+          <T numberOfLines={1} style={{ fontSize: 11.5, color: SIDEBAR.soft }}>{hotel}</T>
+        </Animated.View>
+      </View>
+      {group('SERVICE', pages.filter((p) => !p.group))}
+      {group('MANAGE', pages.filter((p) => p.group === 'manage'))}
+      <View style={{ flex: 1 }} />
+      <Pressable ref={foldRef} onPress={onFold} accessibilityRole="button" accessibilityLabel={mini ? 'Open the menu' : 'Collapse the menu'}
+        style={(x) => [st.item, (x as { hovered?: boolean }).hovered && st.itemHover]}>
+        <View style={st.ico}><Feather name={mini ? 'chevrons-right' : 'chevrons-left'} size={17} color={SIDEBAR.icon} /></View>
+        <Label style={{ fontSize: 13.5, fontFamily: F.semibold, color: SIDEBAR.soft }}>Collapse</Label>
+      </Pressable>
+      <View style={st.me}>
+        <View style={st.avatar}><Feather name="user" size={16} color="#C9C9CC" /></View>
+        <Animated.View style={{ opacity: fade, width: 124 }} pointerEvents="none">
+          <T w="semibold" numberOfLines={1} style={{ fontSize: 13, color: SIDEBAR.text }}>{email ?? ''}</T>
+          <T numberOfLines={1} style={{ fontSize: 11.5, color: SIDEBAR.soft }}>{role}</T>
+        </Animated.View>
+        {mini ? null : (
+          <Pressable ref={outRef} onPress={onSignOut} hitSlop={6} accessibilityRole="button" accessibilityLabel="Sign out"
+            style={(x) => [st.out, (x as { hovered?: boolean }).hovered && st.itemHover]}>
+            <Feather name="log-out" size={16} color={SIDEBAR.icon} />
+          </Pressable>
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+/** One page in the sidebar: icon and name; collapsed, the name shows as a tooltip. */
+function Item({ pg, on, mini, onGo, fade }: { pg: SidePage; on: boolean; mini: boolean; onGo: (name: string) => void; fade: Animated.AnimatedInterpolation<number> }) {
+  const ref = useTitle(mini ? pg.label : undefined);
+  return (
+    <Pressable ref={ref} onPress={() => onGo(pg.name)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={pg.label}
+      style={(x) => [st.item, on && st.itemOn, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
+      <View style={st.ico}><Feather name={FEATHER[pg.name] ?? 'circle'} size={18} color={on ? C.accent : SIDEBAR.icon} /></View>
+      <Animated.View style={{ opacity: fade, width: 150 }} pointerEvents="none">
+        <T numberOfLines={1} style={{ fontSize: 14.5, fontFamily: on ? F.bold : F.semibold, color: on ? '#FFFFFF' : '#B4B4B8' }}>{pg.label}</T>
+      </Animated.View>
+    </Pressable>
   );
 }
 
@@ -159,15 +162,14 @@ function Dock({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 const st = StyleSheet.create({
-  side: { position: 'absolute', top: 0, bottom: 0, left: 0, backgroundColor: SIDEBAR.bg, borderRightWidth: 1, borderRightColor: SIDEBAR.line, paddingHorizontal: 12, paddingTop: 16, paddingBottom: 12, overflow: 'hidden',
+  side: { backgroundColor: SIDEBAR.bg, borderRightWidth: 1, borderRightColor: SIDEBAR.line, paddingHorizontal: 12, paddingTop: 16, paddingBottom: 12, overflow: 'hidden',
     backgroundImage: 'linear-gradient(180deg, #1B1B1F 0%, #0B0B0D 55%, #000000 100%)' } as object,
-  sideFloat: { boxShadow: '12px 0 40px rgba(0,0,0,0.28)' } as object,
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, minHeight: 44, marginBottom: 18, overflow: 'hidden' },
   logo: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 4px 14px rgba(232,89,12,0.45)' } as object,
-  group: { fontSize: 10.5, letterSpacing: 1.2, color: SIDEBAR.soft, fontFamily: F.semibold, marginLeft: 12, marginBottom: 6 },
+  group: { fontSize: 10.5, letterSpacing: 1.2, color: SIDEBAR.soft, fontFamily: F.semibold, marginLeft: 12 },
+  groupLine: { height: 1, marginHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.10)' },
   ico: { width: 24, alignItems: 'center' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 42, paddingHorizontal: 12, borderRadius: 10, overflow: 'hidden' },
-  sub: { height: 36 },
   itemOn: { backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.5)' } as object,
   itemHover: { backgroundColor: SIDEBAR.hover },
   me: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: SIDEBAR.line, paddingTop: 12, marginTop: 8, paddingLeft: 6, overflow: 'hidden' },

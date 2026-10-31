@@ -2,7 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNavigationContainerRef, DefaultTheme, NavigationContainer, useNavigation, type NavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, View } from 'react-native';
 import { warmUp } from './printing/ble';
 import AnalyticsScreen from './screens/AnalyticsScreen';
 import RoomsScreen from './screens/RoomsScreen';
@@ -82,7 +82,7 @@ function Tabs() {
   const owner = account?.role === 'owner';
   const wide = useWide();
   return (
-    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={({ navigation }) => ({ headerShown: false, sceneStyle: { backgroundColor: C.bg, ...(isDesktop && !navigation.isFocused() ? { display: 'none' } : {}) }, tabBarPosition: wide ? 'left' : 'bottom' })}>
+    <Tab.Navigator backBehavior="history" tabBar={(p) => <TabBar {...p} />} screenOptions={({ navigation }) => ({ headerShown: false, sceneStyle: { backgroundColor: C.bg, ...(isDesktop && !navigation.isFocused() ? { display: 'none' } : {}) }, tabBarPosition: wide ? 'left' : 'bottom' })}>
       {feat('tables') || !feat('rooms') ? <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} /> : null}
       {bill && feat('rooms') ? <Tab.Screen name="Rooms" component={G.Rooms} options={{ tabBarIcon: Icon.tables }} /> : null}
       {owner ? <Tab.Screen name="Menu" component={G.Menu} options={{ tabBarIcon: Icon.menu }} /> : null}
@@ -116,6 +116,26 @@ function useLive(enabled: boolean) {
 }
 
 const navRef = createNavigationContainerRef<Stack & { Main: { screen?: string } | undefined }>();
+
+/**
+ * Computer: back works like in any Windows app – the mouse's back button, Alt+← and the keyboard's Back key go
+ * to the previous screen or page (Esc too, when no popup or text box is open).
+ */
+function useDesktopBack(enabled: boolean) {
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined') return;
+    const back = () => { if (navRef.isReady() && navRef.canGoBack()) { navRef.goBack(); return true; } return false; };
+    const typing = () => { const el = document.activeElement as HTMLElement | null; return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable); };
+    const key = (e: KeyboardEvent) => {
+      const go = (e.altKey && e.key === 'ArrowLeft') || e.key === 'BrowserBack' || (e.key === 'Escape' && !typing() && !document.querySelector('[aria-modal="true"]'));
+      if (go && back()) e.preventDefault();
+    };
+    const app = () => back();   // Windows' "back" command (mouse back button), passed on by the desktop app
+    window.addEventListener('keydown', key);
+    window.addEventListener('mb-back', app);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('mb-back', app); };
+  }, [enabled]);
+}
 // Screens opened over the tabs belong to a sidebar page (Order → Tables, Printer Setup → Settings…).
 const IN_SETTINGS = ['TableSetup', 'Staff'];
 const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Bills', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Analytics', Bills: 'Bills' };
@@ -129,7 +149,7 @@ function sidePage(state: NavigationState | undefined): string {
   }
   return PARENT[top.name] ?? 'Tables';
 }
-let foldedOnce = true;   // computer: the sidebar opens on mouse over unless pinned open (kept while the app is open)
+let foldedOnce = false;   // computer: the sidebar stays collapsed or open while the app is open
 
 export default function Root() {
   const wide = useWide();
@@ -141,6 +161,7 @@ export default function Root() {
   const loadError = useAppSelector((s) => s.data.error);
   const hotel = status === 'signedIn' && account?.staff && account.active;
   useLive(Boolean(hotel));
+  useDesktopBack(Platform.OS === 'web' && Boolean(hotel));
   useEffect(() => {
     if (hotel) {
       dispatch(loadAll());

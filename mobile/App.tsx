@@ -1,5 +1,5 @@
 import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
-import { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold } from '@expo-google-fonts/instrument-sans';
+import { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold, InstrumentSans_700Bold } from '@expo-google-fonts/instrument-sans';
 import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -43,7 +43,7 @@ SplashScreen.setOptions({ fade: true, duration: 250 });
 export default function App() {
   const wide = useWide();
   const [fontsLoaded, fontError] = useFonts(isDesktop
-    ? { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold, IBMPlexMono_500Medium, Inter_500Medium, Inter_600SemiBold }
+    ? { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold, InstrumentSans_700Bold, IBMPlexMono_500Medium, Inter_500Medium, Inter_600SemiBold }
     : { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [fontWait, setFontWait] = useState(true);
   const [ready, setReady] = useState(false);

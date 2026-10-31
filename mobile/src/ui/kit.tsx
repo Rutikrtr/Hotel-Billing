@@ -4,6 +4,7 @@ import {
   type StyleProp, type TextInputProps, type TextStyle, type ViewStyle,
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Feather } from '@expo/vector-icons';
 import { Icon } from './icons';
 import { C, F, shadow } from './theme';
 import { useWide } from './wide';
@@ -109,6 +110,15 @@ export const s = StyleSheet.create({
     : { backgroundColor: C.accent, borderColor: C.accent },
   input: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 14.5, color: C.text },
   sheet: { backgroundColor: isDesktop ? '#FFF9F2' : C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
+  kpis: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, marginBottom: 16, ...shadow },
+  kpi: { flex: 1, minWidth: 0, paddingVertical: 16, paddingHorizontal: 20, overflow: 'hidden', justifyContent: 'center' },
+  kpiMain: { flex: 1.35 },
+  kpiLine: { borderLeftWidth: 1, borderLeftColor: C.line },
+  kpiValue: { fontFamily: F.mono, fontSize: 26, marginTop: 6, color: C.text, fontVariant: ['tabular-nums'] },
+  kpiNote: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 8 },
+  seg: { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: 'rgba(16,16,20,0.06)', borderRadius: 11, padding: 3, gap: 2 },
+  segItem: { paddingHorizontal: 13, height: 32, borderRadius: 8, justifyContent: 'center' },
+  segOn: { backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' } as object,
   summary: { borderRadius: 18, padding: 12, marginBottom: 12, overflow: 'hidden', backgroundColor: C.brand1 },
   note: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 6 },
   big: { fontSize: 25, letterSpacing: -0.6, color: '#FFFFFF', fontVariant: ['tabular-nums'], marginTop: 2 },
@@ -141,13 +151,13 @@ export function PageHeader({ title, sub, right, onBack }: { title: string; sub?:
     <View {...({ dataSet: isDesktop ? { drag: '1', glass: '1' } : { drag: '1' } } as object)} style={s.pageHead}>
       {onBack ? (
         <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to Settings"
-          style={(x) => [s.back, (x as { hovered?: boolean }).hovered && { backgroundColor: C.accentSoft }]}>
-          <T w="heavy" style={{ fontSize: 16, color: C.accent }}>←</T>
-          <T w="bold" style={{ fontSize: 13, color: C.accent }}>Settings</T>
+          style={(x) => [s.back, (x as { hovered?: boolean }).hovered && { backgroundColor: 'rgba(16,16,20,0.05)' }]}>
+          <Feather name="arrow-left" size={18} color={C.text} />
+          <T w="semibold" style={{ fontSize: 13.5, color: C.text }}>Settings</T>
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T w={isDesktop ? 'light' : 'heavy'} numberOfLines={1} style={{ fontSize: isDesktop ? 30 : 24, letterSpacing: isDesktop ? -0.9 : -0.5 }}>{title}</T>
+        <T w="heavy" numberOfLines={1} style={{ fontSize: isDesktop ? 28 : 24, letterSpacing: isDesktop ? -0.7 : -0.5 }}>{title}</T>
         {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}
       </View>
       {right}
@@ -158,7 +168,7 @@ export function PageHeader({ title, sub, right, onBack }: { title: string; sub?:
 export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 6 }}>
-      <T w={isDesktop ? 'semibold' : 'heavy'} style={isDesktop ? { fontSize: 12, flex: 1, color: C.muted, letterSpacing: 1.1, textTransform: 'uppercase' } : { fontSize: 14.5, flex: 1 }}>{children}</T>
+      <T w={isDesktop ? 'bold' : 'heavy'} style={isDesktop ? { fontSize: 15.5, flex: 1 } : { fontSize: 14.5, flex: 1 }}>{children}</T>
       {right}
     </View>
   );
@@ -222,9 +232,11 @@ export interface Stat { value: string | number; label: string; color: string; bg
  * The summary at the top of Tables, Bills and Analytics: one big number, then small coloured tiles.
  * Values are always larger and darker than their labels, and digits keep a fixed width so totals don't jump.
  */
-export function SummaryCard({ label, value, note, noteColor, stats, right }: {
+export function SummaryCard(props: {
   label: string; value: string; note?: string; noteColor?: string; stats: Stat[]; right?: React.ReactNode;
 }) {
+  if (isDesktop) return <KpiRow {...props} />;
+  const { label, value, note, noteColor, stats, right } = props;
   return (
     <View style={[s.summary, shadow]}>
       <Gradient radius={18} />
@@ -245,6 +257,70 @@ export function SummaryCard({ label, value, note, noteColor, stats, right }: {
         ))}
       </View>
     </View>
+  );
+}
+
+/**
+ * Desktop: the same summary as one card of figures – the main figure in an orange tile (with its note and
+ * button), the others on white with a small colour dot, in the number font.
+ */
+function KpiRow({ label, value, note, noteColor, stats, right }: {
+  label: string; value: string; note?: string; noteColor?: string; stats: Stat[]; right?: React.ReactNode;
+}) {
+  return (
+    <View {...glass} style={s.kpis}>
+      <View style={[s.kpi, s.kpiMain]}>
+        <Gradient radius={0} />
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <T numberOfLines={1} style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.9)' }}>{label}</T>
+            <T numberOfLines={1} style={[s.kpiValue, { color: '#FFFFFF' }]}>{value}</T>
+          </View>
+          {right}
+        </View>
+        {note ? <View style={s.kpiNote}><T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: '#FFFFFF' }}>{note}</T></View> : null}
+      </View>
+      {stats.map((x) => (
+        <View key={x.label} style={[s.kpi, s.kpiLine]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: x.color }} />
+            <T numberOfLines={1} style={{ fontSize: 12.5, color: C.muted }}>{x.label}</T>
+          </View>
+          <T numberOfLines={1} style={s.kpiValue}>{x.value}</T>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Desktop: a set of choices as one switch (e.g. Today · 7 days · This month). */
+export function Segmented({ options, value, onChange }: { options: [string, string][]; value: string; onChange: (key: string) => void }) {
+  return (
+    <View style={s.seg} accessibilityRole="tablist">
+      {options.map(([k, label]) => {
+        const on = k === value;
+        return (
+          <Pressable key={k} onPress={() => onChange(k)} accessibilityRole="tab" accessibilityState={{ selected: on }}
+            style={(x) => [s.segItem, on && s.segOn, !on && (x as { hovered?: boolean }).hovered && { backgroundColor: 'rgba(255,255,255,0.6)' }]}>
+            <T w={on ? 'bold' : 'semibold'} style={{ fontSize: 13, color: on ? C.text : C.muted }}>{label}</T>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Desktop: a white card with its title (and buttons) inside, for charts and lists. */
+export function Panel({ title, sub, right, style, children }: { title: string; sub?: string; right?: React.ReactNode; style?: StyleProp<ViewStyle>; children: React.ReactNode }) {
+  return (
+    <Card style={[{ padding: 18, gap: 12 }, style]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 28 }}>
+        <T w="bold" style={{ fontSize: 15.5, flex: 1 }}>{title}</T>
+        {sub ? <T style={{ fontSize: 12.5, color: C.muted }}>{sub}</T> : null}
+        {right}
+      </View>
+      {children}
+    </Card>
   );
 }
 

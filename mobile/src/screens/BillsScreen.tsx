@@ -11,6 +11,7 @@ import { q, sb } from '../supabase';
 import { Icon } from '../ui/icons';
 import { Empty, SectionTitle, SummaryCard, T } from '../ui/kit';
 import { C } from '../ui/theme';
+import { useWide } from '../ui/wide';
 import type { Stack } from '../Root';
 
 interface Row { id: number; kind: string; bill_no: string; label: string; method: string; total: number; closed_at: string; edit_count?: number; split?: Record<string, number> }
@@ -23,6 +24,7 @@ export const billsChanged = { current: false };
 /** Paid bills for one day (one small request), plus bills printed but not paid yet. */
 export default function BillsScreen() {
   const nav = useNavigation<NativeStackNavigationProp<Stack>>();
+  const pad = useWide() ? 24 : 12;
   const [day, setDay] = useState(localDay());
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -90,7 +92,7 @@ export default function BillsScreen() {
   return (
     <View style={{ flex: 1 }}>
       {/* Title and sales card stay in place; only the list below scrolls. */}
-      <View style={{ paddingHorizontal: 12, paddingTop: 10 }}>
+      <View style={{ paddingHorizontal: pad, paddingTop: pad === 24 ? 24 : 10 }}>
         <SummaryCard
           label={`${isToday ? 'Today’s sales' : `Sales on ${shortDay(day)}`} · ${rows.length} bill${rows.length === 1 ? '' : 's'}`}
           value={rsShort(total)}
@@ -103,7 +105,7 @@ export default function BillsScreen() {
         ) : null}
       </View>
       <FlatList
-        style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 24 }}
+        style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: pad, paddingBottom: 24 }}
         data={rows} keyExtractor={(r) => `${r.kind}${r.id}`}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} colors={[C.brand1]} />}
         ListHeaderComponent={

@@ -8,8 +8,9 @@ import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
 import { toast } from '../ui/toast';
 import { Icon } from '../ui/icons';
-import { Card, Chip, Diet, Empty, SectionTitle, SummaryCard, T } from '../ui/kit';
+import { Button, Card, Chip, Diet, Empty, Panel, SectionTitle, Segmented, SummaryCard, T, glass } from '../ui/kit';
 import { C } from '../ui/theme';
+import { isDesktop } from '../desktop';
 import { useWide } from '../ui/wide';
 
 interface Report {
@@ -39,7 +40,9 @@ function Pair({ wide, children }: { wide: boolean; children: React.ReactNode }) 
   return wide ? <View style={{ flexDirection: 'row', gap: 16, alignItems: 'stretch' }}>{children}</View> : <>{children}</>;
 }
 /** One titled section; on a computer it fills its half and its card stretches to the row's height. */
-function Section({ wide, title, right, card, children }: { wide: boolean; title: string; right?: React.ReactNode; card?: object; children: React.ReactNode }) {
+function Section({ wide, title, sub, right, card, children }: { wide: boolean; title: string; sub?: string; right?: React.ReactNode; card?: object; children: React.ReactNode }) {
+  // Desktop: the title sits inside the card.
+  if (isDesktop) return <View style={wide ? { flex: 1, minWidth: 0 } : undefined}><Panel title={title} sub={sub} right={right} style={[card, wide && { flex: 1 }]}>{children}</Panel></View>;
   return (
     <View style={wide ? { flex: 1, minWidth: 0 } : undefined}>
       <SectionTitle right={right}>{title}</SectionTitle>
@@ -123,6 +126,17 @@ export default function AnalyticsScreen() {
 
     return (
       <>
+        {isDesktop ? (
+          // Desktop: one thin row of smaller figures under the main ones.
+          <View {...glass} style={st.strip}>
+            {kpis.filter(([k]) => k !== 'Bills vs before').map(([k, v], i) => (
+              <View key={k} style={[st.cell, i > 0 && st.cellLine]}>
+                <T numberOfLines={1} style={{ color: C.muted, fontSize: 12 }}>{k}</T>
+                <T w="semibold" numberOfLines={1} style={{ fontSize: 15, marginTop: 3 }}>{v}</T>
+              </View>
+            ))}
+          </View>
+        ) : (
         <View style={st.kpis}>
           {kpis.map(([k, v, tr]) => (
             <View key={k} style={[st.kpi, wide && { width: '24.2%' }]}>
@@ -131,14 +145,15 @@ export default function AnalyticsScreen() {
             </View>
           ))}
         </View>
+        )}
 
         <Pair wide={wide}>
-          {days > 1 ? <Section wide={wide} title="Sales by day"><Columns rows={dayRows} /></Section> : null}
-          {hourRows.length > 1 ? <Section wide={wide} title="Busy hours"><Columns rows={hourRows} peak={peak?.label} every={hourRows.length > 10 ? 2 : 1} /></Section> : null}
+          {days > 1 ? <Section wide={wide} title="Sales by day" sub={isDesktop && best ? `Highest ${money(best.sales)} on ${shortDate(best.day)}` : undefined}><Columns rows={dayRows} peak={isDesktop && best && days <= 62 ? dayRows[daysBetween(from, best.day) - 1]?.label : undefined} /></Section> : null}
+          {hourRows.length > 1 ? <Section wide={wide} title="Busy hours" sub={isDesktop && peak ? `Peak ${peak.label}` : undefined}><Columns rows={hourRows} peak={peak?.label} every={hourRows.length > 10 ? 2 : 1} /></Section> : null}
         </Pair>
 
         <Pair wide={wide}>
-          <Section wide={wide} title="Payments" card={{ gap: 10 }}>
+          <Section wide={wide} title="Payments" sub={isDesktop ? `${t.bills} bills` : undefined} card={{ gap: 10 }}>
           <View style={st.split}>
             {report.methods.map((m) => <View key={m.method} style={{ flex: Number(m.sales) || 0.0001, backgroundColor: METHOD_COLOR[m.method] ?? C.muted }} />)}
           </View>
@@ -225,21 +240,31 @@ export default function AnalyticsScreen() {
   return (
     <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: 30 }}
       refreshControl={<RefreshControl refreshing={loading && !!report} onRefresh={load} colors={[C.brand1]} />}>
+      {isDesktop ? (
+        // Desktop: the dates as one switch, Download on the right.
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+          <Segmented options={Object.entries(RANGES).map(([k, [label]]) => [k, label])} value={range} onChange={setRange} />
+          <View style={{ flex: 1 }} />
+          {t?.bills ? <Button kind="secondary" title="Download" icon={Icon.download} onPress={download} /> : null}
+        </View>
+      ) : (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12, flexGrow: 0 }}>
         {Object.entries(RANGES).map(([k, [label]]) => <Chip key={k} label={label} on={range === k} onPress={() => setRange(k)} />)}
       </ScrollView>
+      )}
       <SummaryCard
         label={`Sales · ${days === 1 ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}`}`}
         value={t ? money(t.sales) : '…'}
         note={t ? `${tr!.text} vs ${days === 1 ? 'the day before' : `the ${days} days before`} (${money(report!.prev.sales)})` : undefined}
         noteColor={tr?.color}
-        right={t?.bills ? (
+        right={t?.bills && !isDesktop ? (
           <Pressable onPress={download} hitSlop={8} style={st.dl} accessibilityRole="button" accessibilityLabel="Download report as a spreadsheet">
             <Icon.download color="#FFFFFF" size={18} />
           </Pressable>
         ) : undefined}
         stats={[
-          { value: t?.bills ?? '–', label: 'Bills', color: C.accentStrong, bg: C.accentSoft },
+          // Desktop: the change in bills sits beside the label (phones show it in the figures below).
+          { value: t?.bills ?? '–', label: isDesktop && t ? `Bills · ${change(t.bills, report!.prev.bills).text}` : 'Bills', color: C.accentStrong, bg: C.accentSoft },
           { value: t?.bills ? money(Math.round(t.sales / t.bills / 100) * 100) : '–', label: 'Avg. bill', color: C.billed, bg: C.billedSoft },
           { value: t?.items ?? '–', label: 'Dishes sold', color: C.free, bg: C.freeSoft },
         ]}
@@ -253,19 +278,21 @@ export default function AnalyticsScreen() {
 function Columns({ rows, peak, every = 1 }: { rows: { label: string; sales: number }[]; peak?: string; every?: number }) {
   const max = Math.max(...rows.map((r) => r.sales), 0);
   const step = rows.length > 14 ? Math.ceil(rows.length / 10) : every;
+  // Desktop: grey bars with the best one in orange.
+  const hi = peak ?? rows.find((r) => r.sales === max && max > 0)?.label;
   return (
     <View>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 120, gap: rows.length > 20 ? 2 : 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: isDesktop ? 160 : 120, gap: rows.length > 20 ? 2 : 4, ...(isDesktop ? { borderBottomWidth: 1, borderBottomColor: C.line } : {}) }}>
         {rows.map((r, i) => (
           <View key={i} style={{ flex: 1, height: '100%', justifyContent: 'flex-end' }}>
-            <View style={{ alignSelf: 'center', width: rows.length > 20 ? '80%' : '64%', height: `${max ? Math.max(r.sales ? 3 : 0, (r.sales / max) * 100) : 0}%`, backgroundColor: r.label === peak ? C.brand2 : C.brand1, borderTopLeftRadius: 4, borderTopRightRadius: 4, opacity: r.label === peak || !peak ? 1 : 0.75 }} />
+            <View style={{ alignSelf: 'center', width: rows.length > 20 ? '80%' : isDesktop ? '78%' : '64%', height: `${max ? Math.max(r.sales ? 3 : 0, (r.sales / max) * 100) : 0}%`, backgroundColor: isDesktop ? (r.label === hi ? C.accent : '#E2E2E7') : r.label === peak ? C.brand2 : C.brand1, borderTopLeftRadius: isDesktop ? 6 : 4, borderTopRightRadius: isDesktop ? 6 : 4, opacity: isDesktop || r.label === peak || !peak ? 1 : 0.75 }} />
           </View>
         ))}
       </View>
       <View style={{ flexDirection: 'row', gap: rows.length > 20 ? 2 : 4, marginTop: 4 }}>
-        {rows.map((r, i) => <T key={i} numberOfLines={1} style={{ flex: 1, fontSize: 9.5, color: C.muted, textAlign: 'center' }}>{i % step === 0 ? r.label : ''}</T>)}
+        {rows.map((r, i) => <T key={i} numberOfLines={1} style={{ flex: 1, fontSize: isDesktop ? 11.5 : 9.5, color: C.muted, textAlign: 'center' }}>{i % step === 0 ? r.label : ''}</T>)}
       </View>
-      <T style={{ color: C.muted, fontSize: 11.5, marginTop: 6 }}>Highest {money(max)}</T>
+      {isDesktop ? null : <T style={{ color: C.muted, fontSize: 11.5, marginTop: 6 }}>Highest {money(max)}</T>}
     </View>
   );
 }
@@ -290,6 +317,9 @@ const st = StyleSheet.create({
   hero: { borderRadius: 18, padding: 14, overflow: 'hidden', marginBottom: 12 },
   fact: { flex: 1, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 10, padding: 8 },
   kpis: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  strip: { flexDirection: 'row', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 14, marginBottom: 16, overflow: 'hidden' },
+  cell: { flex: 1, minWidth: 0, paddingVertical: 12, paddingHorizontal: 16 },
+  cellLine: { borderLeftWidth: 1, borderLeftColor: C.line },
   kpi: { width: '48.6%', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, gap: 1 },
   split: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 },
   rank: { width: 26, height: 26, borderRadius: 13, backgroundColor: C.surface2, alignItems: 'center', justifyContent: 'center' },

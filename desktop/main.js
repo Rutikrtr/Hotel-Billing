@@ -90,6 +90,10 @@ app.whenReady().then(() => {
   win.on('page-title-updated', (e) => { e.preventDefault(); win.setTitle(`Master Bill ${app.getVersion()}`); });
   win.setTitle(`Master Bill ${app.getVersion()}`);
   // Opens full screen (maximized), like desktop billing software.
+  // Windows: the mouse's back button arrives as an app command; the app goes back a screen.
+  win.on('app-command', (_e, cmd) => {
+    if (cmd === 'browser-backward') win.webContents.executeJavaScript("window.dispatchEvent(new Event('mb-back'))").catch(() => {});
+  });
   win.once('ready-to-show', () => { win.maximize(); win.show(); });
   win.loadURL(START);
 });
