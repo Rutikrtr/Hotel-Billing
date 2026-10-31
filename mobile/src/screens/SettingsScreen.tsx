@@ -90,13 +90,12 @@ export default function SettingsScreen() {
         {!owner ? <T style={{ color: C.muted, fontSize: 12 }}>{role === 'manager' ? 'You can take orders, print bills, take parcels and payments.' : 'You can take orders at tables.'} To change your password or role, ask the hotel owner.</T> : null}
       </Card>
 
-      {account?.can_bill ? (
+      {owner ? (
         <Card style={{ gap: 2, paddingVertical: 4 }}>
-          <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
-          {/* Computer: tables and staff have their own pages too. */}
-          {wide && owner && feat('tables') ? <><View style={st.sep} /><Row title="Tables & layout" sub="Add, rename and arrange tables by hall" onPress={() => nav.navigate('TableSetup' as never)} /></> : null}
-          {wide && owner ? <><View style={st.sep} /><Row title="Staff logins" sub="Waiter and manager logins, roles and passwords" onPress={() => nav.navigate('Staff' as never)} /></> : null}
-          {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
+          {/* Computer: Bills and Analytics are in the sidebar (under Manage); tables and staff have their own pages. */}
+          {owner && feat('tables') ? <Row title="Tables & layout" sub="Add, rename and arrange tables by hall" onPress={() => nav.navigate('TableSetup' as never)} /> : null}
+          {owner && feat('tables') ? <View style={st.sep} /> : null}
+          {owner ? <Row title="Staff logins" sub="Waiter and manager logins, roles and passwords" onPress={() => nav.navigate('Staff' as never)} /> : null}
         </Card>
       ) : null}
       {qr ? (

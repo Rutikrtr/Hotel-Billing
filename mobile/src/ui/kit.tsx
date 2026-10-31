@@ -52,12 +52,12 @@ export function Button({ title, onPress, kind = 'primary', busy, disabled, style
       accessibilityState={{ disabled: !!off, busy: !!busy }}
       hitSlop={6}
       style={({ pressed }) => [
-        s.btn, small && s.btnSmall,
+        s.btn, small && s.btnSmall, isDesktop && kind === 'primary' && s.btnBlack, isDesktop && kind === 'secondary' && s.btnGloss,
         kind === 'secondary' && s.btnSecondary, kind === 'dark' && { backgroundColor: C.ink }, kind === 'green' && { backgroundColor: C.free }, kind === 'red' && { backgroundColor: C.danger }, kind === 'danger' && s.btnDanger,
         { opacity: off ? 0.55 : 1, transform: [{ scale: pressed && !off ? 0.97 : 1 }] }, style,
       ]}
     >
-      {kind === 'primary' ? <Gradient radius={small ? 10 : 13} /> : null}
+      {kind === 'primary' && !isDesktop ? <Gradient radius={small ? 10 : 13} /> : null}
       {busy ? <ActivityIndicator color={fg} /> : (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {icon ? icon({ color: fg, size: small ? 16 : 18 }) : null}
@@ -96,12 +96,17 @@ export const s = StyleSheet.create({
   pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, paddingLeft: 24, paddingRight: isDesktop ? 160 : 24, paddingVertical: 10, backgroundColor: isDesktop ? 'rgba(255,255,255,0.45)' : C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
   btn: { minHeight: 44, borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: C.brand1 },
   btnSmall: { minHeight: 34, borderRadius: 10, paddingHorizontal: 12 },
+  // Desktop: main buttons are glossy black, quiet ones glossy white (orange is kept for highlights).
+  btnBlack: { backgroundImage: 'linear-gradient(180deg, #2A2A2E, #0B0B0D)', boxShadow: '0 6px 16px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.18)' } as object,
+  btnGloss: { backgroundImage: 'linear-gradient(180deg, #FFFFFF, #F4F4F6)', boxShadow: '0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 #FFFFFF' } as object,
   btnSecondary: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   btnDanger: { backgroundColor: C.surface, borderWidth: 1, borderColor: '#E9B4B4' },
   card: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 },
   cardGlass: { borderRadius: 20, borderColor: 'rgba(255,255,255,0.85)', padding: 16, shadowColor: '#8A4B12', shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   chip: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: 'center', marginRight: 6 },
-  chipOn: { backgroundColor: C.accent, borderColor: C.accent },
+  chipOn: isDesktop
+    ? { backgroundColor: '#111113', borderColor: '#111113', backgroundImage: 'linear-gradient(180deg, #2A2A2E, #0B0B0D)', boxShadow: '0 4px 10px rgba(0,0,0,0.18)' } as object
+    : { backgroundColor: C.accent, borderColor: C.accent },
   input: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 14.5, color: C.text },
   sheet: { backgroundColor: isDesktop ? '#FFF9F2' : C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
   summary: { borderRadius: 18, padding: 12, marginBottom: 12, overflow: 'hidden', backgroundColor: C.brand1 },
@@ -142,7 +147,7 @@ export function PageHeader({ title, sub, right, onBack }: { title: string; sub?:
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T w={isDesktop ? 'light' : 'heavy'} numberOfLines={1} style={{ fontSize: isDesktop ? 28 : 24, letterSpacing: isDesktop ? -0.8 : -0.5 }}>{title}</T>
+        <T w={isDesktop ? 'light' : 'heavy'} numberOfLines={1} style={{ fontSize: isDesktop ? 30 : 24, letterSpacing: isDesktop ? -0.9 : -0.5 }}>{title}</T>
         {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}
       </View>
       {right}

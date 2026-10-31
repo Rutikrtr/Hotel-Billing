@@ -16,6 +16,8 @@ import PrinterScreen from './screens/PrinterScreen';
 import SettingsScreen, { StaffScreen, TableSetupScreen } from './screens/SettingsScreen';
 import TablesScreen from './screens/TablesScreen';
 import { store, useAppDispatch, useAppSelector } from './store';
+import { hasPending } from './store/cart';
+import { ask } from './ui/dialog';
 import { recheck, signOut } from './store/auth';
 import { loadAll, refreshOrders, resetData, syncIfChanged } from './store/data';
 import { sb } from './supabase';
@@ -67,8 +69,8 @@ const today = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', da
 const G = {
   Rooms: glow(RoomsScreen, 'Rooms', today), Tables: glow(TablesScreen), Menu: glow(MenuScreen),   // Menu draws its own header (with Add Item) on a computer
   Settings: glow(SettingsScreen, 'Settings', () => 'Printer, hotel details, tables, staff'),
-  Bills: glow(BillsScreen, 'Bills', () => 'Paid bills by day, waiting for payment, edit and reprint', true),
-  Analytics: glow(AnalyticsScreen, 'Analytics', () => 'Sales, busy hours, top dishes', true),
+  Bills: glow(BillsScreen, 'Bills', () => 'Paid bills by day, waiting for payment, edit and reprint'),
+  Analytics: glow(AnalyticsScreen, 'Analytics', () => 'Sales, busy hours, top dishes'),
   TableSetup: glow(TableSetupScreen, 'Tables & layout', () => 'Add, rename and arrange tables by hall', true),
   Staff: glow(StaffScreen, 'Staff logins', () => 'Waiter and manager logins, roles and passwords', true),
 };
@@ -115,8 +117,8 @@ function useLive(enabled: boolean) {
 
 const navRef = createNavigationContainerRef<Stack & { Main: { screen?: string } | undefined }>();
 // Screens opened over the tabs belong to a sidebar page (Order → Tables, Printer Setup → Settings…).
-const IN_SETTINGS = ['Analytics', 'Bills', 'TableSetup', 'Staff'];
-const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Settings', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Settings', Bills: 'Settings' };
+const IN_SETTINGS = ['TableSetup', 'Staff'];
+const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Bills', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Analytics', Bills: 'Bills' };
 function sidePage(state: NavigationState | undefined): string {
   const top = state?.routes[state.index];
   if (!top) return 'Tables';
@@ -127,7 +129,7 @@ function sidePage(state: NavigationState | undefined): string {
   }
   return PARENT[top.name] ?? 'Tables';
 }
-let foldedOnce = false;   // the sidebar stays folded or open while the app is open
+let foldedOnce = true;   // computer: the sidebar opens on mouse over unless pinned open (kept while the app is open)
 
 export default function Root() {
   const wide = useWide();
@@ -187,16 +189,24 @@ export default function Root() {
     ...(feat('tables') || !feat('rooms') ? [{ name: 'Tables', label: 'Tables' }] : []),
     ...(account?.can_bill && feat('rooms') ? [{ name: 'Rooms', label: 'Rooms' }] : []),
     ...(account?.role === 'owner' ? [{ name: 'Menu', label: 'Menu' }] : []),
-    { name: 'Settings', label: 'Settings' },
+    // Computer: grouped under Manage in the sidebar.
+    ...(wide && account?.can_bill ? [{ name: 'Bills', label: 'Bills', group: 'manage' as const }] : []),
+    ...(wide && account?.can_bill && feat('trending') ? [{ name: 'Analytics', label: 'Analytics', group: 'manage' as const }] : []),
+    { name: 'Settings', label: 'Settings', ...(wide ? { group: 'manage' as const } : {}) },
   ];
   const go = (name: string) => { if (navRef.isReady()) navRef.navigate('Main', { screen: name } as never); };
   const fold = () => { foldedOnce = !mini; setMini(!mini); };
+  const out = () => {
+    const unsaved = Object.values(store.getState().cart).filter(hasPending).length;
+    ask('Sign out', unsaved ? `${unsaved} order(s) on this computer are not saved yet. Sign out anyway?` : 'Sign out of Master Bill on this computer?',
+      [{ text: 'Cancel' }, { text: 'Sign Out', style: 'destructive', onPress: () => dispatch(signOut()) }]);
+  };
   return (
     <NavigationContainer theme={theme} ref={navRef} onStateChange={(s) => setPage(sidePage(s))}>
       {wide ? (
         // Computer: the sidebar stays beside every screen, including while taking an order.
         <View style={{ flex: 1, flexDirection: 'row' }}>
-          <AppSideBar pages={pages} current={page} onGo={go} mini={mini} onFold={fold} />
+          <AppSideBar pages={pages} current={page} onGo={go} mini={mini} onFold={fold} onSignOut={out} />
           <View style={{ flex: 1 }}>
           <S.Navigator screenOptions={{ headerTitleStyle: { fontFamily: F.heavy }, headerShadowVisible: false, headerStyle: { backgroundColor: C.bg, ...(isDesktop ? { height: 64 } : {}) } as object, animation: 'slide_from_right' }}>
             <S.Screen name="Main" component={Tabs} options={{ headerShown: false }} />

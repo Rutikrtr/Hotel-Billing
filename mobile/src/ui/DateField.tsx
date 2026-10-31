@@ -4,7 +4,7 @@ import { Platform, Pressable, View } from 'react-native';
 import { localDay } from '../dates';
 import { Icon } from './icons';
 import { s as kit, T } from './kit';
-import { C } from './theme';
+import { C, F } from './theme';
 
 /** A date box that opens the phone's calendar. value and onChange use "YYYY-MM-DD". */
 export default function DateField({ label, value, onChange, min, max }: { label: string; value: string; onChange: (day: string) => void; min?: string; max?: string }) {
@@ -18,7 +18,7 @@ export default function DateField({ label, value, onChange, min, max }: { label:
         React.createElement('input', {
           type: 'date', value, min, max, 'aria-label': label,
           onChange: (e: { target: { value: string } }) => { if (e.target.value) onChange(e.target.value); },
-          style: { height: 44, borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, padding: '0 12px', font: '600 15px Inter_600SemiBold, system-ui, sans-serif', color: C.text, width: '100%', boxSizing: 'border-box' },
+          style: { height: 44, borderRadius: 12, border: `1px solid ${C.line}`, background: C.surface, padding: '0 12px', font: `600 15px ${F.bold}, system-ui, sans-serif`, color: C.text, width: '100%', boxSizing: 'border-box' },
         })
       ) : (
       <Pressable onPress={() => setOpen(true)} style={[kit.input, { flexDirection: 'row', alignItems: 'center', gap: 8 }]} accessibilityRole="button" accessibilityLabel={`${label}: ${shown}`}>
