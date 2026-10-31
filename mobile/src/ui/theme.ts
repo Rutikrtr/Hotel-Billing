@@ -55,7 +55,7 @@ const SLATE: typeof MASALA = {
 };
 
 /** The desktop sidebar: light cream with tangerine for the selected page. */
-export const SIDEBAR = { bg: '#FFF4DF', line: '#F3E3D1', text: '#4A3626', icon: '#B07A52', soft: '#7F8DA3', hover: '#FFE2C4', card: '#FFE9CF' };
+export const SIDEBAR = { bg: '#FFE4C2', line: '#F2C99E', text: '#3F2A18', icon: '#A86A3D', soft: '#6F7C93', hover: '#FFD3A3', card: '#FFD8AE' };
 
 export const C = isDesktop ? SLATE : MASALA;
 

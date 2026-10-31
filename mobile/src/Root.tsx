@@ -1,5 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNavigationContainerRef, DefaultTheme, NavigationContainer, type NavigationState } from '@react-navigation/native';
+import { createNavigationContainerRef, DefaultTheme, NavigationContainer, useNavigation, type NavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, View } from 'react-native';
@@ -13,7 +13,7 @@ import LoginScreen from './screens/LoginScreen';
 import MenuScreen from './screens/MenuScreen';
 import OrderScreen from './screens/OrderScreen';
 import PrinterScreen from './screens/PrinterScreen';
-import SettingsScreen from './screens/SettingsScreen';
+import SettingsScreen, { StaffScreen, TableSetupScreen } from './screens/SettingsScreen';
 import TablesScreen from './screens/TablesScreen';
 import { store, useAppDispatch, useAppSelector } from './store';
 import { recheck, signOut } from './store/auth';
@@ -47,15 +47,16 @@ const theme = { ...DefaultTheme, colors: { ...DefaultTheme.colors, background: C
 // The glow also runs under the phone's status bar, so the top of the screen is one smooth colour.
 // On a computer (wide): pages get a comfortable reading width (Tables uses the full width); Bills and
 // Analytics, which have no heading of their own there, get a page title.
-const glow = (Screen: React.ComponentType, title?: string, sub?: () => string) => function Glowing() {
+const glow = (Screen: React.ComponentType, title?: string, sub?: () => string, back = false) => function Glowing() {
   const insets = useSafeAreaInsets();
   const wide = useWide();
+  const nav = useNavigation();
   if (wide) {
     // Computer: a fixed page header, then the page scrolling below it, across the full width.
     return (
       <View style={{ flex: 1, backgroundColor: C.bg }}>
         <TopGlow />
-        {title ? <PageHeader title={title} sub={sub?.()} /> : null}
+        {title ? <PageHeader title={title} sub={sub?.()} onBack={back ? () => nav.navigate('Settings' as never) : undefined} /> : null}
         <View style={{ flex: 1 }}><Screen /></View>
       </View>
     );
@@ -66,8 +67,10 @@ const today = () => new Date().toLocaleDateString('en-IN', { weekday: 'long', da
 const G = {
   Rooms: glow(RoomsScreen, 'Rooms', today), Tables: glow(TablesScreen), Menu: glow(MenuScreen),   // Menu draws its own header (with Add Item) on a computer
   Settings: glow(SettingsScreen, 'Settings', () => 'Printer, hotel details, tables, staff'),
-  Bills: glow(BillsScreen, 'Bills', () => 'Paid bills by day, waiting for payment, edit and reprint'),
-  Analytics: glow(AnalyticsScreen, 'Analytics', () => 'Sales, busy hours, top dishes'),
+  Bills: glow(BillsScreen, 'Bills', () => 'Paid bills by day, waiting for payment, edit and reprint', true),
+  Analytics: glow(AnalyticsScreen, 'Analytics', () => 'Sales, busy hours, top dishes', true),
+  TableSetup: glow(TableSetupScreen, 'Tables & layout', () => 'Add, rename and arrange tables by hall', true),
+  Staff: glow(StaffScreen, 'Staff logins', () => 'Waiter and manager logins, roles and passwords', true),
 };
 
 function Tabs() {
@@ -84,6 +87,8 @@ function Tabs() {
       {/* Computer: Bills and Analytics sit in the sidebar (on phones they open from Settings). */}
       {wide && bill ? <Tab.Screen name="Bills" component={G.Bills} /> : null}
       {wide && bill && feat('trending') ? <Tab.Screen name="Analytics" component={G.Analytics} /> : null}
+      {wide && owner && feat('tables') ? <Tab.Screen name="TableSetup" component={G.TableSetup} /> : null}
+      {wide && owner ? <Tab.Screen name="Staff" component={G.Staff} /> : null}
       <Tab.Screen name="Settings" component={G.Settings} options={{ tabBarIcon: Icon.settings }} />
     </Tab.Navigator>
   );
@@ -110,6 +115,7 @@ function useLive(enabled: boolean) {
 
 const navRef = createNavigationContainerRef<Stack & { Main: { screen?: string } | undefined }>();
 // Screens opened over the tabs belong to a sidebar page (Order → Tables, Printer Setup → Settings…).
+const IN_SETTINGS = ['Analytics', 'Bills', 'TableSetup', 'Staff'];
 const PARENT: Record<string, string> = { Order: 'Tables', Bill: 'Settings', Stay: 'Rooms', Printer: 'Settings', Analytics: 'Settings', Bills: 'Settings' };
 function sidePage(state: NavigationState | undefined): string {
   const top = state?.routes[state.index];
@@ -117,7 +123,7 @@ function sidePage(state: NavigationState | undefined): string {
   if (top.name === 'Main') {
     const tabs = top.state as NavigationState | undefined;
     const name = tabs ? tabs.routes[tabs.index ?? 0]?.name : undefined;
-    return name === 'Analytics' || name === 'Bills' ? 'Settings' : name ?? 'Tables';
+    return name && IN_SETTINGS.includes(name) ? 'Settings' : name ?? 'Tables';
   }
   return PARENT[top.name] ?? 'Tables';
 }

@@ -47,7 +47,7 @@ export default function SettingsScreen() {
   const loadStaff = useCallback(async () => {
     try { setStaff(await q<Member[]>(sb.from('staff').select('email, user_id, role, display_name').order('created_at'))); } catch { /* shown as empty */ }
   }, []);
-  useEffect(() => { if (owner) loadStaff(); }, [owner]);
+  useEffect(() => { if (owner && !wide) loadStaff(); }, [owner, wide]);   // computer: staff has its own page
   useEffect(() => {
     if (!feat('qr_menu')) return;
     q<string | null>(sb.rpc('my_menu_token')).then((t) => setQr(t ? `${WEB}/menu.html?m=${encodeURIComponent(t)}` : null), () => {});
@@ -93,6 +93,9 @@ export default function SettingsScreen() {
       {account?.can_bill ? (
         <Card style={{ gap: 2, paddingVertical: 4 }}>
           <Row title="Bills" sub="Paid bills by day, waiting for payment, edit and reprint" onPress={() => nav.navigate('Bills')} />
+          {/* Computer: tables and staff have their own pages too. */}
+          {wide && owner && feat('tables') ? <><View style={st.sep} /><Row title="Tables & layout" sub="Add, rename and arrange tables by hall" onPress={() => nav.navigate('TableSetup' as never)} /></> : null}
+          {wide && owner ? <><View style={st.sep} /><Row title="Staff logins" sub="Waiter and manager logins, roles and passwords" onPress={() => nav.navigate('Staff' as never)} /></> : null}
           {feat('trending') ? <><View style={st.sep} /><Row title="Analytics" sub="Sales for any dates, busy hours, top dishes, download" onPress={() => nav.navigate('Analytics')} /></> : null}
         </Card>
       ) : null}
@@ -115,11 +118,7 @@ export default function SettingsScreen() {
   const right = (
     <>
       {owner && settings ? <BillDetails /> : null}
-      {owner && feat('tables') && settings ? <TableLayoutCard /> : null}
-      {owner && feat('tables') ? <Tables tables={tables} /> : null}
       {owner && feat('rooms') ? <Rooms /> : null}
-      {owner ? <StaffLogins staff={staff} limit={settings?.staff_limit ?? 2} reload={loadStaff} /> : null}
-
     </>
   );
   if (wide) {
@@ -185,6 +184,35 @@ export default function SettingsScreen() {
 
       <Button kind="danger" title="Sign Out" onPress={out} />
       <T style={{ textAlign: 'center', color: C.muted, fontSize: 12 }}>Master Bill {isDesktop ? '2.5' : '2.0'} · Techyverve Solution Limited</T>
+    </ScrollView>
+  );
+}
+
+/** Computer: tables and the table layout on their own page (opened from Settings). */
+export function TableSetupScreen() {
+  const tables = useAppSelector((s) => s.data.tables);
+  const settings = useAppSelector((s) => s.data.settings);
+  return (
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <View style={{ flexDirection: 'row', gap: 20, alignItems: 'flex-start' }}>
+        <View style={{ flex: 3, gap: 14, minWidth: 0 }}>{settings ? <TableLayoutCard /> : null}</View>
+        <View style={{ flex: 2, gap: 14, minWidth: 0 }}><Tables tables={tables} /></View>
+      </View>
+    </ScrollView>
+  );
+}
+
+/** Computer: staff logins on their own page (opened from Settings). */
+export function StaffScreen() {
+  const settings = useAppSelector((s) => s.data.settings);
+  const [staff, setStaff] = useState<Member[]>([]);
+  const loadStaff = useCallback(async () => {
+    try { setStaff(await q<Member[]>(sb.from('staff').select('email, user_id, role, display_name').order('created_at'))); } catch { /* shown as empty */ }
+  }, []);
+  useEffect(() => { loadStaff(); }, []);
+  return (
+    <ScrollView style={{ backgroundColor: 'transparent' }} contentContainerStyle={{ padding: 24, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+      <View style={{ maxWidth: 760 }}><StaffLogins staff={staff} limit={settings?.staff_limit ?? 2} reload={loadStaff} /></View>
     </ScrollView>
   );
 }

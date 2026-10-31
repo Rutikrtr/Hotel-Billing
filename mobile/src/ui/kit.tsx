@@ -89,6 +89,7 @@ export function Diet({ veg }: { veg: boolean }) {
 }
 
 export const s = StyleSheet.create({
+  back: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
   pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingLeft: 24, paddingRight: isDesktop ? 160 : 24, paddingVertical: 10, backgroundColor: C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
   btn: { minHeight: 44, borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: C.brand1 },
   btnSmall: { minHeight: 34, borderRadius: 10, paddingHorizontal: 12 },
@@ -126,9 +127,16 @@ export function Header({ eyebrow, title, right }: { eyebrow?: string; title: str
  * Computer: the fixed header of a page – title and a short line under it on the left, actions on the right.
  * It is also where the desktop window is dragged, and leaves room for the window's own buttons on the right.
  */
-export function PageHeader({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) {
+export function PageHeader({ title, sub, right, onBack }: { title: string; sub?: string; right?: React.ReactNode; onBack?: () => void }) {
   return (
     <View {...({ dataSet: { drag: '1' } } as object)} style={s.pageHead}>
+      {onBack ? (
+        <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to Settings"
+          style={(x) => [s.back, (x as { hovered?: boolean }).hovered && { backgroundColor: C.accentSoft }]}>
+          <T w="heavy" style={{ fontSize: 16, color: C.accent }}>←</T>
+          <T w="bold" style={{ fontSize: 13, color: C.accent }}>Settings</T>
+        </Pressable>
+      ) : null}
       <View style={{ flex: 1 }}>
         <T w="heavy" numberOfLines={1} style={{ fontSize: 24, letterSpacing: -0.5 }}>{title}</T>
         {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}

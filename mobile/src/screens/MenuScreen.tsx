@@ -96,19 +96,23 @@ export default function MenuScreen() {
   return (
     <View style={{ flex: 1 }}>
       {wide ? <PageHeader title="Menu" sub={`${menu.length} dish${menu.length === 1 ? '' : 'es'} · tap ★ to show a dish first, switch off when sold out`} right={<Button title="＋ Add Item" small onPress={openNew} style={{ paddingHorizontal: 18 }} />} /> : null}
+      {/* Computer: the search stays in place above the dishes. */}
+      {wide ? <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 }}><SearchBox value={search} onChange={setSearch} placeholder="Search dishes" style={st.search} /></View> : null}
       <SectionList
         sections={wide ? sections.map((sec) => ({ ...sec, count: sec.data.length, data: pairs(sec.data) as unknown as MenuItem[] })) : sections}
         keyExtractor={(m) => (Array.isArray(m) ? (m as MenuItem[]).map((x) => x.id).join('-') : String(m.id))}
         stickySectionHeadersEnabled={false}
-        contentContainerStyle={{ padding: wide ? 24 : 12, paddingBottom: wide ? 30 : 90 }}
+        contentContainerStyle={{ padding: wide ? 24 : 12, paddingTop: wide ? 4 : 12, paddingBottom: wide ? 30 : 90 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} colors={[C.brand1]} />}
         ListHeaderComponent={
           <View>
             <Header eyebrow={`${menu.length} item${menu.length === 1 ? '' : 's'}`} title="Menu" />
+            {wide ? null : (
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <SearchBox value={search} onChange={setSearch} placeholder={isDesktop ? 'Search dishes' : 'Search or tap the mic'} style={st.search} />
               <MicButton onText={setSearch} hints={menu.map((m) => m.name)} />
             </View>
+            )}
             {wide ? null : <T style={{ color: C.muted, fontSize: 12, marginTop: 6 }}>Tap ★ to show a dish first when taking orders. Switch off a dish when it is sold out.</T>}
           </View>
         }
@@ -118,7 +122,7 @@ export default function MenuScreen() {
           // Computer: two dishes per row, each its own card.
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 10 }}>
             {(row as unknown as MenuItem[]).map((m) => <View key={m.id} style={[st.row, st.card]}>{dishRow(m)}</View>)}
-            {(row as unknown as MenuItem[]).length === 1 ? <View style={{ flex: 1 }} /> : null}
+            {(row as unknown as MenuItem[]).length === 1 ? <View style={[st.row, st.card, { borderColor: 'transparent', backgroundColor: 'transparent' }]} /> : null}
           </View>
         ) : (
           <View style={[st.row, index === 0 && st.first, index === section.data.length - 1 && st.last]}>{dishRow(row)}</View>
@@ -155,7 +159,7 @@ export default function MenuScreen() {
 const pairs = <X,>(xs: X[]) => Array.from({ length: Math.ceil(xs.length / 2) }, (_, i) => xs.slice(i * 2, i * 2 + 2));
 
 const st = StyleSheet.create({
-  card: { flex: 1, borderWidth: 1, borderRadius: 14, borderColor: C.line },
+  card: { flex: 1, flexBasis: 0, minWidth: 0, borderWidth: 1, borderRadius: 14, borderColor: C.line },
   search: { height: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 15, color: C.text },
   cat: { fontSize: 12, color: C.muted, letterSpacing: 0.5, marginTop: 16, marginBottom: 6 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: C.surface, borderColor: C.line, borderLeftWidth: 1, borderRightWidth: 1, borderBottomWidth: 1, paddingHorizontal: 12, paddingVertical: 9 },

@@ -131,7 +131,7 @@ const st = StyleSheet.create({
   group: { color: '#6B7280', fontSize: 10.5, letterSpacing: 1.2, marginTop: 22, marginLeft: 10 },
   itemMini: { justifyContent: 'center', paddingHorizontal: 0 },
   hotelDot: { width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  fold: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 42, paddingHorizontal: 11, borderRadius: 12, marginTop: 10, borderWidth: 1, borderColor: SIDEBAR.line, backgroundColor: '#FFFFFF', overflow: 'hidden' },
+  fold: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 42, paddingHorizontal: 11, borderRadius: 12, marginTop: 10, borderWidth: 1, borderColor: SIDEBAR.line, backgroundColor: 'transparent', overflow: 'hidden' },
   brandIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 46, paddingHorizontal: 12, borderRadius: 12, overflow: 'hidden' },
   hotel: { backgroundColor: SIDEBAR.card, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, overflow: 'hidden' },
