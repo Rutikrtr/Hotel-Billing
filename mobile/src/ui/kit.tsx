@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Feather } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
 import { Icon } from './icons';
 import { C, F, shadow } from './theme';
 import { useWide } from './wide';
@@ -147,8 +148,11 @@ export function Header({ eyebrow, title, right }: { eyebrow?: string; title: str
  * It is also where the desktop window is dragged, and leaves room for the window's own buttons on the right.
  */
 export function PageHeader({ title, sub, right, onBack }: { title: string; sub?: string; right?: React.ReactNode; onBack?: () => void }) {
+  const focused = useIsFocused();
   return (
-    <View {...({ dataSet: isDesktop ? { drag: '1', glass: '1' } : { drag: '1' } } as object)} style={s.pageHead}>
+    // Only the page on screen is a window drag area: on Windows a drag area under another screen (Tables under
+    // an open order) still catches the clicks, which made the order's back button do nothing.
+    <View {...({ dataSet: { ...(focused ? { drag: '1' } : {}), ...(isDesktop ? { glass: '1' } : {}) } } as object)} style={s.pageHead}>
       {onBack ? (
         <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to Settings"
           style={(x) => [s.back, (x as { hovered?: boolean }).hovered && { backgroundColor: 'rgba(16,16,20,0.05)' }]}>

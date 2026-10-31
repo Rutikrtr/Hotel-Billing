@@ -59,15 +59,11 @@ export function AppSideBar({ pages, current, onGo, mini, onFold, onSignOut }: { 
   const Label = ({ children, style }: { children: React.ReactNode; style?: object }) => (
     <Animated.View style={{ opacity: fade, width: 150 }} pointerEvents="none"><T numberOfLines={1} style={style}>{children}</T></Animated.View>
   );
-  const group = (name: string, list: SidePage[]) => (list.length ? (
-    <View style={{ gap: 2, marginBottom: 16 }}>
-      <View style={{ height: 22, justifyContent: 'center' }}>
-        {/* Collapsed: a thin line instead of the group's name. */}
-        {mini ? <View style={st.groupLine} /> : <Label style={st.group}>{name}</Label>}
-      </View>
-      {list.map((pg) => <Item key={pg.name} pg={pg} on={pg.name === current} mini={mini} onGo={onGo} fade={fade} />)}
-    </View>
-  ) : null);
+  const [manage, setManage] = useState(false);   // Manage starts closed; a click opens it
+  const service = pages.filter((p) => !p.group);
+  const managed = pages.filter((p) => p.group === 'manage');
+  const inManage = managed.some((p) => p.name === current);
+  const manageRef = useTitle(mini ? 'Manage' : undefined);
   const role = account?.role ? account.role[0].toUpperCase() + account.role.slice(1) : '';
   const foldRef = useTitle(mini ? 'Open the menu' : undefined);
   const outRef = useTitle('Sign out');
@@ -80,8 +76,24 @@ export function AppSideBar({ pages, current, onGo, mini, onFold, onSignOut }: { 
           <T numberOfLines={1} style={{ fontSize: 11.5, color: SIDEBAR.soft }}>{hotel}</T>
         </Animated.View>
       </View>
-      {group('SERVICE', pages.filter((p) => !p.group))}
-      {group('MANAGE', pages.filter((p) => p.group === 'manage'))}
+      <View style={{ height: 22, justifyContent: 'center' }}>
+        {mini ? <View style={st.groupLine} /> : <Label style={st.group}>SERVICE</Label>}
+      </View>
+      <View style={{ gap: 2, marginBottom: 12 }}>
+        {service.map((pg) => <Item key={pg.name} pg={pg} on={pg.name === current} mini={mini} onGo={onGo} fade={fade} />)}
+      </View>
+      {managed.length ? (
+        <View style={{ gap: 2 }}>
+          <Pressable ref={manageRef} onPress={() => setManage(!manage)} accessibilityRole="button" accessibilityState={{ expanded: manage }} accessibilityLabel="Manage"
+            style={(x) => [st.item, (x as { hovered?: boolean }).hovered && st.itemHover]}>
+            {/* Closed while one of its pages is open: the icon shows it in orange. */}
+            <View style={st.ico}><Feather name="sliders" size={18} color={inManage && !manage ? C.accent : SIDEBAR.icon} /></View>
+            <Label style={{ fontSize: 14.5, fontFamily: F.semibold, color: '#E4E4E6' }}>Manage</Label>
+            <Animated.View style={{ opacity: fade, marginLeft: 'auto' }}><Feather name={manage ? 'chevron-up' : 'chevron-down'} size={16} color={SIDEBAR.soft} /></Animated.View>
+          </Pressable>
+          {manage ? managed.map((pg) => <Item key={pg.name} pg={pg} on={pg.name === current} mini={mini} onGo={onGo} fade={fade} sub />) : null}
+        </View>
+      ) : null}
       <View style={{ flex: 1 }} />
       <Pressable ref={foldRef} onPress={onFold} accessibilityRole="button" accessibilityLabel={mini ? 'Open the menu' : 'Collapse the menu'}
         style={(x) => [st.item, (x as { hovered?: boolean }).hovered && st.itemHover]}>
@@ -106,12 +118,12 @@ export function AppSideBar({ pages, current, onGo, mini, onFold, onSignOut }: { 
 }
 
 /** One page in the sidebar: icon and name; collapsed, the name shows as a tooltip. */
-function Item({ pg, on, mini, onGo, fade }: { pg: SidePage; on: boolean; mini: boolean; onGo: (name: string) => void; fade: Animated.AnimatedInterpolation<number> }) {
+function Item({ pg, on, mini, onGo, fade, sub }: { pg: SidePage; on: boolean; mini: boolean; onGo: (name: string) => void; fade: Animated.AnimatedInterpolation<number>; sub?: boolean }) {
   const ref = useTitle(mini ? pg.label : undefined);
   return (
     <Pressable ref={ref} onPress={() => onGo(pg.name)} accessibilityRole="tab" accessibilityState={{ selected: on }} accessibilityLabel={pg.label}
-      style={(x) => [st.item, on && st.itemOn, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
-      <View style={st.ico}><Feather name={FEATHER[pg.name] ?? 'circle'} size={18} color={on ? C.accent : SIDEBAR.icon} /></View>
+      style={(x) => [st.item, sub && !mini && st.sub, on && st.itemOn, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
+      <View style={st.ico}><Feather name={FEATHER[pg.name] ?? 'circle'} size={sub ? 16 : 18} color={on ? C.accent : SIDEBAR.icon} /></View>
       <Animated.View style={{ opacity: fade, width: 150 }} pointerEvents="none">
         <T numberOfLines={1} style={{ fontSize: 14.5, fontFamily: on ? F.bold : F.semibold, color: on ? '#FFFFFF' : '#B4B4B8' }}>{pg.label}</T>
       </Animated.View>
@@ -167,6 +179,7 @@ const st = StyleSheet.create({
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, minHeight: 44, marginBottom: 18, overflow: 'hidden' },
   logo: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 4px 14px rgba(232,89,12,0.45)' } as object,
   group: { fontSize: 10.5, letterSpacing: 1.2, color: SIDEBAR.soft, fontFamily: F.semibold, marginLeft: 12 },
+  sub: { paddingLeft: 26, height: 38 },
   groupLine: { height: 1, marginHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.10)' },
   ico: { width: 24, alignItems: 'center' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 42, paddingHorizontal: 12, borderRadius: 10, overflow: 'hidden' },
