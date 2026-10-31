@@ -1,4 +1,4 @@
-import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
+import { Inter_300Light, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
@@ -11,6 +11,8 @@ import { start } from './src/store/auth';
 import { C } from './src/ui/theme';
 import { DialogHost } from './src/ui/dialog';
 import { useWide } from './src/ui/wide';
+import { isDesktop } from './src/desktop';
+import Backdrop from './src/ui/Backdrop';
 import { ToastHost } from './src/ui/toast';
 
 // Smooth show/hide of parts of a screen (e.g. the floor plan switch) on Android.
@@ -38,7 +40,7 @@ SplashScreen.setOptions({ fade: true, duration: 250 });
 
 export default function App() {
   const wide = useWide();
-  const [fontsLoaded, fontError] = useFonts({ Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
+  const [fontsLoaded, fontError] = useFonts({ Inter_300Light, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [fontWait, setFontWait] = useState(true);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -59,10 +61,12 @@ export default function App() {
   return (
     <Guard>
       <Provider store={store}>
-        <SafeAreaProvider style={{ backgroundColor: Platform.OS === 'web' ? '#EFE7E0' : C.bg }}>
+        <SafeAreaProvider style={{ backgroundColor: isDesktop ? '#F6D6B5' : Platform.OS === 'web' ? '#EFE7E0' : C.bg }}>
           {/* Web on a tablet-size window: a centred phone-width column. From 900 px (computers): the full window. */}
           <View style={Platform.OS === 'web' && !wide ? { flex: 1, width: '100%', maxWidth: 640, alignSelf: 'center', backgroundColor: C.bg, boxShadow: '0 0 40px rgba(124,45,18,0.10)' } as object : { flex: 1 }}>
             <StatusBar style="dark" translucent backgroundColor="transparent" />
+            {/* Desktop app: the warm backdrop behind the frosted panels. */}
+            {isDesktop ? <Backdrop /> : null}
             {fontsReady && ready ? (
               <View style={{ flex: 1 }}>
                 <Root />

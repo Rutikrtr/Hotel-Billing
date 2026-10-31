@@ -68,8 +68,11 @@ export function Button({ title, onPress, kind = 'primary', busy, disabled, style
   );
 }
 
+/** Desktop app: marks a frosted-glass surface (the blur itself is CSS, added by the desktop app). */
+export const glass = (isDesktop ? { dataSet: { glass: '1' } } : {}) as object;
+
 export function Card({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[s.card, style]}>{children}</View>;
+  return <View {...glass} style={[s.card, isDesktop && s.cardGlass, style]}>{children}</View>;
 }
 
 export function Chip({ label, on, onPress, onLongPress }: { label: string; on?: boolean; onPress: () => void; onLongPress?: () => void }) {
@@ -90,16 +93,17 @@ export function Diet({ veg }: { veg: boolean }) {
 
 export const s = StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface },
-  pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 68, paddingLeft: 24, paddingRight: isDesktop ? 160 : 24, paddingVertical: 10, backgroundColor: C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
+  pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, paddingLeft: 24, paddingRight: isDesktop ? 160 : 24, paddingVertical: 10, backgroundColor: isDesktop ? 'rgba(255,255,255,0.45)' : C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
   btn: { minHeight: 44, borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: C.brand1 },
   btnSmall: { minHeight: 34, borderRadius: 10, paddingHorizontal: 12 },
   btnSecondary: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   btnDanger: { backgroundColor: C.surface, borderWidth: 1, borderColor: '#E9B4B4' },
   card: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 },
+  cardGlass: { borderRadius: 20, borderColor: 'rgba(255,255,255,0.85)', padding: 16, shadowColor: '#8A4B12', shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   chip: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: 'center', marginRight: 6 },
   chipOn: { backgroundColor: C.accent, borderColor: C.accent },
   input: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 14.5, color: C.text },
-  sheet: { backgroundColor: C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
+  sheet: { backgroundColor: isDesktop ? '#FFF9F2' : C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
   summary: { borderRadius: 18, padding: 12, marginBottom: 12, overflow: 'hidden', backgroundColor: C.brand1 },
   note: { alignSelf: 'flex-start', backgroundColor: '#FFFFFF', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 6 },
   big: { fontSize: 25, letterSpacing: -0.6, color: '#FFFFFF', fontVariant: ['tabular-nums'], marginTop: 2 },
@@ -129,7 +133,7 @@ export function Header({ eyebrow, title, right }: { eyebrow?: string; title: str
  */
 export function PageHeader({ title, sub, right, onBack }: { title: string; sub?: string; right?: React.ReactNode; onBack?: () => void }) {
   return (
-    <View {...({ dataSet: { drag: '1' } } as object)} style={s.pageHead}>
+    <View {...({ dataSet: isDesktop ? { drag: '1', glass: '1' } : { drag: '1' } } as object)} style={s.pageHead}>
       {onBack ? (
         <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back to Settings"
           style={(x) => [s.back, (x as { hovered?: boolean }).hovered && { backgroundColor: C.accentSoft }]}>
@@ -138,7 +142,7 @@ export function PageHeader({ title, sub, right, onBack }: { title: string; sub?:
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T w="heavy" numberOfLines={1} style={{ fontSize: 24, letterSpacing: -0.5 }}>{title}</T>
+        <T w={isDesktop ? 'light' : 'heavy'} numberOfLines={1} style={{ fontSize: isDesktop ? 28 : 24, letterSpacing: isDesktop ? -0.8 : -0.5 }}>{title}</T>
         {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}
       </View>
       {right}
@@ -149,7 +153,7 @@ export function PageHeader({ title, sub, right, onBack }: { title: string; sub?:
 export function SectionTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 14, marginBottom: 6 }}>
-      <T w="heavy" style={{ fontSize: 14.5, flex: 1 }}>{children}</T>
+      <T w={isDesktop ? 'semibold' : 'heavy'} style={isDesktop ? { fontSize: 12, flex: 1, color: C.muted, letterSpacing: 1.1, textTransform: 'uppercase' } : { fontSize: 14.5, flex: 1 }}>{children}</T>
       {right}
     </View>
   );

@@ -9,7 +9,7 @@ import { hasPending } from '../store/cart';
 import { loadAll } from '../store/data';
 import { areaTables, fixtureKind, tableKey, type LayoutArea, type Order, type Table } from '../types';
 import { Icon } from '../ui/icons';
-import { Button, Chip, Gradient, HotelHeader, PageHeader, T } from '../ui/kit';
+import { Button, Chip, Gradient, HotelHeader, PageHeader, T, glass } from '../ui/kit';
 import PlanGrid from '../ui/PlanGrid';
 import { useWide } from '../ui/wide';
 import { DotFloor, FixtureBlock } from '../ui/PlanArt';
@@ -241,7 +241,7 @@ export default function TablesScreen() {
           const s = areaStats(a);
           const compact = a.cols >= 4;
           return (
-            <View key={a.id} style={st.area}>
+            <View key={a.id} {...glass} style={st.area}>
               <DotFloor />
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <T w="heavy" style={{ fontSize: 15, flex: 1 }}>{a.name}</T>

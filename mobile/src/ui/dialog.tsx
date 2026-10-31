@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native';
-import { Button, T } from './kit';
+import { Button, T, glass } from './kit';
 import { C } from './theme';
 
 export interface AskButton { text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }
@@ -40,7 +40,7 @@ export function DialogHost() {
         <Pressable style={StyleSheet.absoluteFill} onPress={() => tap(cancel)} accessibilityLabel="Close" />
       </Animated.View>
       <View style={st.center} pointerEvents="box-none">
-        <Animated.View accessibilityViewIsModal style={[st.card, { opacity: anim, transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }]}>
+        <Animated.View {...glass} accessibilityViewIsModal style={[st.card, { opacity: anim, transform: [{ scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }]}>
           <View style={[st.badge, { backgroundColor: tone === 'danger' ? C.dangerSoft : C.accentSoft }]}>
             <T w="heavy" style={{ fontSize: 20, color: tone === 'danger' ? C.danger : C.accent }}>{tone === 'danger' ? '!' : 'i'}</T>
           </View>

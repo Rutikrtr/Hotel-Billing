@@ -12,7 +12,7 @@ import { change, clearCart, hasPending, mergeLines, setDiscount, type Line } fro
 import { orderClosed } from '../store/data';
 import { q, sb } from '../supabase';
 import { parcelKey, tableKey, type Order } from '../types';
-import { Button, Chip, Diet, SearchBox, T } from '../ui/kit';
+import { Button, Chip, Diet, SearchBox, T, glass } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { MicButton } from '../ui/Mic';
 import { useWide } from '../ui/wide';
@@ -324,7 +324,7 @@ export default function OrderScreen() {
             contentContainerStyle={{ padding: 12 }} keyboardShouldPersistTaps="handled" initialNumToRender={30}
           />
         </View>
-        <View style={st.side}>
+        <View {...glass} style={st.side}>
           <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: C.line }}>
             <T w="heavy" style={{ fontSize: 19 }}>{label}</T>
             <T style={{ color: C.muted, fontSize: 12.5 }}>{lines.length ? `${bill.itemCount} items${pending ? ' · not saved' : ''}` : 'No dishes yet'}</T>

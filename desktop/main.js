@@ -70,13 +70,14 @@ app.whenReady().then(() => {
     title: 'Master Bill', backgroundColor: '#FAF6F2', autoHideMenuBar: true,
     icon: path.join(__dirname, 'build', 'icon.png'),
     // No black Windows title bar: the page header is the title bar, with the window buttons floating on it.
-    titleBarStyle: 'hidden', titleBarOverlay: { color: '#FBF6F1', symbolColor: '#2B1A0E', height: 44 },
+    titleBarStyle: 'hidden', titleBarOverlay: { color: '#00000000', symbolColor: '#1E1E1E', height: 44 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, devTools: !app.isPackaged, spellcheck: false },
   });
   // Never leave the app's own pages; web links (QR menu, website) open in the normal browser.
   // Drag the window by its headers (marked data-drag in the screens) and by a thin strip along the top.
   win.webContents.on('did-finish-load', () => {
     win.webContents.insertCSS(`
+      [data-glass] { backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%); }
       [data-drag] { -webkit-app-region: drag; }
       [data-drag] [role="button"], [data-drag] [role="tab"], [data-drag] input, [data-drag] a { -webkit-app-region: no-drag; }
       #mb-drag { position: fixed; top: 0; left: 0; right: 150px; height: 6px; -webkit-app-region: drag; z-index: 99999; }

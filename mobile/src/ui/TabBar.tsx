@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './icons';
-import { Gradient, T } from './kit';
+import { Gradient, T, glass } from './kit';
 import { C, F, SIDEBAR } from './theme';
 import { useWide } from './wide';
 import { useAppSelector } from '../store';
@@ -44,7 +44,7 @@ export function AppSideBar({ pages, current, onGo, mini, onFold }: { pages: Side
     <Animated.View style={{ opacity: fade, width: 160 }} pointerEvents="none"><T numberOfLines={1} style={style}>{children}</T></Animated.View>
   );
   return (
-    <Animated.View style={[st.side, { width }]}>
+    <Animated.View {...glass} style={[st.side, { width }]}>
       <View {...({ dataSet: { drag: '1' } } as object)} style={st.brand}>
         <View style={{ width: 28, alignItems: 'center' }}><TechyverveLogo size={28} color={C.accent} /></View>
         <Animated.View style={{ opacity: fade, width: 160 }}>

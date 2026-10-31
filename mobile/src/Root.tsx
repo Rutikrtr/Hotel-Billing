@@ -80,7 +80,7 @@ function Tabs() {
   const owner = account?.role === 'owner';
   const wide = useWide();
   return (
-    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: C.bg }, tabBarPosition: wide ? 'left' : 'bottom' }}>
+    <Tab.Navigator tabBar={(p) => <TabBar {...p} />} screenOptions={({ navigation }) => ({ headerShown: false, sceneStyle: { backgroundColor: C.bg, ...(isDesktop && !navigation.isFocused() ? { display: 'none' } : {}) }, tabBarPosition: wide ? 'left' : 'bottom' })}>
       {feat('tables') || !feat('rooms') ? <Tab.Screen name="Tables" component={G.Tables} options={{ tabBarIcon: Icon.tables }} /> : null}
       {bill && feat('rooms') ? <Tab.Screen name="Rooms" component={G.Rooms} options={{ tabBarIcon: Icon.tables }} /> : null}
       {owner ? <Tab.Screen name="Menu" component={G.Menu} options={{ tabBarIcon: Icon.menu }} /> : null}
