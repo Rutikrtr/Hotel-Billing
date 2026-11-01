@@ -21,6 +21,35 @@ export function ascii(text: unknown): string {
 
 export type Target = 'bill' | 'kitchen';
 
+const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+function fromBase64(text: string): number[] {
+  const out: number[] = [];
+  let acc = 0, bits = 0;
+  for (const ch of text) {
+    const v = B64.indexOf(ch);
+    if (v < 0) continue;   // '=' padding
+    acc = (acc << 6) | v; bits += 6;
+    if (bits >= 8) { bits -= 8; out.push((acc >> bits) & 0xff); }
+  }
+  return out;
+}
+
+/**
+ * A heading picture saved with the hotel: "width:height:z:<base64>", 1 bit per dot, rows of width/8 bytes;
+ * in the data a 0 byte is followed by how many 0 bytes it stands for. Returns null if it doesn't add up.
+ */
+export function headImage(saved: string | null | undefined): { width: number; height: number; dots: number[] } | null {
+  const [w, h, kind, data] = String(saved ?? '').split(':');
+  const width = Number(w), height = Number(h);
+  if (!width || !height || kind !== 'z' || !data) return null;
+  const packed = fromBase64(data);
+  const dots: number[] = [];
+  for (let i = 0; i < packed.length; i++) {
+    if (packed[i] === 0) { for (let n = packed[++i] ?? 0; n > 0; n--) dots.push(0); } else dots.push(packed[i]);
+  }
+  return dots.length === (width / 8) * height ? { width, height, dots } : null;
+}
+
 /** What a slip shows, line by line, for printing from a browser (web app), where text keeps its own letters. */
 export type Row =
   | { kind: 'text'; text: string; align: 'left' | 'center' | 'right'; bold: boolean; big: boolean }
@@ -62,6 +91,19 @@ export class Slip {
     if (l.length > room) l = l.slice(0, Math.max(room, 0));
     return this.emit(l + ' '.repeat(Math.max(width - l.length - r.length, 1)) + r);
   }
+  /** A saved picture (headImage) centred on the paper as an ESC/POS raster image (GS v 0). False if it doesn't fit. */
+  picture(img: { width: number; height: number; dots: number[] }) {
+    const paper = this.width >= 48 ? 576 : 384;
+    if (img.width > paper) return false;
+    const rowBytes = img.width / 8, pad = (paper - img.width) / 16, wBytes = paper / 8;
+    this.raw(GS, 0x76, 0x30, 0, wBytes & 0xff, wBytes >> 8, img.height & 0xff, img.height >> 8);
+    for (let y = 0; y < img.height; y++) {
+      for (let i = 0; i < pad; i++) this.out.push(0);
+      for (let i = 0; i < rowBytes; i++) this.out.push(img.dots[y * rowBytes + i]);
+      for (let i = 0; i < wBytes - rowBytes - pad; i++) this.out.push(0);
+    }
+    return true;
+  }
   rule(ch = '-') { this.rows.push({ kind: 'rule', ch }); return this.emit(ch.repeat(this.width)); }
   cut() { return this.raw(ESC, 0x64, this.feedLines).raw(GS, 0x56, 0x42, 0x00); }
   bytes() { return Uint8Array.from(this.out); }
@@ -89,6 +131,17 @@ export function kotSlip(p: Paper, label: string, changes: { name: string; quanti
 
 /** Bill heading: the hotel name large and spaced out, then address and phone on their own lines. */
 function header(s: Slip, settings: Settings, rate: number) {
+  const address = (settings.hotel_address ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
+  // Marathi name or address: the printer has no Marathi letters, so it prints the saved heading picture.
+  // Browser printing gets the same lines as text (it has Marathi fonts).
+  const pic = /[\u0900-\u097F]/.test(settings.hotel_name + address.join(' ')) ? headImage(settings.bill_head_img) : null;
+  if (pic && s.align('center').picture(pic)) {
+    s.rows.push({ kind: 'text', text: settings.hotel_name, align: 'center', bold: true, big: true });
+    for (const line of address) s.rows.push({ kind: 'text', text: line, align: 'center', bold: false, big: false });
+    if (settings.hotel_phone) s.line(`Ph: ${settings.hotel_phone}`);
+    if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
+    return s.align('left').rule();
+  }
   const name = ascii(settings.hotel_name).toUpperCase();
   s.align('center').bold(true);
   const mark = s.rows.length;
@@ -101,7 +154,7 @@ function header(s: Slip, settings: Settings, rate: number) {
   if (head?.kind === 'text') head.text = settings.hotel_name;
   s.bold(false);
   // The address may have several lines (e.g. road, then village); each prints on its own line.
-  for (const line of (settings.hotel_address ?? '').split('\n')) if (line.trim()) s.wrap(line.trim());
+  for (const line of address) s.wrap(line);
   if (settings.hotel_phone) s.line(`Ph: ${settings.hotel_phone}`);
   if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
   return s.align('left').rule();

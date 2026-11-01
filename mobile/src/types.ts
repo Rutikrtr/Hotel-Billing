@@ -25,6 +25,8 @@ export interface Settings {
   disc_exclude?: string[];
   /** Printed bill layout, set by Techyverve: 'classic' or 'table' (Item / Qty / Amount columns). */
   bill_style?: 'classic' | 'table';
+  /** Marathi heading drawn as a printer picture by Techyverve ("width:height:z:<base64>"), see escpos.ts. */
+  bill_head_img?: string | null;
 }
 
 /** Optional floor plan: areas (Hall 1, Garden…) each with a grid; cells hold a table id or null (an empty spot). */
