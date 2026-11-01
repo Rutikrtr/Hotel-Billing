@@ -98,7 +98,8 @@ function header(s: Slip, settings: Settings, rate: number) {
   const head = s.rows[mark];
   if (head?.kind === 'text') head.text = settings.hotel_name;
   s.bold(false);
-  if (settings.hotel_address) s.wrap(settings.hotel_address);
+  // The address may have several lines (e.g. road, then village); each prints on its own line.
+  for (const line of (settings.hotel_address ?? '').split('\n')) if (line.trim()) s.wrap(line.trim());
   if (settings.hotel_phone) s.line(`Ph: ${settings.hotel_phone}`);
   if (settings.hotel_gstin && rate > 0) s.line(`GSTIN: ${settings.hotel_gstin}`);
   return s.align('left').rule();
