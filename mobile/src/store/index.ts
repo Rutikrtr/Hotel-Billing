@@ -4,7 +4,7 @@ import { useDispatch, useSelector, type TypedUseSelectorHook } from 'react-redux
 import { setDiscountSource } from '../discount';
 import { q, sb } from '../supabase';
 import { keyOf, type Order, type OrderKey } from '../types';
-import auth from './auth';
+import auth, { sessionEnded, signingOut } from './auth';
 import cart, { restoreCart, saved, type Cart } from './cart';
 import data, { orderClosed, orderSaved, readCache, restoreData } from './data';
 import printer, { restorePrinter } from './printer';
@@ -12,6 +12,11 @@ import printer, { restorePrinter } from './printer';
 export const store = configureStore({ reducer: { auth, data, cart, printer } });
 // The percent discount reads the hotel's current rule and the menu's categories from here.
 setDiscountSource(() => store.getState().data);
+// A login that ends by itself (e.g. removed on the server) shows the login screen instead of failing every save.
+// (Deferred: calling back into Supabase from inside this callback can lock the auth client.)
+sb.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT' && !signingOut.current && store.getState().auth.status === 'signedIn') setTimeout(() => store.dispatch(sessionEnded()), 0);
+});
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 export const useAppDispatch: () => AppDispatch = useDispatch;

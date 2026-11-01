@@ -1951,7 +1951,7 @@ async function staffSettingsView(token) {
       </div>
     </div>`);
   showInstall();
-  root.querySelector('#signout').addEventListener('click', () => sb.auth.signOut());
+  root.querySelector('#signout').addEventListener('click', () => sb.auth.signOut({ scope: 'local' }));
   root.querySelector('#printer-setup')?.addEventListener('click', printerDialog);
   root.querySelector('#qr-big')?.addEventListener('click', qrDialog);
   if (feat('qr_menu')) {
@@ -2217,7 +2217,7 @@ async function settingsView(token) {
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;
-    if (t.id === 'signout') sb.auth.signOut();
+    if (t.id === 'signout') sb.auth.signOut({ scope: 'local' });
     else if (t.dataset.editRoom) {
       const r = rooms.find((x) => x.id === Number(t.dataset.editRoom));
       formDialog({
@@ -2487,7 +2487,7 @@ async function roomsView(token) {
           <span class="state">${st.guest_name} · till ${shortDate(st.check_out)}</span></span></a>`;
       })}
     </div>`);
-  root.querySelector('#signout-rooms')?.addEventListener('click', () => sb.auth.signOut());
+  root.querySelector('#signout-rooms')?.addEventListener('click', () => sb.auth.signOut({ scope: 'local' }));
   root.addEventListener('click', (e) => {
     const t = e.target.closest('[data-checkin]');
     if (t) checkIn(rooms.find((r) => r.id === Number(t.dataset.checkin)));
@@ -2927,7 +2927,7 @@ async function adminView(token) {
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;
-    if (t.id === 'sa-signout') sb.auth.signOut();
+    if (t.id === 'sa-signout') sb.auth.signOut({ scope: 'local' });
     else if (t.id === 'backup-all' || t.id === 'backup-choose') act(t, () => runBackup(hotels, t.id === 'backup-choose').then(reload));
     else if (t.dataset.backup) act(t, () => runBackup([byId(t.dataset.backup)], false));
     else if (t.id === 'new-hotel') hotelDialog(null, reload);
@@ -3501,7 +3501,7 @@ function blockedScreen({ iconName = 'lock', title, body, retry = true }) {
       <button type="button" class="wide secondary" id="signout2">Use a Different Account</button>`,
   });
   root.querySelector('#retry')?.addEventListener('click', () => { accountCheck = null; route(); });
-  root.querySelector('#signout2').addEventListener('click', () => sb.auth.signOut());
+  root.querySelector('#signout2').addEventListener('click', () => sb.auth.signOut({ scope: 'local' }));
 }
 
 /** Show only the tabs this account can use. */
@@ -3637,7 +3637,7 @@ async function route(opts) {
   setHTML($view, html`<div class="card empty">Page not found. <a href="#/">Back to start</a></div>`);
 }
 
-document.getElementById('logout').addEventListener('click', () => sb.auth.signOut());
+document.getElementById('logout').addEventListener('click', () => sb.auth.signOut({ scope: 'local' }));
 
 // A background read found changes: redraw the list screen quietly, unless someone is typing, a dialog or the order sheet is open.
 onFresherData = () => {

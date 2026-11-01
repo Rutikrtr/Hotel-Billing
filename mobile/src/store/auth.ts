@@ -44,7 +44,7 @@ export const start = createAsyncThunk('auth/start', async () => {
     if (!saved) throw err;
     account = saved;
   }
-  if (adminOnly(account)) { await sb.auth.signOut(); throw new Error(WEB_ONLY); }
+  if (adminOnly(account)) { await sb.auth.signOut({ scope: 'local' }); throw new Error(WEB_ONLY); }
   return { email: data.session.user.email ?? '', account };
 });
 
@@ -52,23 +52,33 @@ export const signIn = createAsyncThunk('auth/signIn', async (p: { login: string;
   const { data, error } = await sb.auth.signInWithPassword({ email: loginEmail(p.login), password: p.password });
   if (error) throw new Error(/invalid/i.test(error.message) ? 'Wrong Login ID or password.' : error.message);
   const account = await loadAccount();
-  if (adminOnly(account)) { await sb.auth.signOut(); throw new Error(WEB_ONLY); }
+  if (adminOnly(account)) { await sb.auth.signOut({ scope: 'local' }); throw new Error(WEB_ONLY); }
   return { email: data.user.email ?? '', account };
 });
 
 /** Re-read access (paused hotel, role change) when the app comes back to the front. */
 export const recheck = createAsyncThunk('auth/recheck', loadAccount);
 
+// Set while this phone signs out on purpose, so that isn't taken for a login that ended by itself.
+export const signingOut = { current: false };
+
 export const signOut = createAsyncThunk('auth/signOut', async () => {
-  await clearCache();
-  await AsyncStorage.removeItem(ACCOUNT_KEY).catch(() => {});
-  await sb.auth.signOut();
+  signingOut.current = true;
+  try {
+    await clearCache();
+    await AsyncStorage.removeItem(ACCOUNT_KEY).catch(() => {});
+    // Only this phone: other phones signed in with the same login stay signed in.
+    await sb.auth.signOut({ scope: 'local' });
+  } finally { signingOut.current = false; }
 });
 
 const auth = createSlice({
   name: 'auth',
   initialState,
-  reducers: {},
+  reducers: {
+    /** The login ended without this phone signing out (e.g. it was removed on the server): back to the login screen. */
+    sessionEnded: (s) => ({ ...initialState, status: 'signedOut' as const, email: s.email, error: 'Your login ended on this phone. Please sign in again – unsaved orders stay on this phone.' }),
+  },
   extraReducers: (b) => {
     b.addCase(start.fulfilled, (s, a) => {
       if (!a.payload) { s.status = 'signedOut'; return; }
@@ -88,4 +98,5 @@ const auth = createSlice({
   },
 });
 
+export const { sessionEnded } = auth.actions;
 export default auth.reducer;
