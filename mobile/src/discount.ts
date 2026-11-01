@@ -16,6 +16,13 @@ export const hotelRule = (s: Settings | null | undefined): DiscountRule => ({ pc
 export const orderRule = (o: Pick<Order, 'status' | 'disc_pct' | 'disc_exclude'>): DiscountRule =>
   o.status === 'paid' ? { pct: o.disc_pct ?? 0, exclude: o.disc_exclude ?? [] } : hotelRule(source().settings);
 
+/** A dish in a category the percent discount leaves out (e.g. Beverages). */
+export function leftOut(menuId: number | null, rule: DiscountRule): boolean {
+  if (!rule.exclude.length) return false;
+  const category = menuId != null ? source().menu.find((m) => m.id === menuId)?.category ?? '' : '';
+  return rule.exclude.includes(category);
+}
+
 /** The percent discount on these dishes (dishes in a left-out category don't count). */
 export function autoDiscount(items: { menuId: number | null; quantity: number; unitPrice: number }[], rule: DiscountRule): number {
   if (!rule.pct) return 0;

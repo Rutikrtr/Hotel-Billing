@@ -2,7 +2,7 @@
   "expo": {
     "name": "Master Bill",
     "slug": "master-bill",
-    "version": "2.0.50",
+    "version": "2.0.51",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "in.techyverve.masterbill",
-      "versionCode": 23,
+      "versionCode": 24,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundImage": "./assets/adaptive-bg.png",

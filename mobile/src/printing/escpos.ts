@@ -1,6 +1,6 @@
 // Receipts as ESC/POS printer bytes. Same layout as the web app's slips (public/printer.js and app.js).
-import { orderBill, orderRule, ruleLabel, ruleNote } from '../discount';
-import { computeBill, fmt, nightsBetween } from '../money';
+import { leftOut, orderBill, orderRule, ruleLabel } from '../discount';
+import { computeBill, fmt, nightsBetween, type BillLine } from '../money';
 import { toLatin } from '../match';
 import type { Order, Settings, Stay } from '../types';
 
@@ -120,7 +120,7 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   // One line per dish: "2 Puneri Misal          180.00" (long names wrap, the amount stays on the last line).
   const amtW = 10;
   const nameW = W - amtW;
-  for (const l of b.lines) {
+  const dish = (l: BillLine) => {
     const left = ascii(`${l.quantity} ${l.name}`);
     const amt = fmt(l.quantity * l.unitPrice);
     const mark = s.rows.length;
@@ -138,17 +138,34 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
     // Browser printing shows the name as written (Marathi stays Marathi) on one row; the browser wraps it.
     s.rows.length = mark;
     s.rows.push({ kind: 'cols', left: `${l.quantity} ${l.name}`, right: amt, bold: false, big: false });
-  }
+  };
+  const rule = orderRule(order);
+  // Percent discount with categories left out (e.g. Beverages): the discounted dishes first with their
+  // subtotal, the % off and what they come to, then the left-out dishes, then the total of both.
+  const kept = order.items.filter((i) => !b.auto || !leftOut(i.menu_item_id, rule));
+  const out = b.auto ? order.items.filter((i) => leftOut(i.menu_item_id, rule)) : [];
+  const asLine = (i: Order['items'][number]): BillLine => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price });
+  const sum = (list: Order['items']) => list.reduce((n, i) => n + i.quantity * i.unit_price, 0);
+  const count = (list: Order['items']) => list.reduce((n, i) => n + i.quantity, 0);
+  kept.map(asLine).forEach(dish);
   s.rule();
-  // Subtotal only when something is added or taken off; otherwise straight to the total.
-  if (b.discount || b.auto || b.tax || b.roundOff) {
-    s.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
-    if (b.auto) {
-      // "50% off  -400.00", then the left-out categories under it.
-      const rule = orderRule(order);
-      s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
-      if (ruleNote(rule)) s.wrap(`  ${ascii(ruleNote(rule))}`);
+  if (out.length) {
+    s.cols(`Subtotal (${count(kept)})`, fmt(sum(kept)));
+    s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
+    s.bold(true).cols('After discount', fmt(sum(kept) - b.auto)).bold(false).rule();
+    out.map(asLine).forEach(dish);
+    s.rule();
+    // Discounted part + left-out dishes; then any typed-in discount, GST and round off.
+    if (b.discount || b.tax || b.roundOff) {
+      s.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal - b.auto));
+      if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
+      if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
+      if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
     }
+  } else if (b.discount || b.auto || b.tax || b.roundOff) {
+    // Subtotal only when something is added or taken off; otherwise straight to the total.
+    s.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
+    if (b.auto) s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
     if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
     if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
     if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
@@ -157,6 +174,8 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   // A split payment lists each part under the total.
   for (const [m, amt] of Object.entries(meta.split ?? {})) if (amt) s.cols(`  Paid by ${m}`, fmt(amt));
   s.rule();
+  // "No discount on Beverages", centred under the total.
+  if (out.length) s.align('center').wrap(`No discount on ${ascii(rule.exclude.join(', '))}`).align('left').rule();
   return s.align('center').line('Thank you! Visit again.').cut();
 }
 
