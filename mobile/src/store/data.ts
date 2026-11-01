@@ -17,8 +17,8 @@ interface DataState {
 const initialState: DataState = { settings: null, menu: [], tables: [], orders: {}, loading: false, error: null, loadedAt: 0 };
 
 const MENU_COLUMNS = 'id, name, category, price, is_veg, available, is_favorite';
-const SETTINGS_COLUMNS = 'id, hotel_name, hotel_address, hotel_phone, hotel_gstin, tax_rate_bp, quick_close, kot_tables, staff_limit, table_layout';
-const ORDER_COLUMNS = 'id, table_id, section, is_parcel, status, discount, bill_no, billed_at, opened_at, is_split, items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)';
+const SETTINGS_COLUMNS = 'id, hotel_name, hotel_address, hotel_phone, hotel_gstin, tax_rate_bp, quick_close, kot_tables, staff_limit, table_layout, disc_pct, disc_exclude';
+const ORDER_COLUMNS = 'id, table_id, section, is_parcel, status, discount, auto_discount, disc_pct, disc_exclude, bill_no, billed_at, opened_at, is_split, items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)';
 
 export const fetchOpenOrders = async (): Promise<Order[]> =>
   q(sb.from('orders').select(ORDER_COLUMNS).eq('status', 'open').order('id').order('id', { referencedTable: 'order_items' }));

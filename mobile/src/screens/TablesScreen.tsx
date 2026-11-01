@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { orderBill } from '../discount';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, LayoutAnimation, Platform, useWindowDimensions, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -43,7 +44,7 @@ export default function TablesScreen() {
   const account = useAppSelector((s) => s.auth.account);
   const canBill = account?.can_bill === true;
   const rate = settings?.tax_rate_bp ?? 0;
-  const totalOf = (o: Order) => computeBill(o.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), o.discount, rate).total;
+  const totalOf = (o: Order) => orderBill(o, rate).total;
 
   const all = Object.values(orders);
   const parcels = all.filter((o) => o.is_parcel);

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { configureStore, createAsyncThunk, type UnknownAction } from '@reduxjs/toolkit';
 import { useDispatch, useSelector, type TypedUseSelectorHook } from 'react-redux';
+import { setDiscountSource } from '../discount';
 import { q, sb } from '../supabase';
 import { keyOf, type Order, type OrderKey } from '../types';
 import auth from './auth';
@@ -9,6 +10,8 @@ import data, { orderClosed, orderSaved, readCache, restoreData } from './data';
 import printer, { restorePrinter } from './printer';
 
 export const store = configureStore({ reducer: { auth, data, cart, printer } });
+// The percent discount reads the hotel's current rule and the menu's categories from here.
+setDiscountSource(() => store.getState().data);
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 export const useAppDispatch: () => AppDispatch = useDispatch;

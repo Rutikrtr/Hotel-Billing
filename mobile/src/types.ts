@@ -20,6 +20,9 @@ export interface Settings {
   kot_tables: boolean;
   staff_limit?: number | null;
   table_layout?: TableLayout | null;
+  /** Percent off every bill (0 = off) and the categories it leaves out. */
+  disc_pct?: number;
+  disc_exclude?: string[];
 }
 
 /** Optional floor plan: areas (Hall 1, Garden…) each with a grid; cells hold a table id or null (an empty spot). */
@@ -88,6 +91,10 @@ export interface Order {
   billed_at: string | null;
   opened_at: string;
   is_split?: boolean;
+  /** Set by the server: the percent discount's amount and rule (src/discount.ts). */
+  auto_discount?: number;
+  disc_pct?: number;
+  disc_exclude?: string[];
   items: OrderItem[];
 }
 

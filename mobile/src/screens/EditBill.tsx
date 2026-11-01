@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { autoDiscount, orderBill, orderRule } from '../discount';
 import { computeBill, fmt, rs, toPaise } from '../money';
 import { useAppSelector } from '../store';
 import { q, sb } from '../supabase';
-import type { OrderItem } from '../types';
+import type { Order } from '../types';
 import { Button, Chip, Field, Sheet, T } from '../ui/kit';
 import { C, F } from '../ui/theme';
 import { toast } from '../ui/toast';
@@ -15,7 +16,7 @@ const METHODS = ['Cash', 'UPI', 'Card'];
 /** Owner changes a paid bill: quantities, dishes, discount, payment. Saved with a reason in the change log (edit_paid_bill). */
 export function EditBillSheet({ open, onClose, onSaved, order, rate }: {
   open: boolean; onClose: () => void; onSaved: () => void;
-  order: { id: number; bill_no: string | null; discount: number; payment_method: string | null; items: OrderItem[] }; rate: number;
+  order: Order & { payment_method: string | null }; rate: number;
 }) {
   const menu = useAppSelector((s) => s.data.menu);
   const [items, setItems] = useState<Line[]>(() => order.items.map((i) => ({ menu_item_id: i.menu_item_id, name: i.name, unit_price: i.unit_price, quantity: i.quantity })));
@@ -27,8 +28,10 @@ export function EditBillSheet({ open, onClose, onSaved, order, rate }: {
   let disc = 0;
   try { disc = toPaise(discount); } catch { /* shown on save */ }
   const lines = (list: Line[]) => list.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price }));
-  const now = computeBill(lines(items), disc, rate).total;
-  const was = computeBill(order.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), order.discount, rate).total;
+  // The percent discount stays as the bill was paid (its own rule), worked out again for the changed dishes.
+  const auto = autoDiscount(items.map((i) => ({ menuId: i.menu_item_id, quantity: i.quantity, unitPrice: i.unit_price })), orderRule(order));
+  const now = computeBill(lines(items), disc, rate, auto).total;
+  const was = orderBill(order, rate).total;
 
   const step = (n: number, d: number) => setItems((list) => list.flatMap((i, k) => (k !== n ? [i] : i.quantity + d < 1 ? [] : [{ ...i, quantity: i.quantity + d }])));
   const add = (id: number) => {

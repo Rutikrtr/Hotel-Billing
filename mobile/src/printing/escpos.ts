@@ -1,4 +1,5 @@
 // Receipts as ESC/POS printer bytes. Same layout as the web app's slips (public/printer.js and app.js).
+import { orderBill, orderRule, ruleLabel, ruleNote } from '../discount';
 import { computeBill, fmt, nightsBetween } from '../money';
 import { toLatin } from '../match';
 import type { Order, Settings, Stay } from '../types';
@@ -109,7 +110,7 @@ export interface BillMeta { rate?: number; at?: string; method?: string | null; 
 /** The customer's bill, short: one "qty name amount" line per dish, then the total. */
 export function billSlip(p: Paper, order: Order, settings: Settings, label: string, billNo: string, method: string | null, meta: BillMeta = {}): Slip {
   const rate = meta.rate ?? settings.tax_rate_bp;
-  const b = computeBill(order.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), order.discount, rate);
+  const b = orderBill(order, rate);
   const s = new Slip(p.width, 'bill', p.feed);
   const W = s.width;
   header(s, settings, rate);
@@ -140,8 +141,14 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   }
   s.rule();
   // Subtotal only when something is added or taken off; otherwise straight to the total.
-  if (b.discount || b.tax || b.roundOff) {
+  if (b.discount || b.auto || b.tax || b.roundOff) {
     s.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
+    if (b.auto) {
+      // "50% off  -400.00", then the left-out categories under it.
+      const rule = orderRule(order);
+      s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
+      if (ruleNote(rule)) s.wrap(`  ${ascii(ruleNote(rule))}`);
+    }
     if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
     if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
     if (b.roundOff) s.cols('Round off', fmt(b.roundOff));

@@ -239,14 +239,25 @@ function BillDetails() {
   const [gstin, setGstin] = useState(s.hotel_gstin ?? '');
   const [quick, setQuick] = useState(s.quick_close !== false);
   const [kot, setKot] = useState(!!s.kot_tables);
+  // Percent discount on every bill: off unless the owner turns it on; some categories can be left out.
+  const menu = useAppSelector((x) => x.data.menu);
+  const categories = [...new Set(menu.map((m) => m.category))];
+  const [discOn, setDiscOn] = useState((s.disc_pct ?? 0) > 0);
+  const [discPct, setDiscPct] = useState((s.disc_pct ?? 0) > 0 ? String(s.disc_pct) : '');
+  const [exclude, setExclude] = useState<string[]>(s.disc_exclude ?? []);
   const [busy, setBusy] = useState(false);
   const save = async () => {
     try {
       const bp = gstOn ? toPaise(rate) : 0;
       if (gstOn && bp <= 0) throw new Error('Enter a GST rate, like 5, or turn GST off.');
       if (bp > 10000) throw new Error('GST rate can’t be more than 100%.');
+      const pct = discOn ? Number(discPct.trim()) : 0;
+      if (discOn && (!/^\d{1,3}$/.test(discPct.trim()) || pct < 1 || pct > 100)) throw new Error('Enter the discount as a whole number from 1 to 100, like 50, or turn the discount off.');
       setBusy(true);
-      await q(sb.from('restaurants').update({ hotel_gstin: gstin.trim().toUpperCase(), tax_rate_bp: bp, quick_close: quick, kot_tables: kot }).eq('id', s.id));
+      await q(sb.from('restaurants').update({
+        hotel_gstin: gstin.trim().toUpperCase(), tax_rate_bp: bp, quick_close: quick, kot_tables: kot,
+        disc_pct: pct, disc_exclude: discOn ? exclude.filter((c) => categories.includes(c)) : [],
+      }).eq('id', s.id));
       await dispatch(reloadSettings());
       toast('Changes saved');
     } catch (err) { toast((err as Error).message, true); } finally { setBusy(false); }
@@ -266,6 +277,19 @@ function BillDetails() {
       ) : null}
       <ToggleRow label="Print Bill clears the table" hint="Off: the table waits for payment after printing" value={quick} onChange={setQuick} />
       <ToggleRow label="Kitchen tickets (KOT) for tables" hint="Send to Kitchen prints new dishes for the cook" value={kot} onChange={setKot} />
+      <ToggleRow label="Percent discount on every bill" hint="Taken off every bill by itself, e.g. 50% off" value={discOn} onChange={setDiscOn} />
+      {discOn ? (
+        <View style={{ gap: 8 }}>
+          <Field label="Discount (%)" value={discPct} onChangeText={setDiscPct} keyboardType="number-pad" placeholder="e.g. 50" />
+          <T style={{ color: C.muted, fontSize: 12 }}>No discount on these categories (tap to choose):</T>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 6 }}>
+            {categories.map((c) => (
+              <Chip key={c} label={exclude.includes(c) ? `✕ ${c}` : c} on={exclude.includes(c)}
+                onPress={() => setExclude((x) => (x.includes(c) ? x.filter((y) => y !== c) : [...x, c]))} />
+            ))}
+          </View>
+        </View>
+      ) : null}
       <Button title="Save Changes" onPress={save} busy={busy} />
       <T style={{ color: C.muted, fontSize: 11.5 }}>To change the restaurant name, address or phone, contact Techyverve.</T>
     </Card>

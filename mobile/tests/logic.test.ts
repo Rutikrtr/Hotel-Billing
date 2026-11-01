@@ -55,6 +55,21 @@ test('bill totals match the web app exactly (GST, discount, round off)', () => {
     [[{ name: 'a', quantity: 2, unitPrice: 12345 }, { name: 'b', quantity: 1, unitPrice: 999 }], 1500, 500],
     [[{ name: 'a', quantity: 7, unitPrice: 4399 }], 99999, 1800],
   ] as const) {
-    assert.deepEqual(computeBill([...lines], discount, rate), webBill({ lines: [...lines], discount, taxRateBp: rate }));
+    const { auto, ...bill } = computeBill([...lines], discount, rate);
+    assert.equal(auto, 0);
+    assert.deepEqual(bill, webBill({ lines: [...lines], discount, taxRateBp: rate }));
   }
+});
+
+test('percent discount: comes off before GST, together never below zero (as the server bill_total)', () => {
+  // ₹600 of food, 50% off ₹520 of it (₹80 of bread left out) = ₹260 off, plus ₹10 typed in; 5% GST on the rest.
+  const b = computeBill([{ name: 'food', quantity: 1, unitPrice: 60000 }], 1000, 500, 26000);
+  assert.equal(b.auto, 26000);
+  assert.equal(b.discount, 1000);
+  assert.equal(b.taxable, 33000);
+  assert.equal(b.total, 34700);   // 330 + 16.50 GST = 346.50 → rounded to 347
+  const all = computeBill([{ name: 'food', quantity: 1, unitPrice: 10000 }], 5000, 0, 8000);
+  assert.equal(all.auto, 8000);
+  assert.equal(all.discount, 2000);
+  assert.equal(all.total, 0);
 });

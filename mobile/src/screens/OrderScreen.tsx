@@ -1,4 +1,5 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { autoDiscount, hotelRule, orderBill, ruleLabel, ruleNote } from '../discount';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, ScrollView, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
@@ -63,7 +64,7 @@ export default function OrderScreen() {
   const label = parcel ? (order?.bill_no ? `Parcel #${tokenNo(order.bill_no)}` : 'Parcel') : `${table?.name ?? 'Table'}${multi || order?.is_split || section !== 'A' ? `-${section}` : ''}`;
   const sectionTotal = (x: string) => {
     const o = allOrders[tableKey(params.tableId as number, x)];
-    return o ? computeBill(o.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), o.discount, settings?.tax_rate_bp ?? 0).total : null;
+    return o ? orderBill(o, settings?.tax_rate_bp ?? 0).total : null;
   };
   // Switching section: unsaved taps of this section are saved first (in the background).
   const goSection = (x: string) => {
@@ -88,7 +89,9 @@ export default function OrderScreen() {
   const lines = useMemo(() => mergeLines(order, cart, menu), [order, cart, menu]);
   const qtyOf = (menuId: number) => lines.find((l) => l.menuId === menuId)?.quantity ?? 0;
   const discount = cart?.discount ?? order?.discount ?? 0;
-  const bill = computeBill(lines.map((l) => ({ name: l.name, quantity: l.quantity, unitPrice: l.unitPrice })), discount, rate);
+  // The percent discount from Settings (if on), worked out on the dishes as they are now.
+  const rule = hotelRule(settings);
+  const bill = computeBill(lines.map((l) => ({ name: l.name, quantity: l.quantity, unitPrice: l.unitPrice })), discount, rate, autoDiscount(lines, rule));
   const pending = hasPending(cart);
   const kotOn = !parcel && settings?.kot_tables === true;
   const toKitchen = lines.filter((l) => l.quantity !== l.kotQty);
@@ -206,7 +209,7 @@ export default function OrderScreen() {
     if (!saved || !settings) return;
     const quick = settings.quick_close !== false;
     if (quick) {
-      const total = computeBill(saved.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), saved.discount, rate).total;
+      const total = orderBill(saved, rate).total;
       const pay = paymentFor(total);
       if (typeof pay === 'string') { toast(pay, true); return; }
       const billNo = await dispatch(settle({ order: saved, ...pay })).unwrap();
@@ -223,7 +226,7 @@ export default function OrderScreen() {
   const pay = () => run('pay', async () => {
     const o = payFor ?? order;
     if (!o) return;
-    const total = computeBill(o.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), o.discount, rate).total;
+    const total = orderBill(o, rate).total;
     const p = paymentFor(total);
     if (typeof p === 'string') { toast(p, true); return; }
     const billNo = await dispatch(settle({ order: o, ...p })).unwrap();
@@ -286,6 +289,7 @@ export default function OrderScreen() {
               </ScrollView>
               <View style={st.totals}>
                 <Row k="Subtotal" v={fmt(bill.subtotal)} />
+                {bill.auto ? <Row k={`${ruleLabel(rule)}${ruleNote(rule) ? ` · ${ruleNote(rule)}` : ''}`} v={`-${fmt(bill.auto)}`} /> : null}
                 {canBill ? <DiscountRow value={discount} onChange={(p) => dispatch(setDiscount({ key, discount: p }))} /> : null}
                 {bill.tax ? <><Row k={`CGST ${rate / 200}%`} v={fmt(bill.cgst)} /><Row k={`SGST ${rate / 200}%`} v={fmt(bill.sgst)} /></> : null}
                 {bill.roundOff ? <Row k="Round off" v={fmt(bill.roundOff)} /> : null}
@@ -342,8 +346,8 @@ export default function OrderScreen() {
             <T w="heavy" style={{ fontSize: 19 }}>Receive payment</T>
             {payFor ? (
               <View style={{ gap: 10, marginTop: 8 }}>
-                <T w="heavy" style={{ fontSize: 30, textAlign: 'center' }}>{rs(computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total)}</T>
-                <PayPicker value={payment} onChange={setPayment} total={computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total} />
+                <T w="heavy" style={{ fontSize: 30, textAlign: 'center' }}>{rs(orderBill(payFor, rate).total)}</T>
+                <PayPicker value={payment} onChange={setPayment} total={orderBill(payFor, rate).total} />
                 <Button title="Mark as Paid" onPress={pay} busy={busy === 'pay'} />
                 <Button kind="secondary" title="Cancel" onPress={() => setPayFor(null)} />
               </View>
@@ -385,8 +389,8 @@ export default function OrderScreen() {
           </View>
           {payFor ? (
             <View style={{ padding: 16, gap: 10 }}>
-              <T w="heavy" style={{ fontSize: 30, textAlign: 'center' }}>{rs(computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total)}</T>
-              <PayPicker value={payment} onChange={setPayment} total={computeBill(payFor.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), payFor.discount, rate).total} />
+              <T w="heavy" style={{ fontSize: 30, textAlign: 'center' }}>{rs(orderBill(payFor, rate).total)}</T>
+              <PayPicker value={payment} onChange={setPayment} total={orderBill(payFor, rate).total} />
               <Button title="Mark as Paid" onPress={pay} busy={busy === 'pay'} />
             </View>
           ) : orderBody}

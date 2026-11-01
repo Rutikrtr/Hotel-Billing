@@ -1,4 +1,5 @@
 import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
+import { orderBill } from '../discount';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -121,7 +122,7 @@ export default function BillsScreen() {
                       <T w="bold" numberOfLines={1}>{o.is_parcel ? `Parcel #${tokenNo(o.bill_no)}` : `${tableName(o.table_id)}${o.section !== 'A' ? `-${o.section}` : ''}`} · {o.bill_no}</T>
                       <T style={{ color: C.muted, fontSize: 11.5 }}>Printed {new Date(o.billed_at!).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })} · not paid yet</T>
                     </View>
-                    <T w="heavy">{rs(computeBill(o.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), o.discount, settings?.tax_rate_bp ?? 0).total)}</T>
+                    <T w="heavy">{rs(orderBill(o, settings?.tax_rate_bp ?? 0).total)}</T>
                   </Pressable>
                 ))}
               </>

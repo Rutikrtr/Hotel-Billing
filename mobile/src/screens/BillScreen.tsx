@@ -1,4 +1,5 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { orderBill, orderRule, ruleLabel, ruleNote } from '../discount';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -32,7 +33,7 @@ export default function BillScreen() {
   const account = useAppSelector((s) => s.auth.account);
   const canEdit = account?.role === 'owner' && account.features?.bill_edit === true;
   const load = () => q<Paid>(sb.from('orders')
-      .select('id, table_id, section, is_parcel, status, discount, bill_no, billed_at, opened_at, closed_at, payment_method, payment_split, tax_rate_bp, edit_count, dining_tables(name), items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)')
+      .select('id, table_id, section, is_parcel, status, discount, auto_discount, disc_pct, disc_exclude, bill_no, billed_at, opened_at, closed_at, payment_method, payment_split, tax_rate_bp, edit_count, dining_tables(name), items:order_items(id, menu_item_id, name, unit_price, quantity, kot_qty)')
       .eq('id', params.orderId).order('id', { referencedTable: 'order_items' }).single())
       .then(setOrder, (err: Error) => setError(err.message));
 
@@ -45,7 +46,7 @@ export default function BillScreen() {
   if (!order || !settings) return <View style={st.center}><ActivityIndicator color={C.brand1} size="large" /></View>;
 
   const rate = order.tax_rate_bp ?? settings.tax_rate_bp;
-  const b = computeBill(order.items.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.unit_price })), order.discount, rate);
+  const b = orderBill(order, rate);
   const label = order.dining_tables?.name ? `${order.dining_tables.name}${order.section !== 'A' ? `-${order.section}` : ''}` : 'Table';
   const at = order.closed_at ?? order.billed_at ?? new Date().toISOString();
 
@@ -107,8 +108,10 @@ export default function BillScreen() {
           </View>
         ))}
         <View style={st.rule} />
-        {b.discount || b.tax || b.roundOff ? (<>
+        {b.discount || b.auto || b.tax || b.roundOff ? (<>
           <KV k={`Subtotal (${b.itemCount})`} v={fmt(b.subtotal)} />
+          {b.auto ? <KV k={ruleLabel(orderRule(order))} v={`-${fmt(b.auto)}`} /> : null}
+          {b.auto && ruleNote(orderRule(order)) ? <KV k={`  ${ruleNote(orderRule(order))}`} v="" /> : null}
           {b.discount ? <KV k="Discount" v={`-${fmt(b.discount)}`} /> : null}
           {b.tax ? (<><KV k={`CGST ${pct(rate / 2)}`} v={fmt(b.cgst)} /><KV k={`SGST ${pct(rate / 2)}`} v={fmt(b.sgst)} /></>) : null}
           {b.roundOff ? <KV k="Round off" v={fmt(b.roundOff)} /> : null}

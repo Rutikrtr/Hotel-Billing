@@ -21,20 +21,23 @@ export const percentOf = (amount: number, rateBp: number) => Math.floor((amount 
 
 export interface BillLine { name: string; quantity: number; unitPrice: number }
 export interface Bill {
-  lines: BillLine[]; subtotal: number; discount: number; taxable: number; tax: number; cgst: number; sgst: number;
+  /** discount: the amount typed in; auto: the percent discount from Settings (src/discount.ts). */
+  lines: BillLine[]; subtotal: number; discount: number; auto: number; taxable: number; tax: number; cgst: number; sgst: number;
   roundOff: number; total: number; itemCount: number;
 }
 
-export function computeBill(lines: BillLine[], discount = 0, taxRateBp = 0): Bill {
+export function computeBill(lines: BillLine[], discount = 0, taxRateBp = 0, auto = 0): Bill {
   const subtotal = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const applied = Math.min(discount, subtotal);
+  // Both discounts together never go below zero (the server's bill_total: least(discount + auto, subtotal)).
+  const autoApplied = Math.min(Math.max(auto, 0), subtotal);
+  const applied = Math.min(discount + autoApplied, subtotal);
   const taxable = subtotal - applied;
   const tax = percentOf(taxable, taxRateBp);
   const cgst = Math.floor(tax / 2);
   const exact = taxable + tax;
   const total = Math.floor((exact + 50) / 100) * 100;
   return {
-    lines, subtotal, discount: applied, taxable, tax, cgst, sgst: tax - cgst, roundOff: total - exact, total,
+    lines, subtotal, discount: applied - autoApplied, auto: autoApplied, taxable, tax, cgst, sgst: tax - cgst, roundOff: total - exact, total,
     itemCount: lines.reduce((s, l) => s + l.quantity, 0),
   };
 }
