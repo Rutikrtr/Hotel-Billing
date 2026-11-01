@@ -23,6 +23,8 @@ export interface Settings {
   /** Percent off every bill (0 = off) and the categories it leaves out. */
   disc_pct?: number;
   disc_exclude?: string[];
+  /** Printed bill layout, set by Techyverve: 'classic' or 'table' (Item / Qty / Amount columns). */
+  bill_style?: 'classic' | 'table';
 }
 
 /** Optional floor plan: areas (Hall 1, Garden…) each with a grid; cells hold a table id or null (an empty spot). */

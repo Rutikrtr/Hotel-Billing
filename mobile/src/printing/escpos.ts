@@ -93,6 +93,8 @@ function header(s: Slip, settings: Settings, rate: number) {
   s.align('center').bold(true);
   const mark = s.rows.length;
   if (name.length * 2 <= s.width) s.size(2, 2).spacing(0).wrap(name, Math.floor(s.width / 2)).size(1, 1);
+  // Table-style bills keep a long name on one line: tall letters at normal width.
+  else if (settings.bill_style === 'table' && name.length <= s.width) s.size(1, 2).spacing(0).wrap(name, s.width).size(1, 1);
   else s.size(1, 2).spacing(1).wrap(name, Math.floor(s.width / 2)).spacing(0).size(1, 1);
   // Browser printing keeps the name as written (e.g. Marathi).
   const head = s.rows[mark];
@@ -118,10 +120,33 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   if (order.is_parcel) s.align('center').bold(true).size(2, 2).line(`PARCEL #${tokenNo(billNo)}`).size(1, 1).bold(false).align('left');
   s.bold(true).cols(`Bill: ${billNo}`, order.is_parcel ? 'Parcel' : `Table: ${label}`).bold(false);
   s.cols(stamp(meta.at ?? new Date().toISOString()), meta.method ?? method ?? '').rule();
+  // Table style: "Item / Qty / Amount" columns; a long name wraps under itself, qty and amount on its first line.
+  const table = settings.bill_style === 'table';
+  const qtyAmt = (q: string, a: string) => `${q.padStart(3)}${a.padStart(11)}`;
+  if (table) s.bold(true).cols('Item', qtyAmt('Qty', 'Amount')).bold(false).rule();
+  const row = (l: BillLine) => {
+    const amt = fmt(l.quantity * l.unitPrice);
+    const right = qtyAmt(String(l.quantity), amt);
+    const room = W - right.length - 1;
+    const mark = s.rows.length;
+    let rest = ascii(l.name);
+    let first = true;
+    while (rest) {
+      let cut = rest.length;
+      if (rest.length > room) { cut = rest.lastIndexOf(' ', room); if (cut <= 0) cut = room; }
+      if (first) s.cols(rest.slice(0, cut), right); else s.line(`  ${rest.slice(0, cut)}`);
+      rest = rest.slice(cut).trimStart();
+      first = false;
+    }
+    // Browser printing: one row with the name as written; the browser wraps it.
+    s.rows.length = mark;
+    s.rows.push({ kind: 'cols', left: l.name, right, bold: false, big: false });
+  };
   // One line per dish: "2 Puneri Misal          180.00" (long names wrap, the amount stays on the last line).
   const amtW = 10;
   const nameW = W - amtW;
   const dish = (l: BillLine) => {
+    if (table) return row(l);
     const left = ascii(`${l.quantity} ${l.name}`);
     const amt = fmt(l.quantity * l.unitPrice);
     const mark = s.rows.length;
@@ -152,8 +177,11 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   s.rule();
   if (out.length) {
     s.cols(`Subtotal (${count(kept)})`, fmt(sum(kept)));
-    s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
-    s.bold(true).cols('After discount', fmt(sum(kept) - b.auto)).bold(false).rule();
+    if (table) s.bold(true).cols(`After ${rule.pct}% discount`, fmt(sum(kept) - b.auto)).bold(false).rule();
+    else {
+      s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
+      s.bold(true).cols('After discount', fmt(sum(kept) - b.auto)).bold(false).rule();
+    }
     out.map(asLine).forEach(dish);
     s.rule();
     // Discounted part + left-out dishes; then any typed-in discount, GST and round off.
@@ -166,7 +194,8 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   } else if (b.discount || b.auto || b.tax || b.roundOff) {
     // Subtotal only when something is added or taken off; otherwise straight to the total.
     s.cols(`Subtotal (${b.itemCount})`, fmt(b.subtotal));
-    if (b.auto) s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
+    if (b.auto && table) s.bold(true).cols(`After ${rule.pct}% discount`, fmt(b.subtotal - b.auto)).bold(false);
+    else if (b.auto) s.cols(ruleLabel(rule), `-${fmt(b.auto)}`);
     if (b.discount) s.cols('Discount', `-${fmt(b.discount)}`);
     if (b.tax) s.cols(`CGST ${pct(rate / 2)}`, fmt(b.cgst)).cols(`SGST ${pct(rate / 2)}`, fmt(b.sgst));
     if (b.roundOff) s.cols('Round off', fmt(b.roundOff));
@@ -174,9 +203,13 @@ export function billSlip(p: Paper, order: Order, settings: Settings, label: stri
   s.bold(true).size(1, 2).cols(`TOTAL (${b.itemCount})`, `Rs.${fmt(b.total)}`).size(1, 1).bold(false);
   // A split payment lists each part under the total.
   for (const [m, amt] of Object.entries(meta.split ?? {})) if (amt) s.cols(`  Paid by ${m}`, fmt(amt));
-  s.rule();
+  // Table style ends without dashed lines: the note in bold under the total, then the thank-you.
+  if (!table) s.rule();
   // "No discount on Beverages", centred under the total.
-  if (out.length) s.align('center').wrap(`No discount on ${ascii(rule.exclude.join(', '))}`).align('left').rule();
+  if (out.length) {
+    s.align('center').bold(table).wrap(`No discount on ${ascii(rule.exclude.join(', '))}`).bold(false).align('left');
+    if (!table) s.rule();
+  }
   return s.align('center').line('Thank you! Visit again.').cut();
 }
 
