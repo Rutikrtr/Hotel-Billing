@@ -26,46 +26,46 @@ const MASALA = {
   dishTile: '#FFF7F1', dishLine: '#EFB08A', floorTop: '#FBF7F3', floorBottom: '#F4EDE6', floorDot: '#D9CCC0', floorLine: '#E6DCD2', spotLine: '#DCD2C9',
 };
 
-// Desktop app 2.5: clean and glossy – white frosted cards over a light grey page with soft glows, a black
-// sidebar, near-black text and orange only to highlight (money on tables, busy tables, the open page).
+// Desktop app 2.5 (Tracebit palette): warm off-white page, white cards with hairline borders, warm black
+// for the sidebar, titles and the main figure, coral only for the main action and busy tables.
 const SLATE: typeof MASALA = {
   bg: 'transparent',
-  surface: 'rgba(255,255,255,0.86)',
-  surface2: 'rgba(248,248,250,0.92)',
-  line: 'rgba(16,16,20,0.08)',
-  text: '#111113',
-  muted: '#6E6E73',
-  accent: '#E8590C',
-  accentStrong: '#C2410C',
-  accentSoft: 'rgba(232,89,12,0.08)',
-  brand1: '#FF8A3D',
-  brand2: '#E8590C',
-  ink: '#111113',
-  free: '#1E8E5A',
-  freeSoft: 'rgba(30,142,90,0.08)',
-  billed: '#6B4FD8',
-  billedSoft: 'rgba(107,79,216,0.08)',
-  danger: '#DC2626',
-  dangerSoft: 'rgba(220,38,38,0.08)',
-  veg: '#15803D',
-  nonveg: '#B91C1C',
-  busyTile: '#FFF6EF', busyLine: 'rgba(232,89,12,0.55)', billedTile: '#F7F5FF', billedLine: 'rgba(107,79,216,0.40)', editLine: 'rgba(232,89,12,0.45)',
-  dishTile: '#FFF6EF', dishLine: 'rgba(232,89,12,0.55)', floorTop: 'rgba(255,255,255,0.55)', floorBottom: 'rgba(255,255,255,0.40)', floorDot: 'rgba(16,16,20,0.10)', floorLine: 'rgba(16,16,20,0.07)', spotLine: 'rgba(16,16,20,0.16)',
+  surface: '#FFFFFF',
+  surface2: '#FAF8F6',
+  line: 'rgba(0,0,0,0.08)',
+  text: '#231F20',
+  muted: '#807574',
+  accent: '#EA6F53',
+  accentStrong: '#BC4725',
+  accentSoft: 'rgba(234,111,83,0.12)',
+  brand1: '#EA6F53',
+  brand2: '#BC4725',
+  ink: '#231F20',
+  free: '#027A48',
+  freeSoft: '#ECFDF3',
+  billed: '#8A3C90',
+  billedSoft: 'rgba(138,60,144,0.10)',
+  danger: '#B42318',
+  dangerSoft: '#FEF3F2',
+  veg: '#027A48',
+  nonveg: '#B42318',
+  busyTile: '#FFF7F4', busyLine: 'rgba(234,111,83,0.45)', billedTile: '#FBF5FB', billedLine: 'rgba(138,60,144,0.35)', editLine: 'rgba(234,111,83,0.45)',
+  dishTile: '#FFF7F4', dishLine: 'rgba(234,111,83,0.45)', floorTop: '#FFFFFF', floorBottom: '#FCFAF8', floorDot: 'rgba(0,0,0,0.08)', floorLine: 'rgba(0,0,0,0.06)', spotLine: 'rgba(0,0,0,0.14)',
 };
 
-/** The desktop sidebar: black, grey names, white and orange for the open page. */
-export const SIDEBAR = { bg: '#0B0B0D', line: 'rgba(255,255,255,0.07)', text: '#F2F2F0', icon: '#8B8B90', soft: '#7C7C80', hover: 'rgba(255,255,255,0.06)', card: 'rgba(255,255,255,0.08)' };
+/** The desktop sidebar: warm black, white names, coral for the open page's icon. */
+export const SIDEBAR = { bg: '#231F20', line: 'rgba(255,255,255,0.12)', text: '#FFFFFF', icon: 'rgba(255,255,255,0.6)', soft: 'rgba(255,255,255,0.5)', hover: 'rgba(255,255,255,0.06)', card: 'rgba(255,255,255,0.08)' };
 
 export const C = isDesktop ? SLATE : MASALA;
 
 // Inter: the font most phone apps use for numbers and small labels (clear digits, tabular figures).
 export const F = isDesktop ? {
-  // Desktop: Instrument Sans (calm, modern type); page titles and big figures in Bold (F.heavy).
-  regular: 'InstrumentSans_400Regular',
-  semibold: 'InstrumentSans_500Medium',
-  bold: 'InstrumentSans_600SemiBold',
-  heavy: 'InstrumentSans_700Bold',
-  light: 'InstrumentSans_500Medium',
+  // Desktop: Inter Tight (close to Tracebit's Lausanne); titles in SemiBold with tight spacing (F.heavy).
+  regular: 'InterTight_400Regular',
+  semibold: 'InterTight_500Medium',
+  bold: 'InterTight_600SemiBold',
+  heavy: 'InterTight_600SemiBold',
+  light: 'InterTight_300Light',
   mono: 'IBMPlexMono_500Medium',
 } : {
   regular: 'Inter_500Medium',

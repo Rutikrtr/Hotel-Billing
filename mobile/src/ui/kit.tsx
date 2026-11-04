@@ -98,25 +98,25 @@ export const s = StyleSheet.create({
   pageHead: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72, paddingLeft: 24, paddingRight: isDesktop ? 160 : 24, paddingVertical: 10, backgroundColor: isDesktop ? 'rgba(255,255,255,0.45)' : C.bg, borderBottomWidth: 1, borderBottomColor: C.line },
   btn: { minHeight: 44, borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: C.brand1 },
   btnSmall: { minHeight: 34, borderRadius: 10, paddingHorizontal: 12 },
-  // Desktop: main buttons are glossy black, quiet ones glossy white (orange is kept for highlights).
-  btnBlack: { backgroundImage: 'linear-gradient(180deg, #2A2A2E, #0B0B0D)', boxShadow: '0 6px 16px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.18)' } as object,
-  btnGloss: { backgroundImage: 'linear-gradient(180deg, #FFFFFF, #F4F4F6)', boxShadow: '0 1px 2px rgba(0,0,0,0.06), inset 0 1px 0 #FFFFFF' } as object,
+  // Desktop (Tracebit): the main button is flat coral, quiet ones white with a hairline border.
+  btnBlack: { backgroundColor: '#EA6F53', borderRadius: 10 },
+  btnGloss: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)', borderRadius: 10 },
   btnSecondary: { backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
   btnDanger: { backgroundColor: C.surface, borderWidth: 1, borderColor: '#E9B4B4' },
   card: { backgroundColor: C.surface, borderRadius: 16, borderWidth: 1, borderColor: C.line, padding: 12 },
   cardGlass: { borderRadius: 20, borderColor: 'rgba(255,255,255,0.85)', padding: 16, shadowColor: '#8A4B12', shadowOpacity: 0.08, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
   chip: { height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, justifyContent: 'center', marginRight: 6 },
   chipOn: isDesktop
-    ? { backgroundColor: '#111113', borderColor: '#111113', backgroundImage: 'linear-gradient(180deg, #2A2A2E, #0B0B0D)', boxShadow: '0 4px 10px rgba(0,0,0,0.18)' } as object
+    ? { backgroundColor: '#231F20', borderColor: '#231F20' }
     : { backgroundColor: C.accent, borderColor: C.accent },
   input: { minHeight: 44, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, paddingHorizontal: 12, fontFamily: F.regular, fontSize: 14.5, color: C.text },
   sheet: { backgroundColor: isDesktop ? '#FFF9F2' : C.bg, borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16, paddingTop: 10, maxHeight: '88%' },
   kpis: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, marginBottom: 16, ...shadow },
   kpi: { flex: 1, minWidth: 0, paddingVertical: 16, paddingHorizontal: 20, overflow: 'hidden', justifyContent: 'center' },
-  kpiMain: { flex: 1.35 },
+  kpiMain: { flex: 1.35, backgroundColor: '#231F20' },
   kpiLine: { borderLeftWidth: 1, borderLeftColor: C.line },
   kpiValue: { fontFamily: F.mono, fontSize: 26, marginTop: 6, color: C.text, fontVariant: ['tabular-nums'] },
-  kpiNote: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 8 },
+  kpiNote: { alignSelf: 'flex-start', backgroundColor: 'rgba(234,111,83,0.25)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, marginTop: 8 },
   seg: { flexDirection: 'row', alignSelf: 'flex-start', backgroundColor: 'rgba(16,16,20,0.06)', borderRadius: 11, padding: 3, gap: 2 },
   segItem: { paddingHorizontal: 13, height: 32, borderRadius: 8, justifyContent: 'center' },
   segOn: { backgroundColor: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' } as object,
@@ -161,7 +161,7 @@ export function PageHeader({ title, sub, right, onBack }: { title: string; sub?:
         </Pressable>
       ) : null}
       <View style={{ flex: 1 }}>
-        <T w="heavy" numberOfLines={1} style={{ fontSize: isDesktop ? 28 : 24, letterSpacing: isDesktop ? -0.7 : -0.5 }}>{title}</T>
+        <T w="heavy" numberOfLines={1} style={{ fontSize: isDesktop ? 32 : 24, letterSpacing: isDesktop ? -1 : -0.5 }}>{title}</T>
         {sub ? <T w="semibold" numberOfLines={1} style={{ fontSize: 12.5, color: C.muted, marginTop: 1 }}>{sub}</T> : null}
       </View>
       {right}
@@ -274,7 +274,6 @@ function KpiRow({ label, value, note, noteColor, stats, right }: {
   return (
     <View {...glass} style={s.kpis}>
       <View style={[s.kpi, s.kpiMain]}>
-        <Gradient radius={0} />
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <T numberOfLines={1} style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.9)' }}>{label}</T>
@@ -282,7 +281,7 @@ function KpiRow({ label, value, note, noteColor, stats, right }: {
           </View>
           {right}
         </View>
-        {note ? <View style={s.kpiNote}><T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: '#FFFFFF' }}>{note}</T></View> : null}
+        {note ? <View style={s.kpiNote}><T w="semibold" numberOfLines={1} style={{ fontSize: 12, color: '#FFB39F' }}>{note}</T></View> : null}
       </View>
       {stats.map((x) => (
         <View key={x.label} style={[s.kpi, s.kpiLine]}>

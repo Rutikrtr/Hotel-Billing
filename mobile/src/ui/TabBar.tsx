@@ -88,7 +88,7 @@ export function AppSideBar({ pages, current, onGo, mini, onFold, onSignOut }: { 
             style={(x) => [st.item, (x as { hovered?: boolean }).hovered && st.itemHover]}>
             {/* Closed while one of its pages is open: the icon shows it in orange. */}
             <View style={st.ico}><Feather name="sliders" size={18} color={inManage && !manage ? C.accent : SIDEBAR.icon} /></View>
-            <Label style={{ fontSize: 14.5, fontFamily: F.semibold, color: '#E4E4E6' }}>Manage</Label>
+            <Label style={{ fontSize: 14.5, fontFamily: F.semibold, color: 'rgba(255,255,255,0.72)' }}>Manage</Label>
             <Animated.View style={{ opacity: fade, marginLeft: 'auto' }}><Feather name={manage ? 'chevron-up' : 'chevron-down'} size={16} color={SIDEBAR.soft} /></Animated.View>
           </Pressable>
           {manage ? managed.map((pg) => <Item key={pg.name} pg={pg} on={pg.name === current} mini={mini} onGo={onGo} fade={fade} sub />) : null}
@@ -125,7 +125,7 @@ function Item({ pg, on, mini, onGo, fade, sub }: { pg: SidePage; on: boolean; mi
       style={(x) => [st.item, sub && !mini && st.sub, on && st.itemOn, !on && (x as { hovered?: boolean }).hovered && st.itemHover]}>
       <View style={st.ico}><Feather name={FEATHER[pg.name] ?? 'circle'} size={sub ? 16 : 18} color={on ? C.accent : SIDEBAR.icon} /></View>
       <Animated.View style={{ opacity: fade, width: 150 }} pointerEvents="none">
-        <T numberOfLines={1} style={{ fontSize: 14.5, fontFamily: on ? F.bold : F.semibold, color: on ? '#FFFFFF' : '#B4B4B8' }}>{pg.label}</T>
+        <T numberOfLines={1} style={{ fontSize: 14.5, fontFamily: on ? F.bold : F.semibold, color: on ? '#FFFFFF' : 'rgba(255,255,255,0.72)' }}>{pg.label}</T>
       </Animated.View>
     </Pressable>
   );
@@ -174,19 +174,18 @@ function Dock({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 const st = StyleSheet.create({
-  side: { backgroundColor: SIDEBAR.bg, borderRightWidth: 1, borderRightColor: SIDEBAR.line, paddingHorizontal: 12, paddingTop: 16, paddingBottom: 12, overflow: 'hidden',
-    backgroundImage: 'linear-gradient(180deg, #1B1B1F 0%, #0B0B0D 55%, #000000 100%)' } as object,
+  side: { backgroundColor: SIDEBAR.bg, borderRightWidth: 1, borderRightColor: SIDEBAR.line, paddingHorizontal: 12, paddingTop: 16, paddingBottom: 12, overflow: 'hidden' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 6, minHeight: 44, marginBottom: 18, overflow: 'hidden' },
-  logo: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 4px 14px rgba(232,89,12,0.45)' } as object,
+  logo: { width: 34, height: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', } as object,
   group: { fontSize: 10.5, letterSpacing: 1.2, color: SIDEBAR.soft, fontFamily: F.semibold, marginLeft: 12 },
   sub: { paddingLeft: 26, height: 38 },
   groupLine: { height: 1, marginHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.10)' },
   ico: { width: 24, alignItems: 'center' },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 42, paddingHorizontal: 12, borderRadius: 10, overflow: 'hidden' },
-  itemOn: { backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), 0 1px 2px rgba(0,0,0,0.5)' } as object,
+  itemOn: { backgroundColor: 'rgba(255,255,255,0.08)' },
   itemHover: { backgroundColor: SIDEBAR.hover },
   me: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: SIDEBAR.line, paddingTop: 12, marginTop: 8, paddingLeft: 6, overflow: 'hidden' },
-  avatar: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#26262A', alignItems: 'center', justifyContent: 'center' },
+  avatar: { width: 34, height: 34, borderRadius: 9, backgroundColor: 'rgba(255,255,255,0.10)', alignItems: 'center', justifyContent: 'center' },
   out: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   wrap: { backgroundColor: C.bg, paddingHorizontal: 14, paddingTop: 6 },
   dock: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: 24, borderWidth: 1, borderColor: C.line, padding: 6,

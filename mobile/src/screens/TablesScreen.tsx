@@ -131,11 +131,10 @@ export default function TablesScreen() {
         // Computer: one row of figures – money on tables in an orange tile, then running, free and parcels.
         <View style={st.kpis} {...glass}>
           {([['clock', 'On tables now', rsShort(onTables)], ['users', 'Running', running], ['check-circle', 'Free', tables.length - running], ['shopping-bag', 'Parcels', parcels.length]] as const).map(([ico, l, v], i) => (
-            <View key={l} style={[st.kpi, i > 0 && st.kpiLine]}>
-              {i === 0 ? <Gradient radius={0} /> : null}
+            <View key={l} style={[st.kpi, i > 0 ? st.kpiLine : st.kpiMain]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Feather name={ico} size={14} color={i === 0 ? '#FFFFFF' : C.muted} />
-                <T style={{ fontSize: 12.5, color: i === 0 ? 'rgba(255,255,255,0.9)' : C.muted }}>{l}</T>
+                <Feather name={ico} size={14} color={i === 0 ? 'rgba(255,255,255,0.65)' : C.muted} />
+                <T style={{ fontSize: 12.5, color: i === 0 ? 'rgba(255,255,255,0.65)' : C.muted }}>{l}</T>
               </View>
               <T numberOfLines={1} style={{ fontFamily: F.mono, fontSize: 26, marginTop: 6, color: i === 0 ? '#FFFFFF' : C.text, fontVariant: ['tabular-nums'] }}>{v}</T>
             </View>
@@ -291,6 +290,7 @@ const st = StyleSheet.create({
   kpis: { flexDirection: 'row', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, marginBottom: 16, ...shadow },
   kpi: { flex: 1, paddingVertical: 16, paddingHorizontal: 20, overflow: 'hidden' },
   kpiLine: { borderLeftWidth: 1, borderLeftColor: C.line },
+  kpiMain: { backgroundColor: C.ink },
   heroWide: { flex: 1, maxWidth: 760, marginBottom: 0, paddingVertical: 20, paddingHorizontal: 22 },
   parcelBtn: { width: 250, flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 18, paddingHorizontal: 26 },
   facts: { flexDirection: 'row', gap: 5 },

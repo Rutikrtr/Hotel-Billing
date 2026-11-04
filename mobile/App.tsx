@@ -1,5 +1,5 @@
 import { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold, useFonts } from '@expo-google-fonts/inter';
-import { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold, InstrumentSans_700Bold } from '@expo-google-fonts/instrument-sans';
+import { InterTight_300Light, InterTight_400Regular, InterTight_500Medium, InterTight_600SemiBold } from '@expo-google-fonts/inter-tight';
 import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -43,7 +43,7 @@ SplashScreen.setOptions({ fade: true, duration: 250 });
 export default function App() {
   const wide = useWide();
   const [fontsLoaded, fontError] = useFonts(isDesktop
-    ? { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold, InstrumentSans_700Bold, IBMPlexMono_500Medium, Inter_500Medium, Inter_600SemiBold }
+    ? { InterTight_300Light, InterTight_400Regular, InterTight_500Medium, InterTight_600SemiBold, IBMPlexMono_500Medium, Inter_500Medium, Inter_600SemiBold }
     : { Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [fontWait, setFontWait] = useState(true);
   const [ready, setReady] = useState(false);
@@ -65,7 +65,7 @@ export default function App() {
   return (
     <Guard>
       <Provider store={store}>
-        <SafeAreaProvider style={{ backgroundColor: isDesktop ? '#F6F6F8' : Platform.OS === 'web' ? '#EFE7E0' : C.bg }}>
+        <SafeAreaProvider style={{ backgroundColor: isDesktop ? '#F3EFEC' : Platform.OS === 'web' ? '#EFE7E0' : C.bg }}>
           {/* Web on a tablet-size window: a centred phone-width column. From 900 px (computers): the full window. */}
           <View style={Platform.OS === 'web' && !wide ? { flex: 1, width: '100%', maxWidth: 640, alignSelf: 'center', backgroundColor: C.bg, boxShadow: '0 0 40px rgba(124,45,18,0.10)' } as object : { flex: 1 }}>
             <StatusBar style="dark" translucent backgroundColor="transparent" />
