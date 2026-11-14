@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <script>/* Users get the new 2.0 app; only the super admin link (?superadmin) stays on 1.0. */ if (!new URLSearchParams(location.search).has("superadmin")) location.replace("/v2/" + location.hash);</script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#FAF6F2" media="(prefers-color-scheme: light)">
