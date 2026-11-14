@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { isDesktop } from '../desktop';
 
 /** A printer: Bluetooth (id = its Bluetooth address) or Wi-Fi/LAN (wifi: true, id = "IP:port"). */
-export interface Device { id: string; name: string; wifi?: boolean }
+export interface Device { id: string; name: string; wifi?: boolean; webbt?: boolean }  // webbt: Web Bluetooth (Bluefy/Chrome)
 export interface PrinterState {
   bill: Device | null;
   kitchen: Device | null;     // null: kitchen tickets print on the bill printer
@@ -26,7 +26,8 @@ const printer = createSlice({
     setPrinter: (s, a: PayloadAction<Partial<PrinterState>>) => ({ ...s, ...a.payload }),
     restorePrinter: (_s, a: PayloadAction<PrinterState>) => ({
       ...initialPrinter, ...a.payload,
-      ...(web ? { bill: BROWSER, kitchen: null, separateKitchen: false } : {}),
+      // Web app: only the browser's print or a Web Bluetooth printer (Bluefy on iPhone) can be used.
+      ...(web ? { bill: a.payload.bill?.webbt ? a.payload.bill : BROWSER, kitchen: a.payload.kitchen?.webbt ? a.payload.kitchen : null } : {}),
       // Desktop app: a choice saved by the first version (browser print) is not a real Windows printer.
       ...(isDesktop && a.payload.bill?.id === BROWSER.id ? { bill: null } : {}),
     }),

@@ -5,11 +5,12 @@ import { scan, stopScan } from '../printing/ble';
 import { testSlip } from '../printing/escpos';
 import { parseAddress, printTcp } from '../printing/wifi';
 import { useAppDispatch, useAppSelector } from '../store';
-import { setPrinter, type Device } from '../store/printer';
+import { BROWSER, setPrinter, type Device } from '../store/printer';
 import { Button, Card, Chip, Field, Sheet, T, ToggleRow } from '../ui/kit';
 import { C } from '../ui/theme';
 import { desktopApi, isDesktop, type WinPrinter } from '../desktop';
 import { useWide } from '../ui/wide';
+import { isApple, pickPrinter, webBluetoothSupported } from '../printing/webbt';
 import { toast } from '../ui/toast';
 
 type Slot = 'bill' | 'kitchen';
@@ -83,26 +84,7 @@ export default function PrinterScreen() {
   };
 
   if (isDesktop) return <DesktopPrinters test={test} testing={testing === 'all'} />;
-  if (Platform.OS === 'web') {
-    // Web app: the browser prints (AirPrint on iPhone, any printer on a computer); only the paper size is set here.
-    return (
-      <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }}>
-        <Card style={{ gap: 8 }}>
-          <T w="heavy" style={{ fontSize: 15 }}>Printing from the browser</T>
-          <T style={{ color: C.muted, lineHeight: 19 }}>Bills open in the print window of this browser. On iPhone choose an AirPrint printer; on a computer choose any installed printer (thermal printers work when installed on the computer). Marathi names print as written.</T>
-          <T style={{ color: C.muted, lineHeight: 19 }}>For Bluetooth thermal printers on Android, use the Master Bill Android app.</T>
-        </Card>
-        <Card style={{ gap: 10 }}>
-          <T w="heavy" style={{ fontSize: 15 }}>Paper</T>
-          <View style={{ flexDirection: 'row' }}>
-            <Chip label="58 mm" on={p.paper === 58} onPress={() => dispatch(setPrinter({ paper: 58 }))} />
-            <Chip label="80 mm" on={p.paper === 80} onPress={() => dispatch(setPrinter({ paper: 80 }))} />
-          </View>
-        </Card>
-        <Button title="Print Test" onPress={test} busy={testing === 'all'} />
-      </ScrollView>
-    );
-  }
+  if (Platform.OS === 'web') return <WebPrinters test={test} testing={testing === 'all'} />;
 
   return (
     <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }} keyboardShouldPersistTaps="handled">
@@ -237,3 +219,84 @@ const st = StyleSheet.create({
   badge: { width: 40, height: 40, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   found: { padding: 12, borderRadius: 10, backgroundColor: C.surface2 },
 });
+
+/**
+ * Web app (iPhone in Bluefy, Chrome): Bluetooth thermal printers through Web Bluetooth, or the browser's print
+ * window (AirPrint / computer printers). Choices are remembered in this browser.
+ */
+function WebPrinters({ test, testing }: { test: () => void; testing: boolean }) {
+  const dispatch = useAppDispatch();
+  const p = useAppSelector((s) => s.printer);
+  const [picking, setPicking] = useState<Slot | null>(null);
+  const supported = webBluetoothSupported();
+  const pick = async (slot: Slot) => {
+    setPicking(slot);
+    try {
+      const d = await pickPrinter();
+      dispatch(setPrinter(slot === 'bill' ? { bill: { ...d, webbt: true } } : { kitchen: { ...d, webbt: true } }));
+      toast(`${SLOT_NAME[slot]}: ${d.name}`);
+    } catch (err) {
+      const e = err as Error;
+      if (e.name !== 'NotFoundError') toast(e.message, true);   // NotFoundError: chooser closed without a pick
+    } finally { setPicking(null); }
+  };
+  const slot = (s: Slot) => {
+    const d = s === 'bill' ? p.bill : p.kitchen;
+    const bt = Boolean(d?.webbt);
+    return (
+      <View style={{ gap: 8 }}>
+        <View style={st.current}>
+          <View style={[st.badge, { backgroundColor: bt ? C.billedSoft : C.surface2 }]}>
+            <T w="heavy" style={{ fontSize: 10, color: bt ? C.billed : C.muted }}>{bt ? 'BT' : '—'}</T>
+          </View>
+          <View style={{ flex: 1 }}>
+            <T w="bold">{bt ? d!.name : s === 'bill' ? 'Browser print window' : 'Not chosen'}</T>
+            <T style={{ color: C.muted, fontSize: 11.5 }}>{bt ? 'Bluetooth' : s === 'bill' ? 'AirPrint / computer printer' : 'Kitchen tickets print on the bill printer'}</T>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button kind="secondary" small style={{ flex: 1 }} title={picking === s ? 'Connecting…' : bt ? 'Change Bluetooth' : 'Bluetooth printer'} disabled={!!picking || !supported} onPress={() => pick(s)} />
+          {bt ? <Button kind="secondary" small style={{ flex: 1 }} title={s === 'bill' ? 'Use print window' : 'Remove'}
+            onPress={() => dispatch(setPrinter(s === 'bill' ? { bill: BROWSER } : { kitchen: null }))} /> : null}
+        </View>
+      </View>
+    );
+  };
+  return (
+    <ScrollView style={{ backgroundColor: C.bg }} contentContainerStyle={{ padding: 12, gap: 12, paddingBottom: 30 }}>
+      {!supported ? (
+        <Card style={{ gap: 6 }}>
+          <T w="heavy" style={{ fontSize: 15 }}>Bluetooth printing</T>
+          <T style={{ color: C.muted, lineHeight: 19 }}>{isApple()
+            ? 'To print on a Bluetooth thermal printer from iPhone, open Master Bill in the free “Bluefy” browser from the App Store. Safari can only print with AirPrint.'
+            : 'This browser can’t use Bluetooth. Open Master Bill in Chrome, or print with the print window.'}</T>
+        </Card>
+      ) : null}
+      <Card style={{ gap: 10 }}>
+        <T w="heavy" style={{ fontSize: 15 }}>Bill printer</T>
+        {slot('bill')}
+      </Card>
+      {supported ? (
+        <Card style={{ gap: 10 }}>
+          <ToggleRow label="Separate kitchen printer" hint={p.separateKitchen ? 'Kitchen tickets and parcel kitchen copies print here' : 'Off: kitchen tickets print on the bill printer'}
+            value={p.separateKitchen} onChange={(v) => dispatch(setPrinter({ separateKitchen: v }))} />
+          {p.separateKitchen ? slot('kitchen') : null}
+        </Card>
+      ) : null}
+      <Card style={{ gap: 10 }}>
+        <T w="heavy" style={{ fontSize: 15 }}>Paper</T>
+        <View style={{ flexDirection: 'row' }}>
+          <Chip label="58 mm" on={p.paper === 58} onPress={() => dispatch(setPrinter({ paper: 58 }))} />
+          <Chip label="80 mm" on={p.paper === 80} onPress={() => dispatch(setPrinter({ paper: 80 }))} />
+        </View>
+        {p.bill?.webbt ? (<>
+          <T w="heavy" style={{ fontSize: 15 }}>Blank space after each slip</T>
+          <View style={{ flexDirection: 'row' }}>
+            {[1, 2, 3, 4].map((n) => <Chip key={n} label={`${n} line${n > 1 ? 's' : ''}`} on={p.feed === n} onPress={() => dispatch(setPrinter({ feed: n }))} />)}
+          </View>
+        </>) : null}
+      </Card>
+      <Button title="Print Test" onPress={test} busy={testing} />
+    </ScrollView>
+  );
+}

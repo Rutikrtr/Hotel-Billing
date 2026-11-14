@@ -1,3 +1,4 @@
+import { warmUpWeb } from './printing/webbt';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNavigationContainerRef, DefaultTheme, NavigationContainer, useNavigation, type NavigationState } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -166,7 +167,8 @@ export default function Root() {
     if (hotel) {
       dispatch(loadAll());
       const p = store.getState().printer;
-      warmUp([p.bill?.wifi ? undefined : p.bill?.id, p.separateKitchen && !p.kitchen?.wifi ? p.kitchen?.id : undefined]);
+      if (Platform.OS === 'web') warmUpWeb([p.bill, p.separateKitchen ? p.kitchen : null]);
+      else warmUp([p.bill?.wifi ? undefined : p.bill?.id, p.separateKitchen && !p.kitchen?.wifi ? p.kitchen?.id : undefined]);
     }
     if (status === 'signedOut') dispatch(resetData());
   }, [hotel, status]);
