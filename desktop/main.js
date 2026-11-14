@@ -43,6 +43,8 @@ app.whenReady().then(() => {
   // No camera, microphone, location or notifications; only copying text (share on a computer copies it).
   session.defaultSession.setPermissionRequestHandler((_wc, perm, cb) => cb(perm === 'clipboard-sanitized-write'));
 
+  // The app's own version, for the in-app update check.
+  ipcMain.handle('version', () => app.getVersion());
   // Printers installed on Windows (USB, Bluetooth paired in Windows, network): listed and printed to directly.
   ipcMain.handle('printers', async (e) => (await e.sender.getPrintersAsync()).map((p) => ({
     name: p.name, displayName: p.displayName || p.name, isDefault: !!p.isDefault, status: p.status,

@@ -16,6 +16,7 @@ import { useWide } from './src/ui/wide';
 import { isDesktop } from './src/desktop';
 import Backdrop from './src/ui/Backdrop';
 import { ToastHost } from './src/ui/toast';
+import { UpdateGate } from './src/ui/UpdateGate';
 
 // Smooth show/hide of parts of a screen (e.g. the floor plan switch) on Android.
 if (Platform.OS === 'android') UIManager.setLayoutAnimationEnabledExperimental?.(true);
@@ -76,6 +77,7 @@ export default function App() {
                 <Root />
                 <ToastHost />
                 <DialogHost />
+                <UpdateGate />
               </View>
             ) : <View style={{ flex: 1 }} />}
           </View>

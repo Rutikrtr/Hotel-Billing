@@ -5,4 +5,5 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('masterBillDesktop', {
   printers: () => ipcRenderer.invoke('printers'),
   print: (job) => ipcRenderer.invoke('print', job),
+  version: () => ipcRenderer.invoke('version'),
 });

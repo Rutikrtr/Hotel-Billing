@@ -7,6 +7,8 @@ export interface WinPrinter { name: string; displayName: string; isDefault: bool
 interface DesktopApi {
   printers: () => Promise<WinPrinter[]>;
   print: (job: { html: string; deviceName?: string; paper: 58 | 80 }) => Promise<void>;
+  /** The desktop app's version (2.5.20 and later; missing in older desktop apps). */
+  version?: () => Promise<string>;
 }
 /** The desktop app's bridge to Windows printers (see desktop/preload.js); null in browsers and on phones. */
 export const desktopApi = (): DesktopApi | null => (isDesktop ? (globalThis as unknown as { masterBillDesktop?: DesktopApi }).masterBillDesktop ?? null : null);

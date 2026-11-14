@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import cart, { change, mergeLines, saved, setDiscount, hasPending } from '../src/store/cart';
 import { computeBill } from '../src/money';
+import { compareVersions, updateFor } from '../src/versions';
 // The web app's own maths, to prove both apps give the same totals.
 // @ts-ignore plain JS module
 import { computeBill as webBill } from '../../public/billing.js';
@@ -72,4 +73,20 @@ test('percent discount: comes off before GST, together never below zero (as the 
   assert.equal(all.auto, 8000);
   assert.equal(all.discount, 2000);
   assert.equal(all.total, 0);
+});
+
+test('app versions compare part by part, as numbers', () => {
+  assert.ok(compareVersions('2.0.56', '2.0.55') > 0);
+  assert.ok(compareVersions('2.0.9', '2.0.10') < 0);
+  assert.ok(compareVersions('2.1', '2.0.99') > 0);
+  assert.equal(compareVersions('2.0', '2.0.0'), 0);
+  assert.equal(compareVersions('2.5.20', '2.5.20'), 0);
+});
+
+test('update popup: none when current, optional when behind latest, required when below minimum', () => {
+  const row = { latest: '2.0.58', minimum: '2.0.57', url: 'https://x', message: '' };
+  assert.equal(updateFor('2.0.58', row), null);
+  assert.equal(updateFor('2.0.60', row), null);
+  assert.deepEqual(updateFor('2.0.57', row), { required: false, latest: '2.0.58', url: 'https://x', message: '' });
+  assert.equal(updateFor('2.0.56', row)?.required, true);
 });
