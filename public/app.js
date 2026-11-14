@@ -3527,6 +3527,9 @@ let shownPath = '';                // the screen currently on display
 let shownInstant = false;          // is it a list screen (safe to redraw quietly)?
 let silentTimer = 0;
 
+/** Opened through the Techyverve admin link (…/?superadmin): the only place the admin console works. */
+const ADMIN_LINK = new URLSearchParams(location.search).has('superadmin');
+
 async function route(opts) {
   const silent = opts?.silent === true;
   const token = ++renderToken;
@@ -3540,6 +3543,16 @@ async function route(opts) {
     return blockedScreen({ iconName: 'lock', title: 'Can’t connect', body: html`<p class="auth-text">${friendly(err)}</p>` });
   }
   if (token !== renderToken) return;
+  // The Techyverve admin login works only on the admin link (?superadmin); the hotels' link is for hotel logins.
+  if (account.super_admin && !account.staff && !ADMIN_LINK) {
+    accountCheck = null;
+    return blockedScreen({
+      retry: false,
+      title: 'Admin login not allowed here',
+      body: html`<p class="auth-text">This is the Techyverve admin login. Open the Master Bill admin link to use it.
+        This app is for hotel logins only.</p>`,
+    });
+  }
   if (!account.super_admin && !account.staff) {
     accountCheck = null;
     return blockedScreen({

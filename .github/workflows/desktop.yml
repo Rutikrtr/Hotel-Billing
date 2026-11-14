@@ -45,10 +45,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la desktop/dist/Master-Bill-2.5.exe
-          notes="Master Bill 2.5 – Windows desktop app (portable .exe, no installer). Built from $GITHUB_SHA."
+          # The same file under the name given to customers (master-bill-3.0-computer.exe); the old name keeps working.
+          cp desktop/dist/Master-Bill-2.5.exe desktop/dist/master-bill-3.0-computer.exe
+          notes="Master Bill – Windows desktop app (portable .exe, no installer). Built from $GITHUB_SHA."
           if gh release view desktop-2.5 >/dev/null 2>&1; then
-            gh release upload desktop-2.5 desktop/dist/Master-Bill-2.5.exe --clobber
+            gh release upload desktop-2.5 desktop/dist/Master-Bill-2.5.exe desktop/dist/master-bill-3.0-computer.exe --clobber
             gh release edit desktop-2.5 --notes "$notes"
           else
-            gh release create desktop-2.5 desktop/dist/Master-Bill-2.5.exe --title "Master Bill 2.5 (Windows)" --notes "$notes" --latest=false
+            gh release create desktop-2.5 desktop/dist/Master-Bill-2.5.exe desktop/dist/master-bill-3.0-computer.exe --title "Master Bill (Windows)" --notes "$notes" --latest=false
           fi
