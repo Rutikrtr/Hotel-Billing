@@ -9,7 +9,7 @@ import {
 // ---------- Smooth screens: a small store of what each screen last read (Redux-style, for server data) ----------
 // List screens draw at once from memory and refresh quietly behind; anything saved makes the next read go to the
 // internet first, so a saved bill or order is never shown out of date. Offline, the last copy is shown.
-const READ_RPCS = new Set(['sales_total', 'bill_list', 'dish_sales', 'sales_report', 'popular_menu_items', 'sa_list_hotels', 'sa_usage', 'my_menu_token']);
+const READ_RPCS = new Set(['sales_total', 'bill_list', 'dish_sales', 'sales_report', 'popular_menu_items', 'sa_list_hotels', 'sa_today', 'sa_usage', 'my_menu_token']);
 const readStore = new Map();
 const FRESH_MS = 1500;          // the same read within 1.5 s (quick tab taps) is answered from memory without asking again
 let readMode = 'network';       // 'cache' while a list screen is drawing
@@ -2823,11 +2823,13 @@ async function runBackup(hotels, chooseFolder) {
   toast(`Backup done · ${hotels.length} hotel${hotels.length === 1 ? '' : 's'} · ${n} bills saved to “${root.name}”`);
 }
 
+let adminTodayOpen = false;
 async function adminView(token) {
-  const [hotels, usage, subs] = await Promise.all([
+  const [hotels, usage, subs, today] = await Promise.all([
     q(sb.rpc('sa_list_hotels')),
     q(sb.rpc('sa_usage')).catch(() => null),
     q(sb.from('sa_subscriptions').select('*')).catch(() => []),
+    q(sb.rpc('sa_today')).catch(() => []),
   ]);
   const subOf = new Map(subs.map((s) => [s.restaurant_id, s]));
   if (token !== renderToken) return;
@@ -2859,6 +2861,18 @@ async function adminView(token) {
         <div class="fact"><strong>${active}</strong><span>Active</span></div>
         <div class="fact"><strong>${hotels.length - active}</strong><span>Paused</span></div>
       </div>
+      <button type="button" class="today-btn" id="today-toggle" aria-expanded="${adminTodayOpen}">
+        <strong>${today.length}</strong> hotel${today.length === 1 ? '' : 's'} active today · ${today.reduce((n, t) => n + Number(t.orders), 0)} orders ▾</button>
+    </section>
+    <section class="card today-panel" id="today-panel" ${adminTodayOpen ? '' : 'hidden'} aria-label="Hotels active today">
+      ${today.length ? html`<div class="table-wrap"><table class="today-table">
+        <thead><tr><th>Hotel</th><th>Orders</th><th>Paid</th><th>Open</th><th>Parcel</th><th>Sales</th><th>Cash</th><th>UPI</th><th>First</th><th>Last</th></tr></thead>
+        <tbody>${today.map((t) => html`<tr>
+          <td><strong>${t.name}</strong></td><td>${t.orders}</td><td>${t.paid}</td><td>${t.open}</td><td>${t.parcel}</td>
+          <td><strong>${rs(Number(t.sales)).replace('.00', '')}</strong></td><td>${rs(Number(t.cash)).replace('.00', '')}</td><td>${rs(Number(t.upi)).replace('.00', '')}</td>
+          <td>${new Date(t.first_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</td>
+          <td>${new Date(t.last_at).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</td></tr>`)}</tbody>
+      </table></div>` : html`<p class="muted" style="margin:0">No hotel has taken an order yet today.</p>`}
     </section>
     ${hotels.length > 3 ? html`<label class="admin-search"><span class="sr-only">Search hotels</span>
       <input type="search" id="hotel-search" placeholder="Search by hotel, phone or owner email" value="${adminSearch}" autocomplete="off"></label>` : ''}
@@ -2927,7 +2941,11 @@ async function adminView(token) {
   root.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (!t) return;
-    if (t.id === 'sa-signout') sb.auth.signOut({ scope: 'local' });
+    if (t.id === 'today-toggle') {
+      adminTodayOpen = !adminTodayOpen;
+      root.querySelector('#today-panel').hidden = !adminTodayOpen;
+      t.setAttribute('aria-expanded', String(adminTodayOpen));
+    } else if (t.id === 'sa-signout') sb.auth.signOut({ scope: 'local' });
     else if (t.id === 'backup-all' || t.id === 'backup-choose') act(t, () => runBackup(hotels, t.id === 'backup-choose').then(reload));
     else if (t.dataset.backup) act(t, () => runBackup([byId(t.dataset.backup)], false));
     else if (t.id === 'new-hotel') hotelDialog(null, reload);
